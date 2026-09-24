@@ -1,0 +1,63 @@
+name: CI
+
+# Every extension, built from source and tested across the framework tiers and
+# builds its manifest declares, against the lowest and the latest published
+# framework versions its peerDependencies range allows. The framework comes
+# from npm, the same files a page loads.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - id: plan
+        name: One job per extension and framework version
+        run: |
+          include='[]'
+          for dir in packages/*/; do
+            name="$(basename "$dir")"
+            node -e "process.exit(require('./$dir/package.json').wildflower ? 0 : 1)" || continue
+            versions="$(node scripts/extension-core-versions.cjs "$name")"
+            include="$(node -e "const i=$include; for (const v of $versions) i.push({ package: '$name', core: v }); console.log(JSON.stringify(i))")"
+          done
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+          echo "$include"
+
+  test:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: ${{ matrix.package }} on wildflowerjs@${{ matrix.core }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Framework under test
+        run: npm install --no-save "wildflowerjs@${{ matrix.core }}"
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Build (vendored rollup + terser, SHA-512 pinned)
+        run: npm run fetch-tools && node scripts/build-extension.cjs "${{ matrix.package }}"
+      - name: Every declared tier and build
+        run: node scripts/test-extension.cjs "${{ matrix.package }}" --core-dir node_modules/wildflowerjs/dist

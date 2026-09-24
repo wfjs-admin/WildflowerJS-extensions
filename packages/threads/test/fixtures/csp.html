@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <!-- A real, strict CSP: no blob:, no inline, no eval. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; worker-src 'self'; connect-src 'self' ws: wss:; style-src 'self'">
+  <title>threads: the isomorphic form under CSP</title>
+  <script defer src="./csp-page.js"></script>
+  <!-- Must be blocked by the CSP above; the page reports whether it ran. -->
+  <script>window.__inlineRan = true;</script>
+</head>
+<body>
+  <p>Loads the built extension and a definition file under a strict CSP; the report is posted to the parent frame.</p>
+</body>
+</html>

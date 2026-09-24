@@ -1,0 +1,2 @@
+# Built output; rebuild with `node scripts/build-rollup.cjs threads` from the repo root.
+dist/

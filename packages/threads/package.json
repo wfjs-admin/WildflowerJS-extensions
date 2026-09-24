@@ -1,0 +1,40 @@
+{
+  "name": "@wildflowerjs/threads",
+  "version": "0.1.0",
+  "description": "Reactive state on a Web Worker, read as a store: declare state, computed and methods; the main thread reads a mirror",
+  "main": "dist/threads.wf.js",
+  "types": "types.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wfjs-admin/WildflowerJS-extensions.git",
+    "directory": "packages/threads"
+  },
+  "keywords": ["web-worker", "worker", "state", "reactive", "off-thread"],
+  "peerDependencies": {
+    "wildflowerjs": ">=1.5.3 <2"
+  },
+  "wildflower": {
+    "tiers": ["nano", "mini", "mini-pool", "lite", "core", "spa", "full"],
+    "builds": ["dev", "min"],
+    "outputs": [
+      { "entry": "src/wf.js",    "file": "dist/threads.wf.js",     "dev": true,  "minify": false },
+      { "entry": "src/wf.js",    "file": "dist/threads.wf.min.js", "dev": false, "minify": true }
+    ]
+  },
+  "files": [
+    "dist/threads.wf.js",
+    "dist/threads.wf.min.js",
+    "types.d.ts",
+    "types.global.d.ts"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-rollup.cjs threads",
+    "test": "cd ../.. && npx vitest run --config packages/threads/vitest.config.js",
+    "test:min": "cd ../.. && npx cross-env THREADS_BUILD=min vitest run --config packages/threads/vitest.config.js",
+    "test:firefox": "cd ../.. && npx cross-env WILDFLOWER_BROWSER=firefox vitest run --config packages/threads/vitest.config.js"
+  }
+}

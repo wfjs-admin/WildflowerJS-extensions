@@ -1,0 +1,76 @@
+name: Release
+
+# Tag-triggered npm publish via OIDC trusted publishing, one extension per tag.
+# A tag names the package and its version: threads-v0.1.0 publishes
+# packages/threads at 0.1.0. No npm token exists anywhere in this pipeline:
+# each package's trusted-publisher setting on npmjs.com names this repository
+# and this workflow file, and npm generates signed provenance on publish.
+#
+# Release flow: bump packages/<name>/package.json and its CHANGELOG, push to
+# main, then push the tag. A prerelease version (0.2.0-rc.0) publishes under
+# the "next" dist-tag.
+
+on:
+  push:
+    tags:
+      - '*-v*'
+
+permissions:
+  id-token: write   # lets the workflow mint the OIDC token npm exchanges for publish rights
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Read the tag
+        id: tag
+        run: |
+          tag="$GITHUB_REF_NAME"
+          name="${tag%-v*}"
+          version="${tag##*-v}"
+          if [ ! -f "packages/$name/package.json" ]; then
+            echo "Tag $tag names packages/$name, which does not exist"; exit 1
+          fi
+          pkg="$(node -p "require('./packages/$name/package.json').version")"
+          if [ "$pkg" != "$version" ]; then
+            echo "Tag $tag does not match packages/$name/package.json version $pkg"; exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Assert npm supports trusted publishing (>= 11.5.1)
+        run: |
+          required="11.5.1"; actual="$(npm --version)"
+          if [ "$(printf '%s\n%s\n' "$required" "$actual" | sort -V | head -1)" != "$required" ]; then
+            echo "npm $actual < $required: trusted publishing unsupported"; exit 1
+          fi
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Build (vendored rollup + terser, SHA-512 pinned)
+        run: npm run fetch-tools && node scripts/build-extension.cjs "${{ steps.tag.outputs.name }}"
+
+      - name: Test against every framework version the range allows (lowest and latest)
+        run: |
+          for core in $(node scripts/extension-core-versions.cjs "${{ steps.tag.outputs.name }}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).join(' ')))"); do
+            echo "== wildflowerjs@$core"
+            npm install --no-save "wildflowerjs@$core"
+            node scripts/test-extension.cjs "${{ steps.tag.outputs.name }}" --core-dir node_modules/wildflowerjs/dist
+          done
+
+      - name: Publish to npm (OIDC, provenance generated automatically)
+        working-directory: packages/${{ steps.tag.outputs.name }}
+        run: |
+          case "${{ steps.tag.outputs.version }}" in
+            *-*) npm publish --access public --tag next ;;
+            *)   npm publish --access public ;;
+          esac

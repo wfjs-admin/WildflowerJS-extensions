@@ -1,0 +1,6 @@
+node_modules/
+tools/
+packages/*/dist/
+__screenshots__/
+.core-local/
+.DS_Store
