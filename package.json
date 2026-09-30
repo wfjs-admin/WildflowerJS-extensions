@@ -4,7 +4,7 @@
   "description": "Extensions for WildflowerJS: separate files a page loads after the framework, each published to npm on its own version",
   "license": "MIT",
   "scripts": {
-    "fetch-tools": "node scripts/fetch-rollup.cjs && node scripts/fetch-terser.cjs",
+    "fetch-tools": "node scripts/fetch-rollup.cjs && node scripts/fetch-terser.cjs && node scripts/fetch-three.cjs",
     "build": "npm run fetch-tools && node scripts/build-extension.cjs --all",
     "test:setup": "npx playwright install chromium"
   },

@@ -1,6 +1,6 @@
 {
   "name": "@wildflowerjs/threads",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reactive state on a Web Worker, read as a store: declare state, computed and methods; the main thread reads a mirror",
   "main": "dist/threads.wf.js",
   "types": "types.d.ts",
@@ -15,7 +15,7 @@
   },
   "keywords": ["web-worker", "worker", "state", "reactive", "off-thread"],
   "peerDependencies": {
-    "wildflowerjs": ">=1.5.3 <2"
+    "wildflowerjs": ">=1.5.4 <2"
   },
   "wildflower": {
     "tiers": ["nano", "mini", "mini-pool", "lite", "core", "spa", "full"],

@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  threadInline, endThread, loadFrameworkForm, statsDefinition, until, tick, captureWarnings, recordPosts, recordReplies, isMin, BUILD,
+  threadInline, endThread, loadFrameworkForm, statsDefinition, until, tick, captureWarnings, recordPosts, recordReplies, isMin, BUILD, CORE,
 } from './helpers.js';
 
 const live = [];
@@ -537,17 +537,70 @@ describe(`thread store (${BUILD})`, () => {
     expect(typeof t.settled).toBe('function');
   });
 
-  // A store has no watch block (it is a component feature), so a thread
-  // definition's watch never ran, and on the default nano-min core nothing
-  // said so.
-  it.skipIf(isMin)('TH-105 warns on a watch block, which a store never runs (dev build)', async () => {
+  // A thread's watch block runs in the worker, on both routes: stores run
+  // watch: {} (it used to be component-only, and TH-105 said it never ran).
+  // The inline route dropped the block; it now writes it as source, method
+  // form with a quoted path key included.
+  it('inline route: a watch block runs in the worker and its write reaches the page', async () => {
     let t;
     const lines = await captureWarnings(async () => {
-      t = await threadInline('watched', { state: { q: '' }, watch: { q() {} } });
+      t = await threadInline('watched', {
+        state: { page: 3, flag: 0, params: { region: '' } },
+        watch: {
+          'params.region'() { this.page = 0; },
+          page: { handler(v) { if (v === 0) this.flag = 1; } },
+        },
+      });
     });
     live.push(t);
-    const hits = lines.filter((l) => l.indexOf('TH-105') !== -1 && l.indexOf("'watch'") !== -1);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    t.params = { region: 'EU' };
+    await until(() => t.page === 0 && t.flag === 1, 3000, 'the watchers to run in the worker');
+    expect(lines.filter((l) => l.indexOf('TH-105') !== -1 && l.indexOf("'watch'") !== -1).length).toBe(0);
+  });
+
+  // reset() on the page puts the inputs back and lets the worker recompute;
+  // it used to rewrite every output too, and each one warned TH-102.
+  it('reset() on the page restores the inputs, the worker recomputes, and nothing warns', async () => {
+    const t = await stats();
+    await t.search('beta');
+    await until(() => t.count === 2, 2000, 'the search to apply');
+    const lines = await captureWarnings(() => { wildflower.getStore('stats').reset(); });
+    await until(() => t.count === 5, 2000, 'the worker to recompute');
+    expect(t.params.query).toBe('');
+    expect(lines.filter((l) => l.indexOf('TH-102') !== -1).length).toBe(0);
+  });
+
+  it('onStoreUpdate is a lifecycle hook, not a method on the mirror', async () => {
+    const t = await threadInline('hooked', { state: { n: 1 }, onStoreUpdate() {} });
+    live.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    expect(typeof t.onStoreUpdate).toBe('undefined');
+  });
+
+  it.skipIf(isMin)('TH-105 warns that storageKey and autoSave do nothing in a worker (dev build)', async () => {
+    let t;
+    const lines = await captureWarnings(async () => {
+      t = await threadInline('persisted', { state: { n: 1 }, storageKey: 'persisted', autoSave: true });
+    });
+    live.push(t);
+    const hits = lines.filter((l) => l.indexOf('TH-105') !== -1 && l.indexOf('storageKey') !== -1);
     expect(hits.length).toBe(1);
+  });
+
+  it('file route: a watch block runs in the worker and its write reaches the page', async () => {
+    const wf = await loadFrameworkForm();
+    let t;
+    const lines = await captureWarnings(() => {
+      t = wf.thread('watchfile', { state: { page: 3, params: { region: '' } }, watch: { 'params.region': function () {} } },
+        { core: CORE, def: '/packages/threads/test/fixtures/watch-def.js' });
+    });
+    try {
+      await until(() => t.isLoading === false, 5000, 'first patch');
+      t.params = { region: 'EU' };
+      await until(() => t.page === 0, 3000, 'the watcher to run in the worker');
+      expect(lines.filter((l) => l.indexOf('TH-105') !== -1 && l.indexOf("'watch'") !== -1).length).toBe(0);
+    } finally { wf.unregister('watchfile'); }
   });
 
   it.skipIf(!isMin)('the min build drops the dev warnings and keeps the behaviour', async () => {

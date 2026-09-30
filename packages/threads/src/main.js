@@ -31,7 +31,7 @@ const RESERVED = ['name', 'isLoading', 'error', 'pending', 'snapshot', 'subscrib
 // Store lifecycle hooks and blocks: the worker's store runs them; they are
 // not callable methods on the mirror. `tick` is the worker's own loop.
 const LIFECYCLE = ['state', 'computed', 'watch', 'init', 'beforeInit', 'beforeUpdate', 'onUpdate',
-  'beforeDestroy', 'destroy', 'onError', 'tick', 'workerOnly'];
+  'beforeDestroy', 'destroy', 'onError', 'onStoreUpdate', 'tick', 'workerOnly'];
 const ARRAY_MUTATORS = ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin'];
 // Fields the runtime owns. A write to one is dropped, not sent to the worker.
 const RUNTIME_OWNED = ['isLoading', 'error', 'pending', 'name', 'snapshot'];
@@ -561,9 +561,9 @@ function validateDefinition(name, def, computedNames, methodNames) {
     warn(CODES.BAD_DEFINITION, `thread '${name}': a 'methods:' block is not part of the shape; the functions inside it are not callable`,
       'Declare methods at the top level of the definition, beside state and computed, as a store does.');
   }
-  if (def.watch !== undefined) {
-    warn(CODES.BAD_DEFINITION, `thread '${name}': a 'watch' block is not part of the shape; a store has no watchers, so it never runs`,
-      "Watch the thread from the page: thread.subscribe(path, cb), or in the framework form a component's watch: { 'store:" + name + ".field': ... }.");
+  if (def.storageKey !== undefined || def.autoSave !== undefined) {
+    warn(CODES.BAD_DEFINITION, `thread '${name}': storageKey and autoSave do nothing here; a worker has no localStorage`,
+      'Persist from the page instead: subscribe to the thread and save the fields you need, then write them back on load.');
   }
   if (def.workerOnly !== undefined) {
     const known = Object.keys(def.state || {}).concat(computedNames);
@@ -571,7 +571,10 @@ function validateDefinition(name, def, computedNames, methodNames) {
       warn(CODES.BAD_DEFINITION, `thread '${name}': 'workerOnly' must be an array of state or computed names`);
     } else {
       for (let i = 0; i < def.workerOnly.length; i++) {
-        if (known.indexOf(def.workerOnly[i]) === -1) {
+        if (def.pools && !Array.isArray(def.pools) && Object.prototype.hasOwnProperty.call(def.pools, def.workerOnly[i])) {
+          warn(CODES.BAD_DEFINITION, `thread '${name}': workerOnly name '${def.workerOnly[i]}' is a pool, and pools always stay in the worker`,
+            'Leave it out of workerOnly; a computed over the pool is what reaches the page.');
+        } else if (known.indexOf(def.workerOnly[i]) === -1) {
           warn(CODES.BAD_DEFINITION, `thread '${name}': workerOnly name '${def.workerOnly[i]}' is not a state key or a computed`,
             'Declare it in state or computed; workerOnly only says it stays in the worker.');
         }

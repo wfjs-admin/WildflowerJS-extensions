@@ -31,6 +31,7 @@ export type ThreadReservedKey =
   | 'beforeDestroy'
   | 'destroy'
   | 'onError'
+  | 'onStoreUpdate'
   | 'tick';
 
 /** Names the mirror uses for itself; a definition may not reuse them (TH-105). */
@@ -231,6 +232,7 @@ export type ThreadDiagnosticCode =
   | 'TH-108'
   | 'TH-109'
   | 'TH-110'
-  | 'TH-111';
+  | 'TH-111'
+  | 'TH-112';
 
 export default wildflowerThread;

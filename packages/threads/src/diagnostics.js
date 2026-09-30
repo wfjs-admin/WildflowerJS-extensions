@@ -24,6 +24,8 @@
  *   TH-111  the name is already a registered store, so no thread was created
  *           and the existing store was returned; unregister it first to
  *           replace it
+ *   TH-112  the definition declares pools on a framework build without them;
+ *           the worker loads the same build, so the pools are empty there
  *
  * Warnings are emitted through console.warn on both sides of the boundary so
  * they survive the production build's console.log stripping. The `dev`
@@ -45,6 +47,7 @@ export const CODES = {
   WORKER_ONLY_MUTATED: DIAG_PREFIX + '-109',
   WORKER_UNRESPONSIVE: DIAG_PREFIX + '-110',
   NAME_TAKEN: DIAG_PREFIX + '-111',
+  NO_POOLS_IN_BUILD: DIAG_PREFIX + '-112',
 };
 
 export function warn(code, message, suggestion) {

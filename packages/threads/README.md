@@ -83,15 +83,30 @@ page reads it when it needs it. A typed array there is transferred rather
 than copied, so allocate a new one each tick, because the worker's copy is
 detached once it has been sent.
 
+A `pools` block works as it does in a store: the pools hold data only, and the
+definition's methods and `tick(dt)` reach them as `this.pools.name`. They live
+in the worker. A computed over a pool's length is sent to the page like any
+other computed, but the entities stay in the worker, and the page's store has
+no pools. To draw them, write what the page needs into an underscore field
+each tick, such as a `Float32Array` of positions, and draw it from a
+component's `tick()`. The worker loads the page's framework file, so that file
+must be a build with pools (mini-pool, lite, standard, spa or full); a
+development build warns on the page (TH-112) when it is not. On the inline
+route the pools block is sent as source: a class instance in `props` or
+`entity.state`, or a cycle, is refused with the reason (TH-105), where the
+file route carries both as written.
+
 ## The worker side
 
 The worker loads the same framework file as the page, found among the page's
 script tags, or the one you pass as `{ core: url }`. There it runs without a
 document, so it scans nothing and adds no listeners. The definition is
 registered with `wildflower.store()`, so lifecycle hooks, `this` and computed
-properties behave as they do in any store. A store has no `watch` block, and a
-thread has none either. Watch a thread from the page, with `store.subscribe()`
-or a component's `watch: { 'store:name.field' }`. The extension uses only the
+properties behave as they do in any store. A `watch` block in the definition
+runs in the worker, as a store's does, so a handler can write state but cannot
+touch the page; its writes reach the page like any other. To react on the page,
+use `store.subscribe()` or a component's `watch: { 'store:name.field' }`. The
+extension uses only the
 framework's public API, so it works with every tier, development or
 production.
 

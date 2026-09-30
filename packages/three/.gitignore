@@ -1,0 +1,2 @@
+# Built output; rebuild with `node scripts/build-rollup.cjs three.wf` from the repo root.
+dist/

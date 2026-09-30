@@ -67,6 +67,29 @@ describe(`framework form (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(store.filtered.length).toBe(5);
   });
 
+  // A generated app in the AI-surface eval (th1) listed a thread output of
+  // plain strings with $this: the rows appeared, but empty.
+  it.skipIf(!CORE_HAS_LISTS)('a data-list of strings over a thread output renders each value with $this', async () => {
+    const { name, store } = await threadStore({
+      state: { n: 0 },
+      // Two outputs change together, so the patch is applied as a batch.
+      computed: {
+        names() { var out = []; for (var i = 0; i < this.n; i++) out.push('w' + i); return out; },
+        size() { return this.n; },
+      },
+    }, false);
+    wf.component('prim' + n, { subscribe: [name], state: {} });
+    const el = mount(`<div data-component="prim${n}"><ul class="prim" data-list="$${name}.names"><template><li data-bind="$this"></li></template></ul></div>`);
+    await until(() => store.isLoading === false, 5000, 'first patch');
+    // 12 rows: at this size the list takes the bulk create path, where the
+    // empty rows came from.
+    store.n = 12;
+    await until(() => el.querySelectorAll('.prim li').length === 12, 3000, 'twelve rows');
+    await settle(120);
+    expect(Array.from(el.querySelectorAll('.prim li')).map((li) => li.textContent))
+      .toEqual(Array.from({ length: 12 }, (_, i) => 'w' + i));
+  });
+
   it('outputs arrive as writes: component computeds, $store bindings, a store: watcher, store.subscribe and (where the tier has lists) a keyed data-list over $store.filtered', async () => {
     const { name, store } = await threadStore(undefined, false);
     const evals = { doubled: 0, status: 0, unrelated: 0 };

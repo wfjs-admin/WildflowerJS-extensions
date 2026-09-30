@@ -1,0 +1,41 @@
+{
+  "name": "@wildflowerjs/three",
+  "version": "0.1.0",
+  "description": "Trillium, the three.js connector for WildflowerJS. Views are stores: bind pools and arrays to instanced meshes, and bind what is hovered and selected in markup",
+  "main": "dist/three.wf.js",
+  "types": "types.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wfjs-admin/WildflowerJS-extensions.git",
+    "directory": "packages/three"
+  },
+  "keywords": ["three.js", "webgl", "3d", "instancing", "picking"],
+  "peerDependencies": {
+    "wildflowerjs": ">=1.5.4 <2",
+    "three": ">=0.160.0"
+  },
+  "wildflower": {
+    "tiers": ["mini-pool", "lite", "core", "spa", "full"],
+    "builds": ["dev", "min"],
+    "outputs": [
+      { "entry": "src/wf.js", "file": "dist/three.wf.js",     "dev": true,  "minify": false },
+      { "entry": "src/wf.js", "file": "dist/three.wf.min.js", "dev": false, "minify": true }
+    ]
+  },
+  "files": [
+    "dist/three.wf.js",
+    "dist/three.wf.min.js",
+    "types.d.ts",
+    "types.global.d.ts"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-rollup.cjs three.wf",
+    "test": "cd ../.. && npx vitest run --config packages/three/vitest.config.js",
+    "test:min": "cd ../.. && npx cross-env EXT_BUILD=min vitest run --config packages/three/vitest.config.js",
+    "test:firefox": "cd ../.. && npx cross-env WILDFLOWER_BROWSER=firefox vitest run --config packages/three/vitest.config.js"
+  }
+}

@@ -119,6 +119,10 @@ function serialiseDefinition(name, def, coreUrl) {
   for (const k in computed) if (typeof computed[k] === 'function') cparts.push(fnEntry(k, computed[k]));
   parts.push('computed: {' + cparts.join(',\n') + '}');
   if (Array.isArray(def.workerOnly)) parts.push('workerOnly: ' + JSON.stringify(def.workerOnly));
+  if (def.pools !== undefined) parts.push('pools: ' + blockSource(def.pools, 'pools', new Set()));
+  // The worker's store runs watch: {} as any store does; the page mirror never
+  // receives it, so each handler runs once, in the worker.
+  if (def.watch !== undefined && typeof def.watch === 'object') parts.push('watch: ' + blockSource(def.watch, 'watch', new Set()));
   for (const k in def) {
     if (k === 'state' || k === 'computed' || typeof def[k] !== 'function') continue;
     parts.push(fnEntry(k, def[k]));
@@ -211,11 +215,51 @@ function valueSource(v, path, seen) {
   }
 }
 
+// A definition block that mixes data and functions, as source: the pools
+// block, where a pool carries plain options (key, props, entity.state) beside
+// functions (hooks, entity computeds and methods). Functions go by their own
+// source as the definition's methods do; everything else as state does.
+// Unlike state, which crosses as data (a class instance arrives as a plain
+// object, as structured clone carries it), the pools block is configuration
+// the worker runs: a class instance in `props` or `entity.state` would arrive
+// without its methods and fail at its first call. So it is refused, and so is
+// a cycle, with the reason; the file route carries both as written.
+function blockSource(v, path, seen) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return valueSource(v, path, seen);
+  const proto = Object.getPrototypeOf(v);
+  if (proto !== Object.prototype && proto !== null) {
+    if (v instanceof Date || v instanceof RegExp || v instanceof Map || v instanceof Set
+        || v instanceof ArrayBuffer || ArrayBuffer.isView(v)) return valueSource(v, path, seen);
+    throw makeError(CODES.BAD_DEFINITION,
+      "'" + path + "' in the pools block is a " + ((v.constructor && v.constructor.name) || 'class instance')
+      + ', whose methods the inline route cannot carry; load the definition by URL instead, or build the value in init()');
+  }
+  if (seen.has(v)) {
+    throw makeError(CODES.BAD_DEFINITION,
+      "'" + path + "' in the pools block is part of a cycle, or is the same object as another field; "
+      + 'the inline route writes the block as source and cannot express that. Load the definition by URL instead.');
+  }
+  seen.add(v);
+  try {
+    const entries = [];
+    for (const k in v) {
+      if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+      const val = v[k];
+      if (typeof val === 'function') entries.push(fnEntry(k, val));
+      else entries.push('[' + JSON.stringify(k) + ']: ' + blockSource(val, path + '.' + k, seen));
+    }
+    return '{' + entries.join(', ') + '}';
+  } finally {
+    seen.delete(v);
+  }
+}
+
 const EXPRESSION_FORM = /^(async\s+)?(function\b|\(|[A-Za-z_$][\w$]*\s*=>)/;
 
 // Method form: `name(args) {}`, `async name() {}`, `*name() {}`, and the two
-// combined. Captures the modifiers so the name can be replaced.
-const METHOD_FORM = /^(async\s+)?(\*\s*)?([A-Za-z_$][\w$]*)\s*\(/;
+// combined. Captures the modifiers so the name can be replaced. The name may
+// be quoted, as a watch path is: `'params.region'() {}`.
+const METHOD_FORM = /^(async\s+)?(\*\s*)?([A-Za-z_$][\w$]*|'[^'\\]*'|"[^"\\]*")\s*\(/;
 
 const NATIVE_CODE = /\{\s*\[native code\]\s*\}\s*$/;
 

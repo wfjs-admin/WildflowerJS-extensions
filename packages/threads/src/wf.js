@@ -31,7 +31,7 @@ import { getPath, copyPlain } from './protocol.js';
 // Store lifecycle hooks and blocks: never callable methods. `tick` is the
 // worker's own loop.
 const LIFECYCLE = ['state', 'computed', 'watch', 'init', 'beforeInit', 'beforeUpdate', 'onUpdate',
-  'beforeDestroy', 'destroy', 'onError', 'tick', 'workerOnly'];
+  'beforeDestroy', 'destroy', 'onError', 'onStoreUpdate', 'tick', 'workerOnly'];
 // The mirror's bookkeeping fields, mirrored into the store as plain state.
 const META = ['isLoading', 'error', 'pending'];
 
@@ -97,12 +97,32 @@ function registerThreadStore(wf, thread, name, def, options) {
     }
   }
   storeDef.settled = function () { return mirror.settled(); };
+  // reset() puts the inputs back and lets the worker recompute. The store's
+  // own reset() rewrites every field, and each output it rewrote warned TH-102.
+  if (!storeDef.reset) {
+    const initial = def.state || {};
+    storeDef.reset = function () {
+      for (let i = 0; i < inputNames.length; i++) {
+        const k = inputNames[i];
+        if (Object.prototype.hasOwnProperty.call(initial, k)) this[k] = copyPlain(initial[k]);
+      }
+      return this;
+    };
+  }
   storeDef.destroy = function () {
     while (offs.length) offs.pop()();
     mirror.terminate();
   };
   const store = wf.store(name, storeDef);
   for (let i = 0; i < rawKeys.length; i++) store[rawKeys[i]] = mirror.snapshot[rawKeys[i]];
+  // A store's getPool exists only in a build with pools. The worker loads
+  // this same framework file, so without them the thread's pools are empty
+  // there, and the worker's own warning lands in the worker's console.
+  if (__DEV__ && def.pools && typeof store.getPool !== 'function') {
+    warn(CODES.NO_POOLS_IN_BUILD,
+      `thread '${name}': the definition declares pools, but this framework build has none, and the worker loads the same build, so this.pools is empty there`,
+      'Load a build that includes pools (mini-pool, lite, standard, spa or full) on the page.');
+  }
 
   // Outputs and bookkeeping flow in as writes. A local write is already in
   // the store (it came from there), so only what the worker or the runtime
