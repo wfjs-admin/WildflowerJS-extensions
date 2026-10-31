@@ -1,0 +1,48 @@
+{
+  "name": "@wildflowerjs/kinetic",
+  "version": "0.1.0",
+  "description": "Kinetic turns a WildflowerJS page into a video, previewed, checked and rendered in the browser. HyperFrames-compatible; not affiliated with HeyGen.",
+  "main": "dist/kinetic.wf.js",
+  "types": "types.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wfjs-admin/WildflowerJS-extensions.git",
+    "directory": "packages/kinetic"
+  },
+  "keywords": ["hyperframes", "video", "animation", "rendering", "time-driven"],
+  "peerDependencies": {
+    "wildflowerjs": ">=1.5.5 <2",
+    "@hyperframes/core": ">=0.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@hyperframes/core": { "optional": true }
+  },
+  "wildflower": {
+    "tiers": ["nano", "mini", "mini-pool", "lite", "core", "spa", "full"],
+    "builds": ["dev", "min"],
+    "outputs": [
+      { "entry": "src/wf.js", "file": "dist/kinetic.wf.js",     "dev": true,  "minify": false },
+      { "entry": "src/wf.js", "file": "dist/kinetic.wf.min.js", "dev": false, "minify": true }
+    ]
+  },
+  "files": [
+    "bake",
+    "dist/kinetic.wf.js",
+    "dist/kinetic.wf.min.js",
+    "types.d.ts",
+    "types.global.d.ts",
+    "skills",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-rollup.cjs kinetic.wf",
+    "test": "cd ../.. && npx vitest run --config packages/kinetic/vitest.config.js",
+    "test:min": "cd ../.. && npx cross-env EXT_BUILD=min vitest run --config packages/kinetic/vitest.config.js",
+    "test:firefox": "cd ../.. && npx cross-env WILDFLOWER_BROWSER=firefox vitest run --config packages/kinetic/vitest.config.js",
+    "test:skill": "cd ../.. && node --test packages/kinetic/test/coverage-skill-check.test.cjs"
+  }
+}
