@@ -27,10 +27,12 @@
  *   TH-112  the definition declares pools on a framework build without them;
  *           the worker loads the same build, so the pools are empty there
  *
- * Warnings are emitted through console.warn on both sides of the boundary so
- * they survive the production build's console.log stripping. The `dev`
- * argument decides whether the long form (message plus suggestion) or the
- * compact form (code only) is printed; callers pass the folded `__DEV__`.
+ * Warnings are printed on both sides of the boundary by warn() below, always
+ * in the long form (the coded message, then the suggestion): through the
+ * core's wildflower.diagnostic() when that core is a development build, and
+ * through console.warn otherwise. Every caller wraps its warn() in `__DEV__`,
+ * so a production Threads build prints none of them; there the codes reach
+ * the page only as the `code` field of the errors makeError() builds.
  */
 
 import { DIAG_PREFIX } from './names.js';
@@ -50,8 +52,18 @@ export const CODES = {
   NO_POOLS_IN_BUILD: DIAG_PREFIX + '-112',
 };
 
+// "[TH-101] message", through the framework's wildflower.diagnostic() when
+// the core on this side of the boundary is a development build (it prints
+// the same line with the Docs line, and keeps the entry in that core's
+// wildflower.diagnostics: the page's, or in the worker the worker's own), and
+// through console.warn in the same format otherwise.
 export function warn(code, message, suggestion) {
-  console.warn('[' + DIAG_PREFIX + ' ' + code + '] ' + message);
+  const wf = typeof self !== 'undefined' ? self.wildflower : null;
+  if (wf && typeof wf.diagnostic === 'function') {
+    wf.diagnostic({ code, message, suggestion });
+    return;
+  }
+  console.warn('[' + code + '] ' + message);
   if (suggestion) console.warn('  ↳ Suggestion: ' + suggestion);
 }
 

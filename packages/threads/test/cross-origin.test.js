@@ -2,7 +2,7 @@
  * The extension loaded from another origin: the expected path once it is on
  * a CDN. A browser refuses a cross-origin worker script, so the default route
  * cannot spawn its own URL there; it starts a same-origin blob: worker that
- * loads the extension instead (review TR-03).
+ * loads the extension instead.
  *
  * The test server answers on localhost and on [::1], which are different
  * origins, so the extension is loaded from [::1] while the page, the

@@ -7,9 +7,12 @@
  *           (a view is a store, and store names are shared across the app)
  *   3D-104  instanced() was given something other than a pool or a function
  *           returning an array, a mesh that is not an InstancedMesh, or a spec
- *           without `position`
+ *           without `position`, with a `quaternion`, `rotation` or per-axis
+ *           `scale` that is not 4, 3 or 3 field names, or with `quaternion`
+ *           or `rotation` beside another rotation field
  *   3D-105  buffer() was given a source that is not a function, a mesh that is
- *           not an InstancedMesh, or a spec without stride, position and count
+ *           not an InstancedMesh, a spec without stride, position and count,
+ *           or a `quaternion` that is not 4 offsets or comes with `direction`
  *   3D-106  a source has more entities than the mesh holds; the rest are not
  *           drawn (raise the InstancedMesh's count)
  *   3D-107  the file loaded on a page with no framework instance (the
@@ -21,10 +24,19 @@
  *           wildflower.features.pools is false), so the view will never draw
  *   3D-111  a binding with sync: 'change' holds an entity that changed in
  *           place with no markDirty()/update(), so the change is not drawn
+ *   3D-112  uniform() was given a target with no `value` or a source that is
+ *           not a function
+ *   3D-113  a uniform's source threw; the last value stays
+ *   3D-114  video() was given something other than a three.js texture of a
+ *           <video>
+ *   3D-115  draw() was called while the view was drawing a frame (from its
+ *           draw option or before()); it did nothing
  *
- * Warnings (106 to 111) are development-only, through console.warn; the
- * behaviour they describe is the same on every build. Errors (101 to 105)
- * are thrown on every build as real Errors carrying `code`.
+ * Warnings (106 to 111, 113, 115) are development-only, through the core's
+ * wildflower.diagnostic() when the core is a development build and
+ * console.warn otherwise;
+ * the behaviour they describe is the same on every build. Errors (101 to
+ * 105, 112, 114) are thrown on every build as real Errors carrying `code`.
  */
 
 import { DIAG_PREFIX } from './names.js';
@@ -41,10 +53,23 @@ export const CODES = {
   LOADED_TWICE: DIAG_PREFIX + '-109',
   NO_FRAME_LOOP: DIAG_PREFIX + '-110',
   UNREPORTED_CHANGE: DIAG_PREFIX + '-111',
+  BAD_UNIFORM: DIAG_PREFIX + '-112',
+  UNIFORM_SOURCE_THREW: DIAG_PREFIX + '-113',
+  BAD_VIDEO: DIAG_PREFIX + '-114',
+  DRAW_IN_FRAME: DIAG_PREFIX + '-115',
 };
 
+// "[3D-106] message", through the framework's wildflower.diagnostic() when
+// the core is a development build (it prints the same line with the Docs
+// line and keeps the entry in wildflower.diagnostics), and through
+// console.warn in the same format otherwise.
 export function warn(code, message, suggestion) {
-  console.warn('[' + DIAG_PREFIX + ' ' + code + '] ' + message);
+  const wf = typeof self !== 'undefined' ? self.wildflower : null;
+  if (wf && typeof wf.diagnostic === 'function') {
+    wf.diagnostic({ code, message, suggestion });
+    return;
+  }
+  console.warn('[' + code + '] ' + message);
   if (suggestion) console.warn('  ↳ Suggestion: ' + suggestion);
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@wildflowerjs/three",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Trillium, the three.js connector for WildflowerJS. Views are stores: bind pools and arrays to instanced meshes, and bind what is hovered and selected in markup",
   "main": "dist/three.wf.js",
   "types": "types.d.ts",

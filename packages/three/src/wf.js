@@ -17,8 +17,10 @@
  *   pixelRatio  the renderer's pixel ratio
  *   stats       { syncMs, renderMs, fps }, averaged over each second
  *
- * and its methods draw: instanced(), buffer(), pick(), hits(), project(),
- * projectPoint(), follow(), occluded(), resize(). wildflower.unregister(name)
+ * and its methods draw: instanced(), buffer(), uniform(), video(), pick(),
+ * hits(), project(), projectPoint(), follow(), occluded(), resize(),
+ * invalidate().
+ * wildflower.unregister(name)
  * runs the store's destroy(), which stops the view and, unless the view was
  * made with dispose: false, frees its scene's GPU resources.
  *
@@ -77,6 +79,9 @@ function install(wf) {
   const api = {
     use(THREE) { lib.T = THREE; return api; },
     view(name, options) { return createView(wf, name, options); },
+    // The live views as their stores, for code that works on every view on
+    // the page (Kinetic draws the ones inside a scene before a capture).
+    views() { return Array.from(views.keys(), (n) => wf.getStore(n)).filter(Boolean); },
   };
   wf[GLOBAL_NAME] = api;
   wf.store(LOOP_STORE, {
@@ -96,6 +101,7 @@ function createView(wf, name, opts) {
   if (missing.length) throw fail(CODES.BAD_VIEW, "view('" + name + "', options): missing " + missing.join(', '));
   if (!opts.renderer.domElement) throw fail(CODES.BAD_VIEW, "view('" + name + "', options): renderer has no domElement (a three.js renderer's canvas)");
   if (opts.fit && !(opts.fit instanceof Element)) throw fail(CODES.BAD_VIEW, "view('" + name + "', options): fit must be an element, not " + typeof opts.fit);
+  if (opts.draw !== undefined && typeof opts.draw !== 'function') throw fail(CODES.BAD_VIEW, "view('" + name + "', options): draw is a function (renderer, scene, camera) that draws the frame, not " + typeof opts.draw);
   if (opts.render !== undefined && opts.render !== 'frame' && opts.render !== 'change') {
     throw fail(CODES.BAD_VIEW, "view('" + name + "', options): render is 'frame' (the default) or 'change', not " + JSON.stringify(opts.render));
   }
@@ -149,14 +155,18 @@ function createView(wf, name, opts) {
     },
     instanced(source, mesh, spec) { return view.instanced(source, mesh, spec); },
     buffer(source, mesh, spec) { return view.buffer(source, mesh, spec); },
+    uniform(target, source) { return view.uniform(target, source); },
+    video(texture) { return view.video(texture); },
     pick(ev) { return view.pick(ev); },
     hits(ev) { return view.hits(ev); },
     project(entity, binding) { return view.project(entity, binding); },
-    projectPoint(x, y, z) { return view.projectPoint(x, y, z); },
+    projectPoint(x, y, z, camera) { return view.projectPoint(x, y, z, camera); },
     follow(el, getEntity, binding) { return view.follow(el, getEntity, binding); },
     occluded(x, y, z) { return view.occluded(x, y, z); },
     resize() { view.resize(); },
     invalidate() { view.invalidate(); },
+    draw() { view.draw(); },
+    canvas() { return view.renderer.domElement; },
     destroy() {
       views.delete(name);
       view.dispose([...views.values()]);

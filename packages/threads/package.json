@@ -1,6 +1,6 @@
 {
   "name": "@wildflowerjs/threads",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Reactive state on a Web Worker, read as a store: declare state, computed and methods; the main thread reads a mirror",
   "main": "dist/threads.wf.js",
   "types": "types.d.ts",

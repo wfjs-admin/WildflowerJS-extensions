@@ -134,6 +134,8 @@ The extension's warnings and errors carry codes prefixed `TH`.
 - TH-108: the extension file was loaded on a page with no framework instance.
 - TH-109: a worker-only array was changed in place.
 - TH-110: the worker has not answered for five seconds.
+- TH-111: the name is already a registered store, so no thread was created and that store was returned.
+- TH-112: the definition declares pools on a framework build without them, so the thread's pools are empty.
 
 ## TypeScript
 

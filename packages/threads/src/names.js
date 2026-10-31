@@ -15,8 +15,8 @@ export const GLOBAL_NAME = 'thread';
 // Document events dispatched by the main half: `thread:patch`.
 export const EVENT_PREFIX = 'thread:';
 
-// Diagnostic prefix. Codes read `[TH TH-101] ...`, the shape the framework's
-// own `[WF WF-216]` lines use, so the two sort together in a console.
+// Diagnostic prefix. Codes read `[TH-101] ...`, the shape the framework's
+// own `[WF-216]` lines use, so the two sort together in a console.
 export const DIAG_PREFIX = 'TH';
 
 // Set on the worker global by the Blob escape hatch's bootstrap script before

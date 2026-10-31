@@ -10,6 +10,9 @@
  *                rows), written field by field
  * BufferBinding  a flat array written by something else (a thread's frame):
  *                records `stride` floats apart
+ * UniformBinding a shader parameter: a function's value written into
+ *                anything with a `.value` (a TSL uniform() node, a
+ *                ShaderMaterial's uniforms entry)
  */
 
 import { CODES, warn, fail } from './diagnostics.js';
@@ -41,11 +44,14 @@ function writeColor(arr, o, v) {
   }
 }
 
-// Write the rotation-scale part of instance matrix `o` so its +Z points
-// along (zx, zy, zz), as Object3D.lookAt(position + direction) does:
-// z = dir, x = up x z, y = z x x, with up = +Y (a fallback x when z is
-// parallel to it).
-function orient(m, o, zx, zy, zz, s) {
+// The writers below fill the rotation-scale part of instance matrix `o`:
+// three columns, the instance's x, y and z axes, each scaled by its own
+// factor (sx, sy, sz), as Matrix4.compose() lays them out.
+
+// +Z points along (zx, zy, zz), as Object3D.lookAt(position + direction)
+// does: z = dir, x = up x z, y = z x x, with up = +Y (a fallback x when z
+// is parallel to it).
+function orient(m, o, zx, zy, zz, sx, sy, sz) {
   const zl = Math.sqrt(zx * zx + zy * zy + zz * zz);
   if (zl === 0) { zx = 0; zy = 0; zz = 1; } else { zx /= zl; zy /= zl; zz /= zl; }
   let xx = zz, xz = -zx;                          // up (0,1,0) x z
@@ -53,27 +59,57 @@ function orient(m, o, zx, zy, zz, s) {
   if (xl < 1e-6) { xx = 1; xz = 0; xl = 1; }
   xx /= xl; xz /= xl;
   const yx = zy * xz, yy = zz * xx - zx * xz, yz = -zy * xx;
-  m[o] = xx * s; m[o + 1] = 0; m[o + 2] = xz * s;
-  m[o + 4] = yx * s; m[o + 5] = yy * s; m[o + 6] = yz * s;
-  m[o + 8] = zx * s; m[o + 9] = zy * s; m[o + 10] = zz * s;
+  m[o] = xx * sx; m[o + 1] = 0; m[o + 2] = xz * sx;
+  m[o + 4] = yx * sy; m[o + 5] = yy * sy; m[o + 6] = yz * sy;
+  m[o + 8] = zx * sz; m[o + 9] = zy * sz; m[o + 10] = zz * sz;
+}
+
+// A quaternion's rotation, through three.js's own Matrix4.compose(); the
+// position it writes is overwritten after. Its objects are made at first
+// use, once use(THREE) has given the library.
+let tmp = null;
+function turn(m, o, q, sx, sy, sz) {
+  tmp.m.compose(tmp.p, q, tmp.s.set(sx, sy, sz)).toArray(m, o);
+}
+function scratch() {
+  const T = lib.T;
+  return tmp || (tmp = { m: new T.Matrix4(), p: new T.Vector3(), s: new T.Vector3(), q: new T.Quaternion(), e: new T.Euler() });
+}
+
+// A quaternion x, y, z, w, normalized (a zero one is no rotation).
+function quat(m, o, x, y, z, w, sx, sy, sz) {
+  const t = scratch();
+  turn(m, o, t.q.set(x, y, z, w).normalize(), sx, sy, sz);
 }
 
 // Write entity e's instance matrix at offset o: the whole rotation-scale
-// block, so nothing set earlier survives, and the position.
+// block, so nothing set earlier survives, and the position. One of
+// quaternion, rotation, direction and rotationY sets the rotation
+// (instanced() refuses quaternion or rotation beside another; direction
+// wins over rotationY). rotation is Euler angles in radians, in three.js's
+// default 'XYZ' order.
 function writeMatrix(m, o, e, spec) {
-  const sc = spec.scale, ry = spec.rotationY, dir = spec.direction, pos = spec.position;
-  const s = sc === undefined ? 1 : field(e, sc);
-  if (dir !== undefined) {
-    orient(m, o, e[dir[0]], e[dir[1]], e[dir[2]], s);
+  const sc = spec.scale, q = spec.quaternion, rot = spec.rotation, dir = spec.direction, ry = spec.rotationY, pos = spec.position;
+  let sx, sy, sz;
+  if (sc === undefined) sx = sy = sz = 1;
+  else if (Array.isArray(sc)) { sx = e[sc[0]]; sy = e[sc[1]]; sz = e[sc[2]]; }
+  else sx = sy = sz = field(e, sc);
+  if (q !== undefined) {
+    quat(m, o, e[q[0]], e[q[1]], e[q[2]], e[q[3]], sx, sy, sz);
+  } else if (rot !== undefined) {
+    const t = scratch();
+    turn(m, o, t.q.setFromEuler(t.e.set(e[rot[0]], e[rot[1]], e[rot[2]])), sx, sy, sz);
+  } else if (dir !== undefined) {
+    orient(m, o, e[dir[0]], e[dir[1]], e[dir[2]], sx, sy, sz);
   } else if (ry !== undefined) {
-    const r = field(e, ry), c = Math.cos(r) * s, sn = Math.sin(r) * s;
-    m[o] = c; m[o + 1] = 0; m[o + 2] = -sn;
-    m[o + 4] = 0; m[o + 5] = s; m[o + 6] = 0;
-    m[o + 8] = sn; m[o + 9] = 0; m[o + 10] = c;
+    const r = field(e, ry), c = Math.cos(r), sn = Math.sin(r);
+    m[o] = c * sx; m[o + 1] = 0; m[o + 2] = -sn * sx;
+    m[o + 4] = 0; m[o + 5] = sy; m[o + 6] = 0;
+    m[o + 8] = sn * sz; m[o + 9] = 0; m[o + 10] = c * sz;
   } else {
-    m[o] = s; m[o + 1] = 0; m[o + 2] = 0;
-    m[o + 4] = 0; m[o + 5] = s; m[o + 6] = 0;
-    m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = s;
+    m[o] = sx; m[o + 1] = 0; m[o + 2] = 0;
+    m[o + 4] = 0; m[o + 5] = sy; m[o + 6] = 0;
+    m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = sz;
   }
   m[o + 12] = e[pos[0]]; m[o + 13] = e[pos[1]]; m[o + 14] = e[pos[2]];
 }
@@ -299,10 +335,11 @@ BufferBinding.prototype.sync = function () {
   if (n > this.capacity) { overCapacity(this, n, 'buffer'); n = this.capacity; }
   const m = mesh.instanceMatrix.array, st = spec.stride;
   const base = this.offsetOf(arr);
-  const p = spec.position, d = spec.direction;
+  const p = spec.position, q = spec.quaternion, d = spec.direction;
   for (let i = 0; i < n; i++) {
     const r = base + i * st, o = i * 16;
-    if (d) orient(m, o, arr[r + d[0]], arr[r + d[1]], arr[r + d[2]], 1);
+    if (q) quat(m, o, arr[r + q[0]], arr[r + q[1]], arr[r + q[2]], arr[r + q[3]], 1, 1, 1);
+    else if (d) orient(m, o, arr[r + d[0]], arr[r + d[1]], arr[r + d[2]], 1, 1, 1);
     m[o + 12] = arr[r + p[0]]; m[o + 13] = arr[r + p[1]]; m[o + 14] = arr[r + p[2]];
   }
   if (spec.color && n > this.colored) {
@@ -319,3 +356,62 @@ BufferBinding.prototype.sync = function () {
 BufferBinding.prototype.keyOf = Binding.prototype.keyOf;
 BufferBinding.prototype.keyed = Binding.prototype.keyed;
 BufferBinding.prototype.release = function () {};
+
+// ── Uniforms ──
+
+const isList = (a) => Array.isArray(a) || ArrayBuffer.isView(a);
+
+export function UniformBinding(target, source) {
+  this.target = target;
+  this.source = source;
+  this.warned = false;
+}
+
+// Reads the source and writes the target only when the value differs, so a
+// view with render: 'change' draws exactly when a bound value moves. A three
+// math object (Color, Vector*, Matrix*) or an array is copied into the
+// target's own object: TSL nodes and materials hold that object, so it keeps
+// its identity, and a number is set into a Color target. Returns whether
+// the target changed.
+UniformBinding.prototype.sync = function () {
+  let v;
+  try { v = this.source(); } catch (err) {
+    if (__DEV__ && !this.warned) {
+      this.warned = true;
+      warn(CODES.UNIFORM_SOURCE_THREW, 'uniform(): the source threw (' + (err && err.message) + '); the last value stays',
+        'Fix the source function; it is read every frame.');
+    }
+    return false;
+  }
+  const t = this.target, cur = t.value;
+  if (cur === v) return false;
+  if (cur && v && typeof cur.equals === 'function' && typeof cur.copy === 'function' && typeof v.equals === 'function') {
+    if (cur.equals(v)) return false;
+    cur.copy(v);
+    return true;
+  }
+  if (cur && cur.isColor && typeof v === 'number') {
+    const c = this.color || (this.color = cur.clone());
+    c.setHex(v);
+    if (cur.equals(c)) return false;
+    cur.copy(c);
+    return true;
+  }
+  // An array takes the source's length. A typed array cannot change length,
+  // so it takes as much as fits and keeps the rest. Changed means a stored
+  // element changed, compared after the write, so a value a Float32Array
+  // rounds still settles.
+  if (isList(cur) && isList(v)) {
+    const grow = Array.isArray(cur), n = grow ? v.length : Math.min(cur.length, v.length);
+    let changed = grow && cur.length !== v.length;
+    for (let i = 0; i < n; i++) {
+      const was = cur[i];
+      cur[i] = v[i];
+      if (!Object.is(cur[i], was)) changed = true;
+    }
+    if (grow) cur.length = v.length;
+    return changed;
+  }
+  t.value = v;
+  return true;
+};

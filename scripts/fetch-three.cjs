@@ -3,11 +3,16 @@
  * Fetch three.js for the three extension's browser tests, SHA-512 verified.
  *
  * No npm CLI invocation, no postinstall scripts: the registry tarball is
- * downloaded once, checked against the pinned integrity, and only the two
- * module files the tests import are extracted:
+ * downloaded once, checked against the pinned integrity, and only the files
+ * the tests and the Kinetic site's runner import are extracted:
  *
  *   tools/three/build/three.module.js   (imports ./three.core.js)
  *   tools/three/build/three.core.js
+ *   tools/three/examples/jsm/postprocessing/*.js and shaders/*.js, the
+ *       passes a scene imports from three/addons/ (EffectComposer,
+ *       RenderPass, BokehPass and what they import), which the runner
+ *       serves as vendor/three/addons/ and scripts/kinetic-render.cjs
+ *       reads as its add-on cache
  *
  * three is a peer dependency of @wildflowerjs/three: a page brings its own.
  * This copy exists so the suite runs offline against an exact version. The
@@ -29,10 +34,18 @@ const { execFileSync } = require('child_process');
 // Pinned 2026-09-27 from the npm registry.
 const VERSION = '0.186.1';
 const INTEGRITY = 'sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==';
-const FILES = ['package/build/three.module.js', 'package/build/three.core.js'];
+const FILES = [
+    'package/build/three.module.js',
+    'package/build/three.core.js',
+    ...['BokehPass', 'EffectComposer', 'MaskPass', 'OutputPass', 'Pass', 'RenderPass', 'ShaderPass'].map((f) => `package/examples/jsm/postprocessing/${f}.js`),
+    ...['BokehShader', 'CopyShader', 'OutputShader'].map((f) => `package/examples/jsm/shaders/${f}.js`),
+];
 
 const OUT_DIR = path.join(__dirname, '..', 'tools', 'three');
 const VER_FILE = path.join(OUT_DIR, '.wf-pinned-version');
+// What a fetch wrote: the version, its integrity and the file list, so a
+// longer list fetches again.
+const PINNED = `${VERSION}\n${INTEGRITY}\n${FILES.join('\n')}`;
 
 const tarBin = process.platform === 'win32'
     ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
@@ -55,7 +68,7 @@ function fetchUrl(url, redirectsLeft = 5) {
 }
 
 async function main() {
-    if (fs.existsSync(VER_FILE) && fs.readFileSync(VER_FILE, 'utf8') === `${VERSION}\n${INTEGRITY}`) {
+    if (fs.existsSync(VER_FILE) && fs.readFileSync(VER_FILE, 'utf8') === PINNED) {
         console.log(`three@${VERSION} already fetched`);
         return;
     }
@@ -78,8 +91,8 @@ async function main() {
     } finally {
         try { fs.unlinkSync(tmpFile); } catch (e) { /* already gone */ }
     }
-    fs.writeFileSync(VER_FILE, `${VERSION}\n${INTEGRITY}`);
-    console.log(`three@${VERSION} -> tools/three/build/`);
+    fs.writeFileSync(VER_FILE, PINNED);
+    console.log(`three@${VERSION} -> tools/three/build/ and tools/three/examples/jsm/`);
 }
 
 main().catch((e) => { console.error(e.message); process.exit(1); });

@@ -438,7 +438,7 @@ describe(`thread store (${BUILD})`, () => {
       expect(await held).toBe('let go');
       await t.settled();
     });
-    const hits = lines.filter((l) => l.indexOf('TH-110') !== -1);
+    const hits = lines.filter((l) => l.startsWith('[TH-110] '));
     expect(hits.length).toBe(1);
     expect(hits[0]).toMatch(/has not answered/);
     expect(hits[0]).toContain("'stuck'");
@@ -448,7 +448,7 @@ describe(`thread store (${BUILD})`, () => {
       t.params.query = 'gamma';
       await t.settled();
     });
-    expect(quiet.filter((l) => l.indexOf('TH-110') !== -1).length).toBe(0);
+    expect(quiet.filter((l) => l.startsWith('[TH-110] ')).length).toBe(0);
     expect(t.count).toBe(1);
   }, 20000);
 
@@ -481,7 +481,7 @@ describe(`thread store (${BUILD})`, () => {
   it.skipIf(isMin)('TH-102 warns on a write to a field the runtime owns (dev build)', async () => {
     const t = await stats();
     const lines = await captureWarnings(() => { t.error = 'dismissed'; });
-    const hits = lines.filter((l) => l.indexOf('TH-102') !== -1);
+    const hits = lines.filter((l) => l.startsWith('[TH-102] '));
     expect(hits.length).toBe(1);
     expect(hits[0]).toContain("'error'");
   });
@@ -489,7 +489,7 @@ describe(`thread store (${BUILD})`, () => {
   it.skipIf(isMin)('TH-102 warns on a main-thread write to a computed field (dev build)', async () => {
     const t = await stats();
     const lines = await captureWarnings(() => { t.count = 99; t.filtered.push({ id: 9 }); });
-    const hits = lines.filter((l) => l.indexOf('TH-102') !== -1);
+    const hits = lines.filter((l) => l.startsWith('[TH-102] '));
     expect(hits.length).toBe(2);
     expect(hits[0]).toContain("'count'");
     expect(hits[1]).toContain("'filtered'");
@@ -568,7 +568,7 @@ describe(`thread store (${BUILD})`, () => {
     const lines = await captureWarnings(() => { wildflower.getStore('stats').reset(); });
     await until(() => t.count === 5, 2000, 'the worker to recompute');
     expect(t.params.query).toBe('');
-    expect(lines.filter((l) => l.indexOf('TH-102') !== -1).length).toBe(0);
+    expect(lines.filter((l) => l.startsWith('[TH-102] ')).length).toBe(0);
   });
 
   it('onStoreUpdate is a lifecycle hook, not a method on the mirror', async () => {
@@ -643,6 +643,174 @@ describe(`init() writes reach the mirror (${BUILD})`, () => {
     // and so does the state the page reads
     expect(t.params.query).toBe('beta');
     expect(t.ready).toBe(true);
+  });
+
+  // A raw (underscore) field is not reactive, so the snapshot of init()'s
+  // writes above never saw one, and the worker seeded every raw field with
+  // its declared value after the store's init() had run, over whatever
+  // init() had put there. A field a definition filled in init() reached
+  // neither the page nor the definition's later reads. And the first
+  // snapshot cleared every change made since setup, so a write in a
+  // microtask queued from init() was lost as well.
+  it('a typed array written to a raw field in init() is in the first patch, transferred', async () => {
+    const t = await threadInline('rawinit', {
+      state: { n: 0, _grid: null },
+      computed: { twice() { return this.n * 2; } },
+      init() {
+        const g = new Float32Array(6);
+        for (let i = 0; i < 6; i++) g[i] = i + 0.5;
+        this._grid = g;
+        this.n = 6;
+      },
+      workerByteLength() { return this._grid ? this._grid.byteLength : -1; },
+    });
+    live2.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    expect(t._grid).toBeInstanceOf(Float32Array);
+    expect(Array.from(t._grid)).toEqual([0.5, 1.5, 2.5, 3.5, 4.5, 5.5]);
+    expect(t.twice).toBe(12);
+    // Transferred as a raw field always is: the worker's copy is detached.
+    expect(await t.workerByteLength()).toBe(0);
+  });
+
+  it('a plain value written to a raw field in init() reaches the page, and a raw field init() leaves alone keeps its declared value', async () => {
+    const t = await threadInline('rawinitplain', {
+      state: { n: 0, _meta: null, _untouched: [1, 2] },
+      computed: { plusOne() { return this.n + 1; } },
+      init() { this._meta = { rows: 3, label: 'night' }; },
+      readMeta() { return this._meta; },
+    });
+    live2.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    expect(t._meta).toEqual({ rows: 3, label: 'night' });
+    expect(t._untouched).toEqual([1, 2]);
+    // The worker still holds init()'s value too.
+    expect(await t.readMeta()).toEqual({ rows: 3, label: 'night' });
+  });
+
+  it('a raw field written in init() of a definition with no computeds reaches the page', async () => {
+    const t = await threadInline('rawinitnocomp', {
+      state: { _rows: null },
+      init() { this._rows = [{ id: 1 }, { id: 2 }]; },
+    });
+    live2.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    expect(t._rows).toEqual([{ id: 1 }, { id: 2 }]);
+  });
+
+  it('state and a raw field written in a microtask queued from init() reach the page', async () => {
+    const t = await threadInline('initmicro', {
+      state: { status: 'idle', summary: null, _data: null },
+      init() {
+        Promise.resolve().then(() => {
+          this._data = new Float32Array([1, 2, 3]);
+          this.summary = { count: 3 };
+          this.status = 'ready';
+        });
+      },
+    });
+    live2.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    await until(() => t.status === 'ready', 2000, 'the microtask\'s state write');
+    expect(t.summary).toEqual({ count: 3 });
+    await until(() => t._data !== null, 2000, 'the microtask\'s raw write');
+    expect(Array.from(t._data)).toEqual([1, 2, 3]);
+  });
+
+  // A raw field is sent whole whenever its identity changes. A raw write
+  // outside a message or a tick scheduled nothing: an async continuation
+  // started by init() that wrote only a raw field after a few awaits (past
+  // the first snapshot) never reached the page. (An `async init()` itself was
+  // rescued by the store's own ready write when its promise settled.)
+  it('a raw field alone, written late in an async continuation of init() after several awaits, reaches the page', async () => {
+    const t = await threadInline('rawinitlate', {
+      state: { n: 0, _g: null },
+      init() {
+        (async () => {
+          await null; await null; await null; await null;
+          await new Promise((r) => setTimeout(r, 30));
+          this._g = new Float32Array([4, 5, 6]);
+        })();
+      },
+    });
+    live2.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    await until(() => t._g !== null, 2000, 'the late raw write');
+    expect(Array.from(t._g)).toEqual([4, 5, 6]);
+  });
+
+  it('a raw field alone, written from a timer after a method has been acknowledged, reaches the page', async () => {
+    const t = await threadInline('rawtimer', {
+      state: { n: 0, _late: null },
+      later() { setTimeout(() => { this._late = { done: true }; }, 30); },
+    });
+    live2.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    await t.later();
+    await until(() => t._late !== null, 2000, 'the timer\'s raw write');
+    expect(t._late).toEqual({ done: true });
+  });
+
+  it('file route: a raw field written in init() reaches the page', async () => {
+    const wf = await loadFrameworkForm();
+    const t = wf.thread('rawinitfile', { state: { count: 0, _grid: null } },
+      { core: CORE, def: '/packages/threads/test/fixtures/raw-init-def.js' });
+    try {
+      await until(() => t.isLoading === false, 5000, 'first patch');
+      expect(t.count).toBe(4);
+      expect(t._grid).toBeInstanceOf(Float32Array);
+      expect(Array.from(t._grid)).toEqual([0, 10, 20, 30]);
+    } finally { wf.unregister('rawinitfile'); }
+  });
+});
+
+// Where a TH warning goes: through the core's wildflower.diagnostic() when
+// the core on that side is a development build (the line, the Suggestion,
+// the Docs line, and an entry in wildflower.diagnostics), and through
+// console.warn in the same format otherwise (no Docs line, nothing
+// recorded). Threads' own warnings are dev-only, so both cases are too.
+describe(`diagnostic routing (${BUILD})`, () => {
+  const live3 = [];
+  afterEach(() => { while (live3.length) endThread(live3.pop()); });
+
+  it.skipIf(isMin)('with a development core, a TH warning goes through wildflower.diagnostic(): recorded in wildflower.diagnostics, printed with the Docs line', async (ctx) => {
+    const wf = await loadFrameworkForm();
+    if (typeof wf.diagnostic !== 'function') ctx.skip();   // a production core has none
+    const t = await threadInline('routedev', statsDefinition());
+    live3.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    const before = wf.diagnostics.length;
+    const lines = await captureWarnings(() => { t.count = 99; });
+    const entries = wf.diagnostics.slice(before).filter((d) => d.code === 'TH-102');
+    expect(entries.length).toBe(1);
+    expect(entries[0].message).toContain("'count' is a computed");
+    expect(entries[0].suggestion).toMatch(/Write to the state the computed reads/);
+    expect(entries[0].docs).toContain('code=TH-102');
+    expect(lines.some((l) => l.startsWith('[TH-102] ') && l.indexOf("'count'") !== -1)).toBe(true);
+    expect(lines.some((l) => l.indexOf('↳ Docs: ') !== -1 && l.indexOf('TH-102') !== -1)).toBe(true);
+  });
+
+  it.skipIf(isMin)('with wildflower.diagnostic absent, a TH warning prints [TH-nnn] message and the Suggestion line through console.warn', async () => {
+    const wf = await loadFrameworkForm();
+    const t = await threadInline('routeplain', statsDefinition());
+    live3.push(t);
+    await until(() => t.isLoading === false, 5000, 'first patch');
+    const had = Object.prototype.hasOwnProperty.call(wf, 'diagnostic');
+    const saved = wf.diagnostic;
+    const logBefore = wf.diagnostics ? wf.diagnostics.length : 0;
+    let lines;
+    try {
+      wf.diagnostic = undefined;
+      lines = await captureWarnings(() => { t.count = 99; });
+    } finally {
+      if (had) wf.diagnostic = saved; else delete wf.diagnostic;
+    }
+    const at = lines.findIndex((l) => l.startsWith('[TH-102] '));
+    expect(at).not.toBe(-1);
+    expect(lines[at]).toBe("[TH-102] thread 'routeplain': 'count' is a computed; the worker owns it and the write was dropped");
+    expect(lines[at + 1]).toBe('  ↳ Suggestion: Write to the state the computed reads, or call a method on the thread.');
+    expect(lines.some((l) => l.indexOf('↳ Docs: ') !== -1)).toBe(false);
+    if (wf.diagnostics) expect(wf.diagnostics.length).toBe(logBefore);
   });
 });
 

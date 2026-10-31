@@ -126,7 +126,7 @@ describe('bindings', () => {
       await frames(4);
     });
     expect(mesh.count).toBe(2);
-    expect(lines.filter((l) => l.includes('3D-106')).length).toBe(BUILD === 'dev' ? 1 : 0);
+    expect(lines.filter((l) => l.startsWith('[3D-106] ')).length).toBe(BUILD === 'dev' ? 1 : 0);
   });
 
   it('a store pool binds as the mesh', async () => {
@@ -249,7 +249,7 @@ describe('bindings', () => {
         await tick(1150);
         await frames(2);
       });
-      const hits = lines.filter((l) => l.includes('3D-111'));
+      const hits = lines.filter((l) => l.startsWith('[3D-111] '));
       expect(hits.length).toBe(BUILD === 'dev' ? 1 : 0);
       if (BUILD === 'dev') expect(hits[0]).toContain('the position');
       expect(t.mesh.instanceMatrix.array[16 + 12]).toBe(-0.5);   // not drawn, as documented
@@ -264,7 +264,7 @@ describe('bindings', () => {
         await tick(1150);
         await frames(2);
       });
-      const hits = lines.filter((l) => l.includes('3D-111'));
+      const hits = lines.filter((l) => l.startsWith('[3D-111] '));
       expect(hits.length).toBe(BUILD === 'dev' ? 1 : 0);
       if (BUILD === 'dev') expect(hits[0]).toContain('the color');
     });
@@ -278,7 +278,7 @@ describe('bindings', () => {
         await tick(1150);
         await frames(2);
       });
-      expect(lines.filter((l) => l.includes('3D-111'))).toEqual([]);
+      expect(lines.filter((l) => l.startsWith('[3D-111] '))).toEqual([]);
     });
 
     it("an unknown sync value throws 3D-104", () => {
@@ -974,6 +974,240 @@ describe('render on demand', () => {
     expect(() => makeView({ render: 'lazy' })).toThrow(/3D-102/);
     expect(() => makeView({ maxFps: 0 })).toThrow(/3D-102/);
     expect(() => makeView({ maxFps: 'fast' })).toThrow(/3D-102/);
+  });
+});
+
+// uniform(target, source): a shader parameter follows store state. The target
+// is anything with a `.value` (a TSL uniform() node, a ShaderMaterial's
+// uniforms entry); the source is a function read each frame.
+describe('uniform bindings', () => {
+  function counted(s) {
+    const c = { n: 0 };
+    const orig = s.renderer.render.bind(s.renderer);
+    s.renderer.render = (a, b) => { c.n++; return orig(a, b); };
+    return c;
+  }
+
+  it('writes a number when the source changes, and draws once under render: change', async () => {
+    const { s, view } = makeView({ render: 'change' });
+    planes(THREE, s.scene);
+    const u = { value: 0 };
+    let glow = 0.25;
+    view.uniform(u, () => glow);
+    await frames(3);
+    expect(u.value).toBe(0.25);
+    const c = counted(s);
+    await frames(3);
+    expect(c.n).toBe(0);                        // unchanged: nothing written, nothing drawn
+    glow = 0.75;
+    await frames(3);
+    expect(u.value).toBe(0.75);
+    expect(c.n).toBe(1);
+  });
+
+  it('copies a Color or vector into the target\'s own object, keeping its identity', async () => {
+    const { view } = makeView();
+    const target = { value: new THREE.Color(0, 0, 0) }, own = target.value;
+    let src = new THREE.Color(1, 0, 0);
+    view.uniform(target, () => src);
+    await frames(2);
+    expect(target.value).toBe(own);
+    expect(own.r).toBe(1);
+    src = new THREE.Color(0, 1, 0);
+    await frames(2);
+    expect(target.value).toBe(own);
+    expect([own.r, own.g]).toEqual([0, 1]);
+    const v = { value: new THREE.Vector3() }, vOwn = v.value;
+    view.uniform(v, () => new THREE.Vector3(1, 2, 3));   // a fresh but equal object each frame
+    await frames(2);
+    expect(v.value).toBe(vOwn);
+    expect(vOwn.toArray()).toEqual([1, 2, 3]);
+  });
+
+  it('copies an array element by element', async () => {
+    const { view } = makeView();
+    const target = { value: [0, 0, 0] }, own = target.value;
+    let src = [1, 2, 3];
+    view.uniform(target, () => src);
+    await frames(2);
+    expect(target.value).toBe(own);
+    expect(own).toEqual([1, 2, 3]);
+    src = [4, 5, 6];
+    await frames(2);
+    expect(own).toEqual([4, 5, 6]);
+  });
+
+  it('a typed-array target and a source of another length settle: written once, then not redrawn', async () => {
+    const { s, view } = makeView({ render: 'change' });
+    planes(THREE, s.scene);
+    const long = { value: new Float32Array(3) }, short = { value: new Float32Array([9, 9, 9]) };
+    view.uniform(long, () => [0.1, 0.2, 0.3, 0.4]);    // longer, and not exact in float32
+    view.uniform(short, () => [1, 2]);
+    await frames(3);
+    expect(Array.from(long.value)).toEqual(Array.from(new Float32Array([0.1, 0.2, 0.3])));
+    expect(Array.from(short.value)).toEqual([1, 2, 9]);  // a typed array keeps its length; the rest stays
+    const c = counted(s);
+    await frames(3);
+    expect(c.n).toBe(0);
+  });
+
+  it('a number source sets a Color target\'s own object, and settles', async () => {
+    const { s, view } = makeView({ render: 'change' });
+    planes(THREE, s.scene);
+    const target = { value: new THREE.Color(0, 0, 0) }, own = target.value;
+    let hex = 0xff0000;
+    view.uniform(target, () => hex);
+    await frames(3);
+    expect(target.value).toBe(own);
+    expect(own.getHex()).toBe(0xff0000);
+    const c = counted(s);
+    await frames(3);
+    expect(c.n).toBe(0);
+    hex = 0x336699;
+    await frames(3);
+    expect(target.value).toBe(own);
+    expect(own.getHex()).toBe(0x336699);
+    expect(c.n).toBe(1);
+  });
+
+  it('returns a function that stops it; after the view is gone it does nothing', async () => {
+    const { name, view } = makeView();
+    const u = { value: 0 };
+    let x = 1;
+    const stop = view.uniform(u, () => x);
+    expect(stop).toBeTypeOf('function');
+    await frames(2);
+    expect(u.value).toBe(1);
+    stop();
+    x = 2;
+    await frames(2);
+    expect(u.value).toBe(1);
+    const again = view.uniform(u, () => 3);
+    wf.unregister(name);
+    expect(() => { again(); stop(); }).not.toThrow();
+  });
+
+  it('is on the view\'s store, and a bad target or source throws 3D-112', () => {
+    const { name, view } = makeView();
+    expect(wf.getStore(name).uniform).toBeTypeOf('function');
+    expect(() => view.uniform({}, () => 1)).toThrow(/3D-112/);
+    expect(() => view.uniform(null, () => 1)).toThrow(/3D-112/);
+    expect(() => view.uniform({ value: 0 }, 1)).toThrow(/3D-112/);
+  });
+
+  it('a throwing source keeps the last value, warns once (3D-113, development builds), and the frame goes on', async () => {
+    const { s, view } = makeView();
+    const mesh = planes(THREE, s.scene);
+    const u = { value: 1 };
+    let boom = false;
+    view.uniform(u, () => { if (boom) throw new Error('nope'); return 2; });
+    let rows = [{ id: 1, x: 0, y: 0, z: 0 }];
+    view.instanced(() => rows, mesh, { position: pos });
+    await frames(2);
+    expect(u.value).toBe(2);
+    const lines = await captureWarnings(async () => {
+      boom = true;
+      rows = [{ id: 1, x: 3, y: 0, z: 0 }];
+      await frames(4);
+    });
+    expect(u.value).toBe(2);
+    expect(mesh.instanceMatrix.array[12]).toBe(3);    // the other binding still wrote
+    expect(lines.filter((l) => l.startsWith('[3D-113] ')).length).toBe(BUILD === 'dev' ? 1 : 0);
+  });
+});
+
+// video(texture): a texture of a <video> uploaded when the video's time
+// moves. The footage is Kinetic's test fixture: 160 x 90, 30 fps, each frame
+// showing its own number as ten stripes, bit i in stripe i from the left.
+describe('video textures', () => {
+  const FOOTAGE = '/packages/kinetic/test/fixtures/f30.webm';
+
+  // A 160 x 90 view whose orthographic camera sees one plane, the video's
+  // texture on it, filling the canvas. A VideoTexture also marks itself when
+  // the browser presents a frame; with plain: true the texture is a plain
+  // Texture of the video, so only video() marks it.
+  async function videoView(opts = {}, plain = false) {
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:0;top:0;width:160px;height:90px';
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'display:block;width:160px;height:90px';
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.src = FOOTAGE;
+    video.style.cssText = 'position:fixed;left:200px;top:0;width:16px;height:9px';
+    host.append(canvas, video);
+    document.body.appendChild(host);
+    await new Promise((ok) => video.addEventListener('loadeddata', ok, { once: true }));
+    const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
+    renderer.setSize(160, 90, false);
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const texture = plain ? new THREE.Texture(video) : new THREE.VideoTexture(video);
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: texture })));
+    const name = uniq('v');
+    const view = wf.three.view(name, Object.assign({ renderer, scene, camera }, opts));
+    cleanup.push(() => { renderer.dispose(); host.remove(); });
+    cleanup.push(() => { if (wf.getStore(name)) wf.unregister(name); });
+    let draws = 0;
+    const orig = renderer.render.bind(renderer);
+    renderer.render = (a, b) => { draws++; return orig(a, b); };
+    return { name, view, video, texture, canvas, draws: () => draws };
+  }
+
+  // The frame number the canvas shows.
+  function shown(canvas) {
+    const c = document.createElement('canvas');
+    c.width = 10; c.height = 1;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(canvas, 0, 0, 10, 1);
+    const d = g.getImageData(0, 0, 10, 1).data;
+    let n = 0;
+    for (let i = 0; i < 10; i++) if (d[i * 4] > 128) n |= 1 << i;
+    return n;
+  }
+  const seekTo = (video, t) => new Promise((ok) => { video.addEventListener('seeked', ok, { once: true }); video.currentTime = t; });
+
+  it('a paused video that was sought is drawn at the frame it was sought to, once, under render: change', async () => {
+    const { view, video, texture, canvas, draws } = await videoView({ render: 'change' });
+    view.video(texture);
+    await frames(3);
+    for (const [t, frame] of [[0.5 + 0.001, 15], [2 + 0.001, 60], [1.2 + 0.001, 36]]) {
+      await seekTo(video, t);
+      const before = draws();
+      await frames(3);
+      expect(shown(canvas), 'at ' + t).toBe(frame);
+      expect(draws() - before, 'at ' + t).toBe(1);
+    }
+  });
+
+  it('a video still seeking is not uploaded until it has landed', async () => {
+    const { view, video, texture } = await videoView({}, true);
+    view.video(texture);
+    await frames(3);
+    const version = texture.version;
+    const landed = seekTo(video, 1.5);
+    expect(video.seeking).toBe(true);
+    view.draw();
+    expect(texture.version).toBe(version);
+    await landed;
+    view.draw();
+    expect(texture.version).toBeGreaterThan(version);
+  });
+
+  it('is on the view\'s store; the function it returns stops it; a bad texture throws 3D-114', async () => {
+    const { name, view, video, texture } = await videoView({}, true);
+    expect(wf.getStore(name).video).toBeTypeOf('function');
+    const stop = view.video(texture);
+    await frames(2);
+    stop();
+    const version = texture.version;
+    await seekTo(video, 2);
+    view.draw();
+    expect(texture.version).toBe(version);
+    expect(() => view.video(null)).toThrow(/3D-114/);
+    expect(() => view.video(new THREE.DataTexture(new Uint8Array(4), 1, 1))).toThrow(/3D-114/);
+    expect(() => view.video(video)).toThrow(/3D-114/);
   });
 });
 

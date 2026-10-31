@@ -113,9 +113,11 @@ export function startWorkerSide(name, def, post, wf) {
   // Underscore-prefixed state keys are the framework's non-reactive
   // instance fields (the context proxy routes them to the raw entity, not
   // the state tree). Here they are the per-frame output channel: kept out of
-  // the store's reactive state, seeded on the instance, and shipped whole
-  // whenever their identity changes after a message or a tick. Pool-shaped:
-  // no per-element reactivity on either side.
+  // the store's reactive state, held behind an accessor on the instance, and
+  // shipped whole whenever their identity changes. Assigning one schedules a
+  // patch the way a state write does, so a write from a tick, a timer or an
+  // async continuation goes out without a message in flight. Pool-shaped:
+  // no per-element reactivity on either side; a change in place is not seen.
   const initialState = def.state || {};
   const rawKeys = [];
   const reactiveState = {};
@@ -143,6 +145,14 @@ export function startWorkerSide(name, def, post, wf) {
   // wf.store(), which is before the change subscription below exists, so
   // those writes are recorded here or not at all.
   const initTouched = [];
+  // The raw fields' declared values, as seeded on the instance; the first
+  // snapshot sends any raw field init() replaced.
+  const seededRaw = {};
+  // The raw fields' current values, behind the accessors. `rawLive` turns on
+  // with the first snapshot: a write before it rides that snapshot, and the
+  // emit machinery below does not exist yet while wf.store() runs init().
+  const rawVals = {};
+  let rawLive = false;
 
   {
     // The write accessors go on from the store's init hook, so they exist
@@ -151,6 +161,18 @@ export function startWorkerSide(name, def, post, wf) {
     // refuse the assignment as a write to a computed.
     const userInit = def.init;
     storeDef.init = function () {
+      // The raw fields are seeded here, before the definition's own init, so
+      // a value init() assigns is the one that stays. Seeded after
+      // wf.store(), they overwrote it.
+      for (let i = 0; i < rawKeys.length; i++) {
+        const k = rawKeys[i];
+        rawVals[k] = seededRaw[k] = copyPlain(initialState[k]);
+        Object.defineProperty(this, k, {
+          configurable: true, enumerable: true,
+          get() { return rawVals[k]; },
+          set(v) { rawVals[k] = v; if (rawLive) scheduleEmit(); },
+        });
+      }
       for (let i = 0; i < workerOnlyState.length; i++) {
         const k = workerOnlyState[i];
         Object.defineProperty(this, k, {
@@ -175,11 +197,11 @@ export function startWorkerSide(name, def, post, wf) {
   }
   wf.store(name, storeDef);
   const store = wf.getStore(name);
+  // What the page holds for each raw field: the declared value, which it
+  // seeds from the same state. A field init() replaced differs from it, so
+  // the first snapshot sends it.
   const lastSent = {};
-  for (let i = 0; i < rawKeys.length; i++) {
-    store[rawKeys[i]] = copyPlain(initialState[rawKeys[i]]);
-    lastSent[rawKeys[i]] = store[rawKeys[i]];
-  }
+  for (let i = 0; i < rawKeys.length; i++) lastSent[rawKeys[i]] = seededRaw[rawKeys[i]];
   const computedNames = Object.keys(def.computed || {});
 
   // What changed since the last emit: leaf paths the tree reported, and the
@@ -210,22 +232,19 @@ export function startWorkerSide(name, def, post, wf) {
 
   // The first snapshot: every computed at its initial value. The subscribe
   // above installs the notifiers on a microtask (their first run records a
-  // baseline and pulses nothing); this runs after them.
+  // baseline and pulses nothing); this runs after them. It goes out through
+  // emit(), so it also carries the raw fields init() replaced (transferred)
+  // and anything written since setup, such as a write in a microtask that
+  // init() queued, which a snapshot of its own cleared and lost.
   queueMicrotask(() => {
     changedComputeds.clear();
-    changedPaths.clear();
-    const changes = [];
     // Anything the definition's init() changed. The page seeded its mirror
     // from the declared state, so without these it would hold the declared
     // values for the life of the thread while the worker used init's.
-    for (let i = 0; i < initTouched.length; i++) {
-      changes.push({ path: initTouched[i], value: copyPlain(store[initTouched[i]]) });
-    }
-    for (let i = 0; i < computedNames.length; i++) {
-      if (workerOnlyKeys.indexOf(computedNames[i]) !== -1) continue;
-      changes.push({ path: computedNames[i], value: copyPlain(store[computedNames[i]]) });
-    }
-    safePost({ type: PATCH, seq: 0, changes }, 0);
+    for (let i = 0; i < initTouched.length; i++) changedPaths.add(initTouched[i]);
+    for (let i = 0; i < computedNames.length; i++) changedComputeds.set(computedNames[i], store[computedNames[i]]);
+    rawLive = true;
+    emit(0, undefined, true);
   });
 
   // tick(dt): dt in milliseconds since the previous tick, as the framework's
@@ -260,8 +279,6 @@ export function startWorkerSide(name, def, post, wf) {
         }
       }
       if (!threw) consecutive = 0;
-      // A tick that only wrote raw fields queued nothing; the emit checks them.
-      if (rawKeys.length) scheduleEmit();
       // Compensate for the tick's own duration so the period stays TICK_MS.
       setTimeout(step, Math.max(0, TICK_MS - (performance.now() - now)));
     };
@@ -270,8 +287,9 @@ export function startWorkerSide(name, def, post, wf) {
 
   // Send one patch for everything that changed. Returns false when the patch
   // could not be sent (an uncloneable value); the caller turns that into an
-  // ERROR reply for its message.
-  function emit(seq, excludePaths) {
+  // ERROR reply for its message. `always` posts even an empty patch: the
+  // first snapshot is what ends the page's isLoading.
+  function emit(seq, excludePaths, always) {
     if (excludePaths) for (let i = 0; i < excludePaths.length; i++) changedPaths.delete(excludePaths[i]);
     const changes = [];
     // Raw fields: shipped when the identity changed since the last send. A
@@ -294,7 +312,7 @@ export function startWorkerSide(name, def, post, wf) {
       // postMessage refuses a duplicate.
       if (buf && (!transfer || transfer.indexOf(buf) === -1)) (transfer || (transfer = [])).push(buf);
     }
-    if (changes.length === 0 && changedPaths.size === 0 && changedComputeds.size === 0) return true;
+    if (!always && changes.length === 0 && changedPaths.size === 0 && changedComputeds.size === 0) return true;
     const paths = normalizePaths(changedPaths);
     for (let i = 0; i < paths.length; i++) {
       const head = paths[i].split('.')[0];

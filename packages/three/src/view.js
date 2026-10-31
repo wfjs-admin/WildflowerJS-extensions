@@ -8,8 +8,8 @@
  * resources unless told to keep them (`dispose: false`).
  */
 
-import { lib, Binding, BufferBinding } from './bindings.js';
-import { CODES, fail } from './diagnostics.js';
+import { lib, Binding, BufferBinding, UniformBinding } from './bindings.js';
+import { CODES, warn, fail } from './diagnostics.js';
 
 const DRAG_PX = 4;          // a pointer that moved further than this between press and release dragged, not clicked
 const STATS_MS = 1000;      // how often the averaged frame cost is published
@@ -21,6 +21,7 @@ export function View(name, opts, publish) {
   this.scene = opts.scene;
   this.camera = opts.camera;
   this.before = opts.before || null;       // optional per-frame hook (controls.update)
+  this.drawWith = opts.draw || null;       // replaces renderer.render(scene, camera), for a post-processing pass
   this.fit = opts.fit || null;
   this.inset = opts.inset || null;
   this.occluder = opts.occluder || null;
@@ -35,6 +36,8 @@ export function View(name, opts, publish) {
   this.camSeen = new Float64Array(32);     // camera world and projection matrices at the last draw
   this.publish = publish;                  // writes into the view's store
   this.bindings = [];
+  this.uniforms = [];                      // uniform() bindings: no mesh, never picked
+  this.videos = [];                        // video() textures: { texture, at }, at the time last uploaded
   this.followers = [];
   this.raycaster = new T.Raycaster();
   this.occRay = new T.Raycaster();         // the occluder's own, so picking's ray is left alone
@@ -55,6 +58,7 @@ export function View(name, opts, publish) {
   this.offsetSet = false;                  // whether the view offset on the camera is this view's
   this.w = 0; this.h = 0;                  // the canvas size, CSS px, from the last resize
   this.dead = false;
+  this.drawing = false;                    // inside frame(): a draw() then does nothing (3D-115)
   this.listen();
   // The size is tracked either way: of `fit` (which the view then sizes the
   // renderer to), or of the canvas the author sizes.
@@ -73,6 +77,18 @@ View.prototype.instanced = function (source, mesh, spec) {
   if (spec.sync !== undefined && spec.sync !== 'frame' && spec.sync !== 'change') {
     throw fail(CODES.BAD_INSTANCED, "instanced(source, mesh, spec): spec.sync is 'frame' (the default) or 'change', not " + JSON.stringify(spec.sync));
   }
+  // The array forms take field names: quaternion 4, rotation 3, and scale 3
+  // when it is an array.
+  for (const [k, n] of [['quaternion', 4], ['rotation', 3], ['scale', 3]]) {
+    const v = spec[k];
+    if (v !== undefined && (k !== 'scale' || Array.isArray(v)) && !(Array.isArray(v) && v.length === n && v.every((f) => typeof f === 'string'))) {
+      throw fail(CODES.BAD_INSTANCED, 'instanced(source, mesh, spec): spec.' + k + ' as an array is ' + n + ' field names');
+    }
+  }
+  // One way to set the rotation; direction beside rotationY stays allowed
+  // (direction is drawn), as it was before quaternion and rotation.
+  const turns = ['quaternion', 'rotation', 'direction', 'rotationY'].filter((k) => spec[k] !== undefined);
+  if (turns.length > 1 && turns[0] !== 'direction') throw fail(CODES.BAD_INSTANCED, 'instanced(source, mesh, spec): spec.' + turns.join(' and spec.') + ' each set the rotation; give one');
   const b = new Binding(source, mesh, spec, spec.name || 'binding' + this.bindings.length);
   this.bindings.push(b);
   this.bound.add(mesh);
@@ -84,10 +100,44 @@ View.prototype.buffer = function (source, mesh, spec) {
   if (!mesh || !mesh.isInstancedMesh) throw fail(CODES.BAD_BUFFER, 'buffer(source, mesh, spec): mesh must be an InstancedMesh');
   const missing = !spec ? ['spec'] : [!spec.stride && 'stride', !spec.position && 'position', typeof spec.count !== 'function' && 'count(arr)'].filter(Boolean);
   if (missing.length) throw fail(CODES.BAD_BUFFER, 'buffer(source, mesh, spec): spec is missing ' + missing.join(', '));
+  const q = spec.quaternion;
+  if (q !== undefined && (spec.direction || !(Array.isArray(q) && q.length === 4 && q.every(Number.isInteger)))) {
+    throw fail(CODES.BAD_BUFFER, 'buffer(source, mesh, spec): spec.quaternion is 4 offsets within a record, instead of spec.direction');
+  }
   const b = new BufferBinding(source, mesh, spec, spec.name || 'binding' + this.bindings.length);
   this.bindings.push(b);
   this.bound.add(mesh);
   return b;
+};
+
+// A shader parameter that follows the app: `target` is anything with a
+// `.value` (a TSL uniform() node, a ShaderMaterial's uniforms entry) and
+// `source` a function read each frame. A change is written, and draws with
+// render: 'change'. Returns a function that stops it.
+View.prototype.uniform = function (target, source) {
+  if (!target || typeof target !== 'object' || !('value' in target)) {
+    throw fail(CODES.BAD_UNIFORM, 'uniform(target, source): target is an object with a value, such as a TSL uniform() or material.uniforms.name');
+  }
+  if (typeof source !== 'function') throw fail(CODES.BAD_UNIFORM, 'uniform(target, source): source is a function returning the value');
+  const u = new UniformBinding(target, source);
+  this.uniforms.push(u);
+  return () => { const i = this.uniforms.indexOf(u); if (i !== -1) this.uniforms.splice(i, 1); };
+};
+
+// A texture of a <video>, uploaded on the next frame after the video's time
+// moves, and drawn with render: 'change'. three.js marks a VideoTexture for
+// upload when the browser presents a new video frame, which a paused video
+// that was sought need not do before the next draw; this follows the video's
+// currentTime instead, so the frame drawn is the one it was sought to. A
+// video still seeking, or with no frame yet, is left until it has one.
+View.prototype.video = function (texture) {
+  const el = texture && texture.isTexture ? texture.image : null;
+  if (!el || typeof el.currentTime !== 'number' || typeof el.readyState !== 'number') {
+    throw fail(CODES.BAD_VIDEO, 'video(texture): texture is a three.js texture of a <video>, such as new THREE.VideoTexture(video)');
+  }
+  const v = { texture, at: NaN };
+  this.videos.push(v);
+  return () => { const i = this.videos.indexOf(v); if (i !== -1) this.videos.splice(i, 1); };
 };
 
 // ── Sizing ──
@@ -205,10 +255,16 @@ View.prototype.occluded = function (x, y, z) {
 
 // ── Projection ──
 
-// A world point on screen, in CSS pixels of the canvas, or null behind the camera.
-View.prototype.projectPoint = function (x, y, z) {
-  const el = this.renderer.domElement;
-  this.v.set(x, y, z).project(this.camera);
+// A world point on screen, in CSS pixels of the canvas, or null behind the
+// camera: the view's camera, or `camera` when one is given (a camera aimed
+// from a scene's time, while the view's is aimed only when it draws). The
+// camera's matrices are brought up to date first, so a camera moved in code
+// since the last frame projects from where it is now (lookAt() alone leaves
+// them half updated).
+View.prototype.projectPoint = function (x, y, z, camera) {
+  const el = this.renderer.domElement, cam = camera || this.camera;
+  cam.updateWorldMatrix(true, false);
+  this.v.set(x, y, z).project(cam);
   if (this.v.z > 1) return null;
   return { x: (this.v.x + 1) / 2 * el.clientWidth, y: (1 - this.v.y) / 2 * el.clientHeight };
 };
@@ -360,8 +416,33 @@ View.prototype.listen = function () {
 
 // ── The frame ──
 
+// One frame now, drawn whatever `render` and `maxFps` say: for code that
+// must have the canvas hold this moment before it reads or captures it (a
+// seek in a video composition). The frame loop's own gating resumes after.
+// Called while the view is drawing (from its draw option or before()), it
+// does nothing: drawing again from there would never return.
+View.prototype.draw = function () {
+  if (this.dead) return;
+  if (this.drawing) {
+    if (__DEV__ && !this.warnedDraw) {
+      this.warnedDraw = true;
+      warn(CODES.DRAW_IN_FRAME, "view '" + this.name + "': draw() was called while the view was drawing a frame (from its draw option or before()); it did nothing",
+        'Inside the draw option, render with the renderer or composer it is given; call view.draw() from code outside the frame.');
+    }
+    return;
+  }
+  this.invalid = true;
+  this.lastFrameAt = -Infinity;
+  this.frame();
+};
+
 View.prototype.frame = function () {
   if (this.dead) return;
+  this.drawing = true;
+  try { this.frameNow(); } finally { this.drawing = false; }
+};
+
+View.prototype.frameNow = function () {
   const start = performance.now();
   // maxFps: the whole frame runs at most that often. The 2 ms slack keeps a
   // 60 Hz display from dropping a frame it should have drawn.
@@ -373,6 +454,14 @@ View.prototype.frame = function () {
   if (this.dead) return;               // unregistered by its own before()
   const t0 = performance.now();
   let wrote = false;
+  for (const u of this.uniforms) if (u.sync()) wrote = true;
+  for (const v of this.videos) {
+    const el = v.texture.image;
+    if (!el || el.readyState < 2 || el.seeking || el.currentTime === v.at) continue;
+    v.at = el.currentTime;
+    v.texture.needsUpdate = true;
+    wrote = true;
+  }
   for (const b of this.bindings) if (b.sync()) wrote = true;
   const t1 = performance.now();
   // render: 'change' draws only for a write, a camera move, a resize or an
@@ -382,7 +471,8 @@ View.prototype.frame = function () {
   const draw = !this.onDemand || wrote || camMoved || this.invalid;
   if (draw) {
     this.invalid = false;
-    this.renderer.render(this.scene, this.camera);
+    if (this.drawWith) this.drawWith(this.renderer, this.scene, this.camera);
+    else this.renderer.render(this.scene, this.camera);
   }
   const t2 = performance.now();
   if (this.followers.length) {
@@ -439,6 +529,8 @@ View.prototype.dispose = function (others) {
   for (const b of this.bindings) b.release();
   this.followers.length = 0;
   this.bindings.length = 0;
+  this.uniforms.length = 0;
+  this.videos.length = 0;
   this.bound.clear();
   if (this.keep) return;
   const shared = { meshes: new Set(), geometries: new Set(), materials: new Set(), textures: new Set() };
