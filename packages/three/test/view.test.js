@@ -1175,8 +1175,10 @@ describe('video textures', () => {
     view.video(texture);
     await frames(3);
     for (const [t, frame] of [[0.5 + 0.001, 15], [2 + 0.001, 60], [1.2 + 0.001, 36]]) {
-      await seekTo(video, t);
+      // Counted from before the seek: the browser clears video.seeking before
+      // it fires 'seeked', so the view's draw can land between the two.
       const before = draws();
+      await seekTo(video, t);
       await frames(3);
       expect(shown(canvas), 'at ' + t).toBe(frame);
       expect(draws() - before, 'at ' + t).toBe(1);
