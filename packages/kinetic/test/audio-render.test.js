@@ -21,6 +21,10 @@ afterEach(async () => {
 });
 
 const hasAudio = typeof AudioEncoder === 'function' && typeof AudioDecoder === 'function';
+// Chrome encodes AAC through the operating system, on macOS and Windows; on
+// Linux it has no AAC encoder and render() writes Opus (KN-202). The tests of
+// the AAC track run where the browser has one.
+const hasAac = hasAudio && (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }).catch(() => ({}))).supported === true;
 
 // ---- reading the file ------------------------------------------------------------
 
@@ -164,7 +168,7 @@ async function clickAndFlash(id, extra = '') {
 }
 
 describe(`render() with sound (${BUILD} extension, ${CORE_TIER} core)`, () => {
-  it.runIf(hasAudio)('writes an AAC track whose click, with the edit list applied, is within 1 ms of 1.0 s, where the flash is', async () => {
+  it.runIf(hasAac)('writes an AAC track whose click, with the edit list applied, is within 1 ms of 1.0 s, where the flash is', async () => {
     const { wf, canvas } = await clickAndFlash('ar1');
     const r = await wf.kinetic.render({ source: canvas, download: false, bitrate: 1e6 });
     expect(r.frames).toBe(60);
@@ -183,7 +187,7 @@ describe(`render() with sound (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(Math.abs(await videoDuration(r.blob) - 2)).toBeLessThan(0.1);
   });
 
-  it.runIf(hasAudio)('the priming in the edit list is the priming the decoded track shows', async () => {
+  it.runIf(hasAac)('the priming in the edit list is the priming the decoded track shows', async () => {
     const { wf, canvas } = await clickAndFlash('ar2');
     const r = await wf.kinetic.render({ source: canvas, download: false, bitrate: 1e6 });
     const track = await demux(r.blob);
@@ -192,7 +196,7 @@ describe(`render() with sound (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(Math.abs((raw - 48000) - track.mediaTime), 'decoded click at ' + raw + ', edit list ' + track.mediaTime).toBeLessThanOrEqual(2);
   });
 
-  it.runIf(hasAudio)('from 0.5: the click is at 0.5 s in the file', async () => {
+  it.runIf(hasAac)('from 0.5: the click is at 0.5 s in the file', async () => {
     const { wf, canvas } = await clickAndFlash('ar3');
     const r = await wf.kinetic.render({ source: canvas, from: 0.5, download: false, bitrate: 1e6 });
     expect(r.frames).toBe(45);
@@ -228,7 +232,7 @@ describe(`render() with sound (${BUILD} extension, ${CORE_TIER} core)`, () => {
   // render's length, 101 with it a pre-skip longer), so an Opus decode covers
   // the render and runs on by less than one packet.
   for (const [audioCodec, over] of [['mp4a.40.2', 48], ['opus', 959]]) {
-    it.runIf(hasAudio)(`Chrome's own decode of the file (${audioCodec}) puts the click within 1 ms of 1.0 s and lasts the render's length`, async () => {
+    it.runIf(audioCodec === 'opus' ? hasAudio : hasAac)(`Chrome's own decode of the file (${audioCodec}) puts the click within 1 ms of 1.0 s and lasts the render's length`, async () => {
       const { wf, canvas } = await clickAndFlash('ar9' + audioCodec.length);
       const r = await wf.kinetic.render({ source: canvas, audioCodec, download: false, bitrate: 1e6 });
       const b = await new OfflineAudioContext(2, 1, 48000).decodeAudioData(await r.blob.arrayBuffer());
@@ -239,7 +243,7 @@ describe(`render() with sound (${BUILD} extension, ${CORE_TIER} core)`, () => {
     });
   }
 
-  it.runIf(hasAudio)('an encoder delay that cannot be measured is KN-203, thrown on every build', async () => {
+  it.runIf(hasAac)('an encoder delay that cannot be measured is KN-203, thrown on every build', async () => {
     const { wf, canvas } = await clickAndFlash('ar10');
     // A decoder that hands back nothing: the measuring impulse never comes out.
     const decode = AudioDecoder.prototype.decode;
@@ -282,7 +286,11 @@ describe(`render() with sound (${BUILD} extension, ${CORE_TIER} core)`, () => {
       await wf.kinetic.render({ source: canvas, from: 1.5, download: false, bitrate: 1e6 });
     });
     expect((await demux(r.blob)).codec).toBe('Opus');
-    expect(lines.filter((l) => l.startsWith('[KN-202]')).length).toBe(BUILD === 'dev' ? 1 : 0);
+    // KN-202 prints once per page: where the browser has no AAC encoder, an
+    // earlier render in this file has already printed it.
+    const kn202 = lines.filter((l) => l.startsWith('[KN-202]')).length;
+    if (hasAac) expect(kn202).toBe(BUILD === 'dev' ? 1 : 0);
+    else expect(kn202).toBeLessThanOrEqual(BUILD === 'dev' ? 1 : 0);
     const err = await wf.kinetic.render({ source: canvas, audioCodec: 'mp4a.40.2', download: false }).catch((e) => e);
     expectKN(err, 'KN-100', 'render(): mp4a.40.2 at 48 kHz', /^this browser cannot encode mp4a\.40\.2/);
   });
