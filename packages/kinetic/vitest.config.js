@@ -50,6 +50,10 @@ export default defineConfig({
     // vitest.render.config.js runs those.
     exclude: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js'],
     testTimeout: 30000,
+    // On CI (two cores) the files run one at a time: the live-playback tests
+    // time a playing <video> against the clock, and with every file's tab
+    // decoding at once the footage falls behind for want of CPU.
+    fileParallelism: !process.env.CI,
     isolate: true,
     globals: true,
   },
