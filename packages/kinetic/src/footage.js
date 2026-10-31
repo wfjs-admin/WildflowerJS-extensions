@@ -127,14 +127,19 @@ export function createFootage(clock, clips) {
   // The clip's next `seeked` that leaves it still, or the end of its source.
   // A seek set over one still running fires one `seeked`, for the later time,
   // and a `seeked` that arrives while the element is still seeking belongs
-  // to an earlier seek. For a seek onto the end of the file, Chrome can fire
+  // to an earlier seek. Under load Chrome can fire `seeked` before the new
+  // frame is presented, so a drawImage of the clip still gets the frame from
+  // before the seek (seen on CI: frame 105 after a seek back to 0); every
+  // seek waits for the element to present a frame, which Chrome does after
+  // each seek, one within the frame already shown included (probed
+  // 2026-10-31). For a seek onto the end of the file, Chrome can also fire
   // `seeked` before it has flushed the last frames, and `ended` reads only
-  // the position, so that seek waits for `ended` and for the element to
-  // present a frame, for up to a second.
+  // the position, so that seek waits for `ended` too. Both waits give up
+  // after a second.
   // A seek that has not landed in SEEK_WAIT_MS, its file stopped loading
   // partway, is KN-138 naming the clip, so a render never waits forever.
   const seeked = (el, end) => new Promise((resolve, reject) => {
-    let shown = !end || !el.requestVideoFrameCallback;
+    let shown = !el.requestVideoFrameCallback;
     if (!shown) el.requestVideoFrameCallback(() => { shown = true; });
     const late = setTimeout(() => {
       for (const n of SETTLED) el.removeEventListener(n, done);
@@ -145,7 +150,7 @@ export function createFootage(clock, clips) {
       clearTimeout(late);
       for (const n of SETTLED) el.removeEventListener(n, done);
       let polls = 0;
-      const out = () => (!end || e.type !== 'seeked' || el.ended && shown || ++polls > 60 ? resolve() : setTimeout(out, 16));
+      const out = () => (e.type !== 'seeked' || shown && (!end || el.ended) || ++polls > 60 ? resolve() : setTimeout(out, 16));
       out();
     };
     for (const n of SETTLED) el.addEventListener(n, done);
