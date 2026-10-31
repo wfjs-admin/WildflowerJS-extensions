@@ -37,6 +37,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -129,19 +130,22 @@ function testPackage(pkgName) {
 
     // The size leg: the production file's Brotli bytes against the package's
     // budget in extension-budgets.json. A package with no budget is
-    // reported, not failed.
+    // reported, not failed. The bytes are compressed here, with the quality
+    // build-rollup.cjs uses for its .br files, because build-extension.cjs
+    // (the extensions repo's build) writes no .br beside the file.
     const prod = (manifest.outputs || []).find((o) => o.minify);
     if (prod) {
-        const br = path.join(pkgDir, prod.file + '.br');
+        const min = path.join(pkgDir, prod.file);
         const budgets = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension-budgets.json'), 'utf8'));
         const budget = budgets[pkgName] && budgets[pkgName].br;
-        if (!fs.existsSync(br)) {
-            results.push({ label: 'size', ok: false, note: `missing ${path.relative(ROOT, br)}; build it first` });
-            console.log(`== size: MISSING ${path.relative(ROOT, br)}`);
+        const brSize = () => zlib.brotliCompressSync(fs.readFileSync(min), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }).length;
+        if (!fs.existsSync(min)) {
+            results.push({ label: 'size', ok: false, note: `missing ${path.relative(ROOT, min)}; build it first` });
+            console.log(`== size: MISSING ${path.relative(ROOT, min)}`);
         } else if (!budget) {
-            console.log(`== size: ${fs.statSync(br).size} B brotli, no budget in extension-budgets.json`);
+            console.log(`== size: ${brSize()} B brotli, no budget in extension-budgets.json`);
         } else {
-            const size = fs.statSync(br).size;
+            const size = brSize();
             const ok = size <= budget;
             const note = `${size} B brotli, budget ${budget} B` + (ok ? '' : ` (${size - budget} B over: raise its budget in extension-budgets.json with since and why, in the same change)`);
             results.push({ label: 'size', ok, note });

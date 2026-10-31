@@ -1117,10 +1117,12 @@ describe('uniform bindings', () => {
 });
 
 // video(texture): a texture of a <video> uploaded when the video's time
-// moves. The footage is Kinetic's test fixture: 160 x 90, 30 fps, each frame
-// showing its own number as ten stripes, bit i in stripe i from the left.
+// moves. The footage is a copy of Kinetic's test fixture, kept here so the
+// package's tests run where Kinetic is absent (the extensions repo): 160 x 90,
+// 30 fps, each frame showing its own number as ten stripes, bit i in stripe i
+// from the left.
 describe('video textures', () => {
-  const FOOTAGE = '/packages/kinetic/test/fixtures/f30.webm';
+  const FOOTAGE = '/packages/three/test/fixtures/f30.webm';
 
   // A 160 x 90 view whose orthographic camera sees one plane, the video's
   // texture on it, filling the canvas. A VideoTexture also marks itself when
