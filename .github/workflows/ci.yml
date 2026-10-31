@@ -56,8 +56,12 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
+      # Google Chrome too: Kinetic's suite runs in it (WILDFLOWER_BROWSER_CHANNEL),
+      # the browser Kinetic renders in. Linux Chromium has no AAC encoder.
+      - run: npx playwright install --with-deps chromium chrome
       - name: Build (vendored rollup + terser, SHA-512 pinned)
         run: npm run fetch-tools && node scripts/build-extension.cjs "${{ matrix.package }}"
       - name: Every declared tier and build
+        env:
+          WILDFLOWER_BROWSER_CHANNEL: chrome
         run: node scripts/test-extension.cjs "${{ matrix.package }}" --core-dir node_modules/wildflowerjs/dist

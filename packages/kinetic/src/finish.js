@@ -316,12 +316,15 @@ export function createFinishLive(clock) {
   }
   // The dust for frame f: the shader's cells of 10 px counted from the
   // bottom, a speck where the cell's hash for the frame is under the amount,
-  // at the hashed place and size.
+  // at the hashed place and size. The canvas stays on the CPU
+  // (willReadFrequently): Chrome moves a canvas from the GPU to the CPU the
+  // first time its pixels are read, and the two edge the specks differently,
+  // so the same frame read before and after that move would not match.
   function drawDust(f) {
     const w = root.offsetWidth, h = root.offsetHeight, dpr = Math.min(2, self.devicePixelRatio || 1);
     if (!w || !h) return;
     if (dust.width !== Math.round(w * dpr) || dust.height !== Math.round(h * dpr)) { dust.width = Math.round(w * dpr); dust.height = Math.round(h * dpr); }
-    const g = dust.getContext('2d');
+    const g = dust.getContext('2d', { willReadFrequently: true });
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, dust.width, dust.height);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);

@@ -14,8 +14,12 @@ import { flakyRoute } from './test/flaky-route.js'
 //
 // EXT_BUILD: dev (default) or min. WF_CORE: the framework tier file on the
 // page (default full.dev). WILDFLOWER_BROWSER: chromium (default), firefox, all.
+// WILDFLOWER_BROWSER_CHANNEL: a Playwright channel such as chrome, to run in
+// the installed Google Chrome, the browser Kinetic renders in. The extensions
+// repository's CI sets it: Linux Chromium has no AAC encoder.
 
 const build = process.env.EXT_BUILD || 'dev'
+const channel = process.env.WILDFLOWER_BROWSER_CHANNEL
 if (build !== 'dev' && build !== 'min') throw new Error(`EXT_BUILD must be dev or min (got ${build})`)
 const wfFile = build === 'min' ? '/packages/kinetic/dist/kinetic.wf.min.js' : '/packages/kinetic/dist/kinetic.wf.js'
 const core = process.env.WF_CORE || '/www/js/dist/wildflower.full.dev.js'
@@ -37,7 +41,7 @@ export default defineConfig({
   test: {
     browser: {
       enabled: true,
-      provider: playwright(),
+      provider: playwright(channel ? { launchOptions: { channel } } : undefined),
       instances: browserInstances,
       headless: true,
     },

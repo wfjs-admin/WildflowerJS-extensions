@@ -54,12 +54,16 @@ jobs:
           fi
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # Google Chrome too: Kinetic's suite runs in it (WILDFLOWER_BROWSER_CHANNEL),
+      # the browser Kinetic renders in. Linux Chromium has no AAC encoder.
+      - run: npx playwright install --with-deps chromium chrome
 
       - name: Build (vendored rollup + terser, SHA-512 pinned)
         run: npm run fetch-tools && node scripts/build-extension.cjs "${{ steps.tag.outputs.name }}"
 
       - name: Test against every framework version the range allows (lowest and latest)
+        env:
+          WILDFLOWER_BROWSER_CHANNEL: chrome
         run: |
           for core in $(node scripts/extension-core-versions.cjs "${{ steps.tag.outputs.name }}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).join(' ')))"); do
             echo "== wildflowerjs@$core"
