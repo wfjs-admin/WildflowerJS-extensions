@@ -26,8 +26,9 @@
  * tracking (em between letters, 0), spacing ('natural': each letter's own
  * advance, as After Effects' per-character spacing; 'fixed': each letter
  * in the slot of its default advance), color (#000), and an axis value for
- * the whole line (wght, slnt). letter(i, ch) returns that letter's own
- * values, any of wght, slnt, dx, dy, scale, rotate (degrees), opacity,
+ * the whole line (wght, slnt, or any other axis the outlines were baked
+ * with, by its tag, such as BNCE). letter(i, ch) returns that letter's own
+ * values, any of those axes, dx, dy, scale, rotate (degrees), opacity,
  * blur (px) and color. A slant on a font with no slnt axis is drawn by
  * skewing the letter. A line takes the left letter's setting for each
  * kerning pair, and its width is the advances and the tracking between
@@ -129,7 +130,10 @@ export function createLettering(wf, clock, scenes) {
     function drawLine(str, o, letter) {
       if (typeof str !== 'string') throw fail(CODES.BAD_CALL, 'line(string)', __DEV__ && 'string is the text of the line, not ' + show(str));
       const opt = o || {};
-      for (const k in opt) if (!LINE.includes(k)) throw fail(CODES.BAD_CALL, 'line(string, { ' + k + ' })', __DEV__ && "'" + k + "' is not an option; the options are " + LINE.join(', '));
+      // Any axis the outlines were baked with is a value too, as wght and slnt are.
+      const tags = font.axes.map((ax) => ax.tag);
+      const held = __DEV__ && (tags.length ? ', and an axis the outlines hold: ' + tags.join(', ') : '');
+      for (const k in opt) if (!LINE.includes(k) && !tags.includes(k)) throw fail(CODES.BAD_CALL, 'line(string, { ' + k + ' })', __DEV__ && "'" + k + "' is not an option; the options are " + LINE.join(', ') + held);
       const at = opt.at || [0, 0];
       if (!Array.isArray(at) || at.length !== 2 || !at.every(isNum)) throw fail(CODES.BAD_CALL, 'line(string, { at })', __DEV__ && 'at is a point, [x, y], not ' + show(opt.at));
       const size = opt.size === undefined ? 16 : opt.size;
@@ -138,19 +142,18 @@ export function createLettering(wf, clock, scenes) {
       for (const [k, ok] of CHOICE) {
         if (opt[k] !== undefined && !ok.includes(opt[k])) throw fail(CODES.BAD_CALL, 'line(string, { ' + k + ' })', __DEV__ && k + ' is ' + ok.join(', ').replace(/, (\w+)$/, ' or $1') + ', not ' + show(opt[k]));
       }
-      for (const k of ['tracking', 'wght', 'slnt']) {
+      for (const k of ['tracking', 'wght', 'slnt'].concat(tags)) {
         if (opt[k] !== undefined && !isNum(opt[k])) throw fail(CODES.BAD_CALL, 'line(string, { ' + k + ' })', __DEV__ && k + ' is a number, not ' + show(opt[k]));
       }
       if (opt.color !== undefined && typeof opt.color !== 'string') throw fail(CODES.BAD_CALL, 'line(string, { color })', __DEV__ && 'color is a CSS colour, not ' + show(opt.color));
       const u = size / font.upm, tracking = (opt.tracking || 0) * font.upm;
       const chars = Array.from(str);
-      const tags = font.axes.map((ax) => ax.tag);
       const states = chars.map((ch, i) => {
         const g = font.glyphs[ch];
         if (!g) throw fail(CODES.BAD_CALL, 'line(string)', __DEV__ && 'the outlines hold no "' + ch + '"; bake them with it');
         const s = letter ? letter(i, ch) || {} : {};
         for (const k in s) {
-          if (!LETTER.includes(k)) throw fail(CODES.BAD_CALL, 'letter(i, ch)', __DEV__ && "'" + k + "' is not a letter value; they are " + LETTER.join(', '));
+          if (!LETTER.includes(k) && !tags.includes(k)) throw fail(CODES.BAD_CALL, 'letter(i, ch)', __DEV__ && "'" + k + "' is not a letter value; they are " + LETTER.join(', ') + held);
           if (s[k] !== undefined && (k === 'color' ? typeof s[k] !== 'string' : !isNum(s[k]))) throw fail(CODES.BAD_CALL, 'letter(i, ch).' + k, __DEV__ && k + ' is ' + (k === 'color' ? 'a CSS colour' : 'a number') + ', not ' + show(s[k]));
         }
         const values = font.axes.map((ax) => (s[ax.tag] !== undefined ? s[ax.tag] : opt[ax.tag] !== undefined ? opt[ax.tag] : ax.default));

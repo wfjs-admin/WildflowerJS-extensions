@@ -213,6 +213,18 @@ function offsetOf(el) {
   }
   return [x, y];
 }
+// How Chrome paints a canvas's bitmap inside the render's canvas. Until 156
+// (probed in 154 and 156): at one drawing px to the CSS px from its border
+// box's corner, clipped to its content box, whatever its border, padding and
+// object-fit, so a copy's bitmap is the border box with the drawing placed
+// inside it. From 157, the version that turned HTML-in-Canvas on (probed in
+// 158; 157 assumed): as CSS paints any canvas, into its content box, so the
+// bitmap is the content box. Another browser cannot render the DOM at all.
+const CONTENT_BOX_PAINT = (() => {
+  const m = typeof navigator !== 'undefined' && /Chrome\/(\d+)/.exec(navigator.userAgent);
+  return !m || Number(m[1]) >= 157;
+})();
+
 // One frame of the copies: `pairs` maps each canvas to its copy, kept from
 // frame to frame.
 function updateCopies(pairs, source, wrap) {
@@ -277,13 +289,12 @@ function updateCopies(pairs, source, wrap) {
     set('translate', 'calc(' + (r.at[0] - wx) + 'px + ' + (r.t[0] || '0px') + ') calc(' + (r.at[1] - wy) + 'px + ' + (r.t[1] || '0px') + ')' + (r.t[2] ? ' ' + r.t[2] : ''));
     set('object-fit', 'fill');
     // The background, then the drawing where object-fit and object-position
-    // put it in the content box, in a bitmap the size of the border box:
-    // inside the render's canvas Chrome paints a canvas's bitmap at one
-    // drawing px to the CSS px from its border box's corner, clipped to its
-    // content box, whatever its CSS size, border, padding and object-fit
-    // (probed 2026-10-10). A drawing of 0 x 0, or a box with no content
-    // area, leaves the background alone, as the page shows it.
-    const bw = Math.ceil(r.w), bh = Math.ceil(r.h);
+    // put it in the content box, in a bitmap the size of the content box
+    // (Chrome 157 on) or of the border box with the drawing inset by the
+    // border and padding (before 157): see CONTENT_BOX_PAINT. A drawing of
+    // 0 x 0, or a box with no content area, leaves the background alone, as
+    // the page shows it.
+    const bw = CONTENT_BOX_PAINT ? Math.max(1, Math.ceil(r.w - r.ih)) : Math.ceil(r.w), bh = CONTENT_BOX_PAINT ? Math.max(1, Math.ceil(r.h - r.iv)) : Math.ceil(r.h);
     if (copy.width !== bw) copy.width = bw;
     if (copy.height !== bh) copy.height = bh;
     ctx.clearRect(0, 0, bw, bh);
@@ -297,7 +308,7 @@ function updateCopies(pairs, source, wrap) {
     const dx = place(r.pos[0] || '50%', w - dw), dy = place(r.pos[1] || '50%', h - dh);
     ctx.imageSmoothingEnabled = r.smooth;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(canvas, r.il + dx, r.it + dy, dw, dh);
+    ctx.drawImage(canvas, (CONTENT_BOX_PAINT ? 0 : r.il) + dx, (CONTENT_BOX_PAINT ? 0 : r.it) + dy, dw, dh);
   }
 }
 function removeCopies(pairs) {

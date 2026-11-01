@@ -143,7 +143,7 @@ import { textMetrics, fontsMeasured, trackFonts } from './metrics.js';
 import { ticks, rank, captions, moment, srt, beat } from './data.js';
 import { timeOf, tempo } from './times.js';
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 
 // Read while this script is the current one: a later call sees null.
 const PREVIEW_REQUESTED = previewRequested();

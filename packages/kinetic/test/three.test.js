@@ -66,7 +66,10 @@ describe(`Trillium views in scenes (${BUILD} extension, ${CORE_TIER} core)`, () 
     let host;
     const lines = await captureWarnings(async () => {
       host = await mount(`<div data-composition-id="t0" data-start="0" data-duration="4"><div data-component="${name}"></div></div>`);
+      // KN-170 needs 3 slow seeks in the last 30.
       await dispatchSeek(1).done;
+      await dispatchSeek(2).done;
+      await dispatchSeek(3).done;
     });
     cleanup.push(() => host.remove());
     cleanup.push(() => { if (wf.getStore(viewName)) wf.unregister(viewName); });

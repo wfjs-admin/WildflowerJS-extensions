@@ -7,6 +7,21 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { load, mount, uniqueName, expectKN, BUILD, CORE_TIER } from './helpers.js';
+import { queryFailedWhy } from '../src/readiness.js';
+
+// KN-131's sentence: on a page opened from disk it names the cause and the
+// two ways out; elsewhere it gives the query's error alone.
+describe('KN-131 on a page opened from disk', () => {
+  it('names the cause and the ways out on file:, and only the error elsewhere', () => {
+    const err = new TypeError('Failed to fetch');
+    const disk = queryFailedWhy(err, 'file:');
+    expect(disk).toMatch(/^the query failed \(Failed to fetch\); this page was opened from disk/);
+    expect(disk).toMatch(/serve the folder \(npx serve\)/);
+    expect(disk).toMatch(/load the data as a script/);
+    expect(queryFailedWhy(err, 'http:')).toBe('the query failed (Failed to fetch)');
+    expect(queryFailedWhy(err, 'https:')).toBe('the query failed (Failed to fetch)');
+  });
+});
 
 const cleanup = [];
 afterEach(async () => {

@@ -215,7 +215,7 @@ export function createScenes(wf, clock, follows) {
       if (!tickers.has(n) || tickNamed.has(n)) continue;
       tickNamed.add(n);
       warn(CODES.SCENE_TICK, "scene '" + n + "' defines tick(), and the page is in video mode (a render(), the HyperFrames runtime or config({ mode: 'video' })), where tick() never runs, so what it changes is missing from the video",
-        "Keep what the video shows a function of local; tick(dt) is for what the interactive page does on its own, such as physics while a step holds.");
+        "Keep what the video shows a function of local. For what a lesson does on its own while a step holds, such as physics, use a store's tick(dt), which runs in both modes, and return early unless wildflower.getStore('kinetic') has mode 'interactive' and waiting true.");
     }
   }
 

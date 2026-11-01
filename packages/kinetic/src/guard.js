@@ -23,7 +23,7 @@
  *   KN-143  a CSS transition under the composition root, except in
  *           interactive mode on a page with steps (lesson.js)
  *   KN-145  locale-dependent formatting with no locale
- *   KN-170  a seek that took longer than 8 ms to settle
+ *   KN-170  3 of the last 30 seeks took longer than 8 ms to settle
  *
  * The clock reads are found by wrapping the globals for the window and
  * reading the stack: a call whose direct caller is the framework's file,
@@ -37,6 +37,8 @@ import { CODES, warn } from './diagnostics.js';
 import { resolveTiming, compositionRoot, timingEpoch } from './timing.js';
 
 const SLOW_SEEK_MS = 8;
+const SLOW_SEEKS = 3;
+const SEEK_WINDOW = 30;
 
 // Frames from these files are not the author's: the framework
 // (wildflower.<tier>.<build>.js), the HyperFrames runtime, and a test
@@ -279,8 +281,19 @@ export function createGuard(wf, clock, scenes, lesson) {
     queueMicrotask(() => slow(before + clockNow() - start));
   }
 
+  // One slow seek is a blip (a GC pause, a first-use compile); KN-170 waits
+  // until SLOW_SEEKS of the last SEEK_WINDOW seeks are over the budget.
+  const times = [];
   function slow(took) {
-    if (took <= SLOW_SEEK_MS || warned.has(CODES.SLOW_SEEK)) return;
+    if (warned.has(CODES.SLOW_SEEK)) return;
+    times.push(took);
+    if (times.length > SEEK_WINDOW) times.shift();
+    if (took <= SLOW_SEEK_MS) return;
+    let over = 0;
+    for (const ms of times) if (ms > SLOW_SEEK_MS) over++;
+    if (over < SLOW_SEEKS) return;
+    const sorted = times.slice().sort((a, b) => a - b);
+    const slowest = sorted[sorted.length - 1], typical = sorted[sorted.length >> 1];
     // A Trillium view compiles its shaders in the first seek that draws,
     // which is one slow seek the author can move into init().
     let three = false;
@@ -290,7 +303,7 @@ export function createGuard(wf, clock, scenes, lesson) {
     let showing = 0;
     const now = clock.now();
     for (const inst of scenes.live) if (inst.element.isConnected && scenes.insideAt(inst.element, now)) showing++;
-    once(CODES.SLOW_SEEK, 'a seek took ' + took.toFixed(1) + ' ms to settle, over the ' + SLOW_SEEK_MS + ' ms budget (about half a frame at 60 fps)',
+    once(CODES.SLOW_SEEK, over + ' of the last ' + times.length + ' seeks took longer than the ' + SLOW_SEEK_MS + ' ms budget (about half a frame at 60 fps) to settle; the slowest took ' + slowest.toFixed(1) + ' ms and a typical one ' + typical.toFixed(1) + ' ms',
       'Keep per-seek work small: fewer rows, a static pool, no layout reads in computeds.'
       + (showing > 1 ? ' ' + showing + ' scenes are inside their clips at ' + +now.toFixed(3) + " s, and each one's computeds and seek(local) run on every seek; a scene outside its clip costs nothing, so a scene's per-frame work counts only while it shows." : '')
       + (three ? ' A Trillium view compiles its shaders in the first seek that draws it; call renderer.compile(scene, camera) in init() so that cost lands before frame 0.' : ''));

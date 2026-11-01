@@ -1,16 +1,18 @@
 /**
  * text(canvas, { font, lines }): lines of type drawn from baked outlines.
  * The fixtures are the baker's output (bake/outlines.mjs) for KINETIC from
- * Work Sans (weight) and AVTo from Roboto Flex (weight and slant). Checked:
+ * Work Sans (weight), AVTo from Roboto Flex (weight and slant) and sl from
+ * Shantell Sans (weight and Bounce). Checked:
  * the outlines against the browser's own Work Sans at two weights, the
  * spacing (advances with weight, kerning, fixed slots, alignment), slant by
- * the axis and by skewing, each letter's values, the scene's local time and
+ * the axis and by skewing, any other axis the outlines hold, each letter's values, the scene's local time and
  * check(), and the KN-100 cases.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { load, mount, dispatchSeek, uniqueName, expectKN, BUILD, CORE_TIER, SITE_FONT, siteHas } from './helpers.js';
 import WS from './fixtures/outlines-work-sans.json';
 import RF from './fixtures/outlines-roboto-flex.json';
+import SS from './fixtures/outlines-shantell-sans.json';
 
 const cleanup = [];
 const scenesToDrop = [];
@@ -123,6 +125,19 @@ describe(`text() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     }
   });
 
+  it("any axis the outlines hold: Shantell Sans's Bounce moves the s down and the l up, set by the line or by the letter", async () => {
+    const at = { at: [150, 160], size: 120 };
+    for (const ch of ['s', 'l']) {
+      const still = (await draw('bn' + ch + '0', SS, (m) => m.line(ch, at))).ink.box;
+      const line = (await draw('bn' + ch + '1', SS, (m) => m.line(ch, { ...at, BNCE: 100 }))).ink.box;
+      const own = (await draw('bn' + ch + '2', SS, (m) => m.line(ch, at, () => ({ BNCE: 100 })))).ink.box;
+      // At Bounce 100 the s sits 61 units of 1000 lower and the l 45 higher: about 7 and 5 px at 120 px.
+      if (ch === 's') expect(line.y0 - still.y0).toBeGreaterThan(5);
+      else expect(still.y0 - line.y0).toBeGreaterThan(3);
+      expect(own).toEqual(line);
+    }
+  });
+
   it("each letter's own values: weight, offset, opacity, colour", async () => {
     const { ink: one } = await draw('le1', WS, (m) => m.line('KINETIC', { at: [10, 100], size: 40 }, (i) => ({ opacity: i === 0 ? 0 : 1, dy: i === 6 ? 40 : 0 })));
     expect(one.leftAt(80)).toBeGreaterThan(30);
@@ -182,18 +197,22 @@ describe(`text() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     await dispatchSeek(0.2).done;
     expect(ink(canvas).count()).toBeGreaterThan(100);
     h0.dispose();
-    for (const [fn, where, why] of [
+    for (const [fn, where, why, font] of [
       [(m) => m.line('KINETIC', { size: 0 }), 'line(string, { size })', /^size is a number/],
       [(m) => m.line('KINETIC', { colour: 'red' }), 'line(string, { colour })', /is not an option/],
       [(m) => m.line('KITX', {}), 'line(string)', /hold no "X"/],
       [(m) => m.line('KINETIC', { align: 'middle' }), 'line(string, { align })', /^align is left, center or right, not/],
       [(m) => m.line('KINETIC', { tracking: '2px' }), 'line(string, { tracking })', /^tracking is a number/],
       [(m) => m.line('KINETIC', {}, () => ({ wght: '500' })), 'letter(i, ch).wght', /^wght is a number/],
+      // An axis these outlines were not baked with names the ones they were.
+      [(m) => m.line('sl', { INFM: 100 }), 'line(string, { INFM })', /is not an option; .* and an axis the outlines hold: wght, BNCE/, SS],
+      [(m) => m.line('sl', {}, () => ({ INFM: 100 })), 'letter(i, ch)', /is not a letter value; .* and an axis the outlines hold: wght, BNCE/, SS],
+      [(m) => m.line('sl', { BNCE: 'high' }), 'line(string, { BNCE })', /^BNCE is a number/, SS],
     ]) {
       const c = document.createElement('canvas');
       c.style.cssText = 'position:absolute;left:0;top:0;width:400px;height:200px';
       canvas.parentNode.appendChild(c);
-      const h = k.text(c, { font: WS, lines: fn });
+      const h = k.text(c, { font: font || WS, lines: fn });
       let e = null;
       try { await dispatchSeek(0.1).done; } catch (x) { e = x; }
       h.dispose();

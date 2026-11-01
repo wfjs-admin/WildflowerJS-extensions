@@ -101,6 +101,8 @@ export function createAudio(wf, clock) {
   let ctx = null;                // the preview's AudioContext
   let on = true;                 // the sound is wanted; the bar's button turns it off
   let muted = false;             // config({ sound: false }) suspended the context
+  let settled = null;            // config()'s sound at the last sync: a false that turns true resumes
+  let asked = false;             // the page turned sound on with config(): the speaker does not turn it off
   let sources = [];
   let anchor = null;             // { x, when } of the playing sources
   let still = null;              // the paused frame whose slice has played
@@ -427,8 +429,9 @@ export function createAudio(wf, clock) {
       if (getComputedStyle(p).position === 'static') p.style.position = 'relative';
       p.insertBefore(btn, r.nextSibling);
       show(2000);
-      // Off until the viewer presses it, even where the browser would let the page start sound.
-      if (status() === 2) { on = false; stopAll(); ctx.suspend().catch(() => {}); }
+      // Off until the viewer presses it, even where the browser would let the
+      // page start sound; unless the page's own control asked for it.
+      if (status() === 2 && !asked) { on = false; stopAll(); ctx.suspend().catch(() => {}); }
     }
     const sounding = status() === 2;
     btn.innerHTML = ICON(sounding);
@@ -495,14 +498,20 @@ export function createAudio(wf, clock) {
 
   // config({ sound }) and the clips changed. Sound turned off by config()
   // suspends the context, and turned on again resumes it, unless the bar's
-  // button had turned it off.
+  // button had turned it off. A page's own sound button that calls
+  // config({ sound: true }) from its click is the viewer's gesture, so the
+  // context resumes there too, with no second press on the speaker; called
+  // with no gesture, the resume waits for one, as the browser requires.
   function sync() {
-    if (!clock.soundOn()) {
+    const was = settled;
+    settled = clock.soundOn();
+    if (!settled) {
       stopAll();
       if (ctx && ctx.state === 'running') { muted = true; ctx.suspend().catch(() => {}); }
     } else {
+      if (was === false) asked = true;
       context();
-      if (muted) { muted = false; unlock(); }
+      if (muted || was === false) { muted = false; unlock(); }
     }
     notify();
   }

@@ -225,9 +225,12 @@ File `index.html`:
         [data-composition-id]:not([data-kinetic-ready]) { visibility: hidden; }
         .layer { position: absolute; inset: 0; pointer-events: none; }
 
-        /* The left column, from the safe area's top left. */
-        .cap h2 { position: absolute; left: 64px; top: 64px; width: 560px; margin: 0; font-size: 44px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
-        .cap p { position: absolute; left: 64px; top: 120px; width: 500px; margin: 0; font-size: 22px; font-weight: 500; line-height: 1.3; }
+        /* The left column, from the safe area's top left. The heading and
+           its line are in normal flow, so a heading that wraps pushes the
+           line down instead of running into it. */
+        .cap { box-sizing: border-box; padding: 64px 0 0 64px; }
+        .cap h2 { width: 560px; margin: 0 0 12px; font-size: 44px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        .cap p { width: 500px; margin: 0; font-size: 22px; font-weight: 500; line-height: 1.3; }
         .prompt { position: absolute; left: 64px; top: 196px; margin: 0; padding: 6px 12px; border-radius: 8px; background: #EFC187; font-size: 18px; font-weight: 600; }
         .choices { position: absolute; left: 64px; top: 252px; display: flex; flex-direction: column; gap: 8px; width: 220px; }
         .choices button { pointer-events: auto; padding: 10px 18px; border: 0; border-radius: 10px; background: #e4dbca; color: #26282d; font: 600 22px/1.2 'Work Sans', sans-serif; text-align: left; cursor: pointer; }

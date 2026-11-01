@@ -165,7 +165,8 @@ The demo `www/demos/kinetic-sine/` is the running example.
   gives the noise a new seed n times a second. `blur(element, { scene, radius,
   marks })` blurs what is under an element where the same marks paint.
 - `text(canvas, { scene, font, lines })` draws lines of type from a variable
-  font's outlines, each letter at its own weight and slant; the outline
+  font's outlines, each letter at its own weight, slant or any other baked
+  axis; the outline
   baker (`bake/outlines.mjs`, and a page on the Kinetic site) makes the
   outlines from a font file.
 - `scene: this`, given to any of those layers or to `lottie()` in a

@@ -78,6 +78,16 @@ const MARK_WAIT_MS = 60000;
 const IMAGE_WAIT_MS = 30000;   // an image still loading after this fails the run (KN-182)
 const PASSES = 3;              // a run's evaluations at most, while failures keep coming
 
+// KN-131's sentence for a failed query. A page opened from disk (file:)
+// cannot fetch the files beside it, the commonest cause, so there it names
+// the two ways out.
+export function queryFailedWhy(error, protocol) {
+  const why = 'the query failed (' + (error && error.message || String(error)) + ')';
+  return protocol === 'file:'
+    ? why + '; this page was opened from disk, where it cannot fetch the files beside it: serve the folder (npx serve), or load the data as a script (const ROWS = [...] in a .js file) and read it without a query'
+    : why;
+}
+
 export function createReadiness(wf, clock, scenes, clips, fit, audio, footage, extra, lesson) {
   const w = self;
   let frameZero = false;       // a run has passed: later reloads are hazards
@@ -128,7 +138,7 @@ export function createReadiness(wf, clock, scenes, clips, fit, audio, footage, e
     if (!q) return Promise.reject(fail(CODES.NO_QUERY, where, __DEV__ && 'no query by that name exists'));
     return new Promise((resolve, reject) => {
       const check = () => {
-        if (q.error) { reject(fail(CODES.QUERY_FAILED, where, __DEV__ && 'the query failed (' + (q.error && q.error.message || String(q.error)) + ')')); return true; }
+        if (q.error) { reject(fail(CODES.QUERY_FAILED, where, __DEV__ && queryFailedWhy(q.error, location.protocol))); return true; }
         // lastSync is null until the first load. A HyperFrames render runs
         // with the clock frozen at 0, so a load there stamps it 0.
         if (!q.isLoading && q.lastSync != null) { resolve(); return true; }

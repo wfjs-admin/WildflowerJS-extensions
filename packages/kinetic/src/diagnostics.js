@@ -59,7 +59,7 @@ export const CODES = {
   PREVIEW_VIDEO: 'KN-158',   // a page with steps put in video mode by the preview bar alone, under config({ mode: 'auto' })
   STYLE_READ:    'KN-159',   // a key read on a multi-track keyframes entry's style object that it does not have, such as translateY
   CHECK_FAILED:  'KN-160',   // check() failed: readiness failed, a seek printed an error, or a frame differed between two seeks
-  SLOW_SEEK:     'KN-170',   // a seek took longer than 8 ms to settle
+  SLOW_SEEK:     'KN-170',   // 3 of the last 30 seeks took longer than 8 ms to settle
   LOTTIE_FAILED: 'KN-180',   // a Lottie animation fired data_failed (console error, every build; ready() rejects)
   IMAGE_FAILED:  'KN-181',   // an animated image failed to fetch or decode (console error, every build; ready() rejects)
   IMAGE_STALLED: 'KN-182',   // an image under a scene still loading after 30 s (console error, every build; ready() rejects)

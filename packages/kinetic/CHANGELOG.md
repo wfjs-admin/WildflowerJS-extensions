@@ -4,6 +4,51 @@ Notable changes to Kinetic (`@wildflowerjs/kinetic`). The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.1.2] - 2026-11-01
+
+### Added
+
+- `text()` takes any axis the outlines were baked with, by its tag (such as
+  Shantell Sans's `BNCE`), as a line or letter value beside `wght` and
+  `slnt`, and the outline baker offers every axis a font has.
+
+### Fixed
+
+- A page's own sound button starts the sound with one press:
+  `config({ sound: true })` called from a click resumes the audio, and
+  Kinetic's corner speaker no longer turns it off again.
+- `render()` of a canvas with a border or padding and `object-fit` in
+  Chrome 157 and later, which paints a canvas into its content box: the
+  canvas came out a few pixels off.
+
+### Changed
+
+- `captions()` balances its lines: between sentence ends and pauses, the
+  words take the fewest lines `maxWords` and `maxChars` allow, about equal
+  in length and broken after a comma near the middle, so a short fragment
+  is no longer left on a line of its own.
+- KN-131 on a page opened from disk (its address starts with `file:`) says
+  the page cannot fetch the files beside it, and to serve the folder or load
+  the data as a script.
+- KN-170 prints when 3 of the last 30 seeks took longer than 8 ms, instead of
+  on the first slow seek, and gives the slowest and a typical seek time.
+- KN-151's suggestion, and the guide, put a lesson's frame-loop work on a
+  store's `tick()`, which runs in both modes and checks the mode and the
+  hold itself.
+- The guide: eight more type pairings and six more palettes (Tol Bright,
+  Viridis Ordered, Neon Stage, Canopy, Lavender Clinic, Solarized Light),
+  and italics used sparingly where they suit the words.
+- The guide: a pattern for a rate the learner controls, which the video
+  sums from the scripted settings and the lesson advances while a step
+  holds, both from one rate function.
+- The guide: the starter lesson lays its heading and line out in normal flow,
+  so a heading that wraps no longer runs into the line; a pattern for ink
+  plates out of register; `boil()`'s `detail` for large shapes; a centered
+  line that types in place; and the intake asks nothing when the brief
+  already gives enough to build.
+
 ## [0.1.1] - 2026-10-31
 
 ### Fixed

@@ -337,6 +337,125 @@ describe(`interactive mode: the modes (${BUILD} extension, ${CORE_TIER} core)`, 
     // This scene's lines only: a scene another test left live may be named too.
     expect(lines.filter((l) => l.includes('KN-151') && l.includes("scene '" + name + "'")).length).toBe(BUILD === 'dev' ? 1 : 0);
   });
+
+  // The guide's recipe for motion while a step holds, on a lesson that is
+  // also checked or rendered: tick() on a store, which KN-151 does not name.
+  // A store's tick() runs in both modes, so the recipe reads the mode.
+  it("a store's tick() runs in both modes and KN-151 names no store, so the recipe's mode and waiting test keeps its work to a held step in interactive mode", async ({ skip }) => {
+    const { wf } = await load();
+    if (wf.features && wf.features.pools === false) skip();
+    const k = wf.kinetic, s = wf.getStore('kinetic');
+    const [a, b, world] = ids('sa', 'sb', 'world');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const calls = [], steps = [];
+    wf.store(world, {
+      state: { n: 0 },
+      tick(dt) {
+        const ks = wildflower.getStore('kinetic');
+        calls.push(ks.mode);
+        if (ks.mode === 'interactive' && ks.waiting) steps.push(dt);
+      },
+    });
+    k.step(a, { wait: 0.2 });
+    let lines;
+    try {
+      lines = await captureWarnings(async () => {
+        await lesson(4, section(a, 0, 2) + section(b, a, 2));
+        k.config({ mode: 'interactive' });
+        k.go(a);
+        await wait(500);
+        expect(s.waiting).toBe(true);
+        expect(steps.length).toBeGreaterThan(2);
+        k.config({ mode: 'video' });
+        await wait(50);
+        calls.length = 0;
+        steps.length = 0;
+        k.seek(1);
+        k.seek(3);
+        await wait(150);
+      });
+    } finally {
+      k.config({ mode: 'interactive' });
+      wf.unregister(world);
+    }
+    expect(calls.length, 'the store ticked in video mode').toBeGreaterThan(2);
+    expect(calls.every((m) => m === 'video')).toBe(true);
+    expect(steps).toEqual([]);
+    expect(codesIn(lines).filter((c) => c === 'KN-151')).toEqual([]);
+  });
+
+  // patterns.md, "A rate the learner controls": one rate function, summed
+  // over the scripted settings in the video and advanced by a store's tick()
+  // while the step holds on the page.
+  it('a rate the learner controls: the video sums the scripted rate in seek(local), the same in any order; the page fills from the learner\'s setting while the step holds, then plays on; check() passes', async ({ skip }) => {
+    const { wf } = await load();
+    if (wf.features && wf.features.pools === false) skip();
+    const k = wf.kinetic, s = wf.getStore('kinetic');
+    const [fill, tank, view] = ids('fill', 'tank', 'tank-view');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const RATE = (tap) => tap * 0.08;
+    const TAP = { at: [0, 1, 3.5], set: [0, 1, 3] };
+    function levelAt(t) {
+      let level = 0;
+      for (let i = 0; i < TAP.at.length; i++) {
+        const end = Math.min(t, i + 1 < TAP.at.length ? TAP.at[i + 1] : Infinity);
+        if (end > TAP.at[i]) level += RATE(TAP.set[i]) * (end - TAP.at[i]);
+      }
+      return Math.min(level, 1);
+    }
+    wf.store(tank, {
+      state: { tap: 0, level: 0 },
+      computed: { full() { return this.level >= 1; } },
+      tick(dt) {
+        const ks = wildflower.getStore('kinetic');
+        if (ks.mode !== 'interactive' || !ks.waiting || this.level >= 1) return;
+        this.level = Math.min(1, this.level + RATE(this.tap) * Math.min(dt, 50) / 1000);
+      },
+    });
+    k.step(fill, { wait: 1, until: tank + '.full', entry: { [tank + '.tap']: 0, [tank + '.level']: 0 }, script: { [tank + '.tap']: TAP } });
+    k.scene(view, {
+      subscribe: [tank, 'kinetic'],
+      seek(local) { if (this.stores.kinetic.mode === 'video') this.stores[tank].level = levelAt(local); },
+      computed: { water() { return { height: (400 * this.stores[tank].level).toFixed(1) }; } },
+    });
+    const t = wf.getStore(tank);
+    let host, report;
+    const lines = await captureWarnings(async () => {
+      host = await lesson(8, section(fill, 0, 8) + `<div data-component="${view}" data-start="0" data-duration="8"><svg><rect width="10" data-bind-attr="water"></rect></svg></div>`);
+      await k.ready();
+      // The video: the scripted taps' sum at each time, visited in two orders.
+      k.config({ mode: 'video' });
+      const times = [0.5, 2, 5, 7.5];
+      for (const order of [times, times.slice().reverse()]) {
+        for (const at of order) {
+          await dispatchSeek(at).done;
+          expect([at, t.tap, t.level]).toEqual([at, at < 1 ? 0 : at < 3.5 ? 1 : 3, levelAt(at)]);
+          expect(host.querySelector('rect').getAttribute('height')).toBe((400 * levelAt(at)).toFixed(1));
+        }
+      }
+      report = await k.check({ samples: 12 });
+      // The page: empty at the hold, then the learner's tap fills it.
+      k.config({ mode: 'interactive' });
+      k.go(fill);
+      await wait(1300);
+      expect([s.waiting, t.level]).toEqual([true, 0]);
+      t.tap = 3;
+      await wait(300);
+      expect(t.level).toBeGreaterThan(0.02);
+      expect(t.level).toBeLessThan(0.2);
+      expect(s.waiting).toBe(true);
+      // Nearly full: the rest fills, until is true, and the step plays on.
+      t.level = 0.99;
+      await wait(400);
+      expect(t.full).toBe(true);
+      expect(s.time).toBeGreaterThan(1);
+    });
+    k.pause();
+    wf.unregister(view);
+    wf.unregister(tank);
+    expect(report.ok, JSON.stringify(report)).toBe(true);
+    expect(codesIn(lines).filter((c) => c !== 'KN-157'), lines.join(' || ')).toEqual([]);
+  });
 });
 
 describe(`interactive mode: steps (${BUILD} extension, ${CORE_TIER} core)`, () => {

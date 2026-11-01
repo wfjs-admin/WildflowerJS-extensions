@@ -56,6 +56,9 @@ describe(`footage and the guard (${BUILD} extension, ${CORE_TIER} core)`, () => 
         expect(shownFrame(v)).toBe(30);
         await dispatchSeek(2).done;
         expect(shownFrame(v)).toBe(60);
+        // A third, since KN-170 needs 3 slow seeks in the last 30.
+        await dispatchSeek(3).done;
+        expect(shownFrame(v)).toBe(90);
       });
     } finally {
       stopEvery(id);
@@ -71,7 +74,7 @@ describe(`footage and the guard (${BUILD} extension, ${CORE_TIER} core)`, () => 
     if (BUILD !== 'dev') skip();
     const { wf } = await load();
     const busy = performance.now.bind(performance);
-    wf.kinetic.scene('fg-slow', { seek(local) { if (Math.abs(local - 1) < 1e-6) { const until = busy() + 14; while (busy() < until) { /* a slow seek */ } } } });
+    wf.kinetic.scene('fg-slow', { seek(local) { if (local >= 1 && local < 1.5) { const until = busy() + 14; while (busy() < until) { /* a slow seek */ } } } });
     const host = await mount(`<div data-composition-id="fg2" data-start="0" data-duration="4" data-fps="30" style="position:relative;width:160px;height:90px">
       <div data-component="fg-slow" data-start="0" data-duration="4"></div>
       <video id="v2" src="${FOOTAGE}f30.webm" data-start="0" data-duration="4" muted playsinline style="position:absolute;left:0;top:0;width:160px;height:90px"></video>
@@ -87,7 +90,11 @@ describe(`footage and the guard (${BUILD} extension, ${CORE_TIER} core)`, () => 
     let lines;
     try {
       lines = await captureWarnings(async () => {
-        const a = dispatchSeek(1).done;               // slow window, then a long wait for its frame
+        // KN-170 needs 3 slow seeks in the last 30: two on their own, then
+        // the third overlapped by a fast one.
+        await dispatchSeek(1).done;
+        await dispatchSeek(1.2).done;
+        const a = dispatchSeek(1.4).done;             // slow window, then a long wait for its frame
         await new Promise((r) => later(r, 40));
         const b = dispatchSeek(2).done;               // a fast window while the first still waits
         await Promise.all([a, b]);

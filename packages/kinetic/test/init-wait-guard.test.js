@@ -17,6 +17,8 @@ const cleanup = [];
 afterEach(() => { for (const el of cleanup.splice(0)) el.remove(); });
 
 describe(`the init wait and KN-170 (${BUILD} extension, ${CORE_TIER} core)`, () => {
+  // KN-170 needs 3 slow seeks in the last 30. Two slow seeks follow the
+  // waiting one here, so counting the wait would make the third and warn.
   it('a seek that waits for a scene whose init() waits on a store draws no KN-170, and the frame has the scene', async () => {
     const { wf } = await load();
     const name = uniqueName('slow-init'), store = uniqueName('late-store');
@@ -24,7 +26,11 @@ describe(`the init wait and KN-170 (${BUILD} extension, ${CORE_TIER} core)`, () 
     // The scene subscribes to a store whose own init() takes 80 ms, so the
     // scene's init is still pending when the seek arrives.
     wf.store(store, { state: { n: 1 }, async init() { await new Promise((r) => later(r, 80)); } });
-    wf.kinetic.scene(name, { subscribe: [store], init() { setUp = true; } });
+    wf.kinetic.scene(name, {
+      subscribe: [store],
+      init() { setUp = true; },
+      seek(local) { if (local >= 2) { const until = busy() + 14; while (busy() < until) { /* a slow seek */ } } },
+    });
     let host;
     const lines = await captureWarnings(async () => {
       host = await mount(`<div data-composition-id="iw" data-start="0" data-duration="4" data-fps="30"><div data-component="${name}" data-start="0" data-duration="4"></div></div>`);
@@ -33,13 +39,16 @@ describe(`the init wait and KN-170 (${BUILD} extension, ${CORE_TIER} core)`, () 
       const t0 = busy();
       await dispatchSeek(1).done;
       expect(busy() - t0, 'the seek waited for the init').toBeGreaterThan(30);
+      await dispatchSeek(2).done;
+      await dispatchSeek(2.5).done;
     });
     expect(setUp).toBe(true);
     expect(lines.filter((l) => l.startsWith('[KN-170]')), lines.join(' || ')).toEqual([]);
   });
 
-  // After the test above, which expects no KN-170 on this page.
-  it('a seek(local) that is itself slow is still KN-170', async ({ skip }) => {
+  // After the test above, which left two slow seeks in the window and no
+  // KN-170 on this page.
+  it('a seek(local) that is itself slow counts: the third slow seek is KN-170, with the slowest and typical times', async ({ skip }) => {
     if (BUILD !== 'dev') skip();
     const { wf } = await load();
     const name = uniqueName('slow-seek');
@@ -48,6 +57,8 @@ describe(`the init wait and KN-170 (${BUILD} extension, ${CORE_TIER} core)`, () 
     cleanup.push(host);
     await wf.kinetic.ready();
     const lines = await captureWarnings(async () => { await dispatchSeek(2).done; });
-    expect(lines.filter((l) => l.startsWith('[KN-170]')).length, lines.join(' || ')).toBe(1);
+    const found = lines.filter((l) => l.startsWith('[KN-170]'));
+    expect(found.length, lines.join(' || ')).toBe(1);
+    expect(found[0]).toMatch(/3 of the last \d+ seeks took longer than the 8 ms budget .* the slowest took [\d.]+ ms and a typical one [\d.]+ ms/);
   });
 });

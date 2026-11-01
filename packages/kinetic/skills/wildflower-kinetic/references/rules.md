@@ -97,7 +97,11 @@ the error-codes page. To finish the page, swap the two script lines for the
   interactive page does on its own, such as physics while a step holds, and
   keep what the video shows a function of `local`. A scene with `tick()` in
   a render or video mode is KN-151, since what it changes is missing from
-  the video; `check()` makes no video, so it says nothing.
+  the video; `check()` makes no video, so it says nothing. On a lesson,
+  which `check.cjs` and a render read in video mode, put that work on a
+  store's `tick()` instead, which runs in both modes, and start it with
+  `if (k.mode !== 'interactive' || !k.waiting) return;`, where `k` is
+  `wildflower.getStore('kinetic')` (api.md, "Interactive mode").
 - Fade a clip in and out with its attributes, `data-clip-enter="fade 0.5"`
   and `data-clip-exit="fade 0.5"`, which need no scene code. Use `edges`
   and `presence` (`enter * (1 - exit)`) only when the scene's own code needs
@@ -405,7 +409,8 @@ come out the same whichever frames came before it.
   between two frames changes on the later frame, or in a render with a
   shutter part-way through the frame before (KN-114). `this.clipFrame` stays
   the frame's own number through all of a shutter's samples.
-- A seek that takes more than 8 ms (KN-170) is too slow for a preview. Use
+- A seek that takes more than 8 ms is too slow for a preview; KN-170 prints
+  when 3 of the last 30 seeks do. Use
   fewer rows, a static pool and no layout reads in computeds. A Trillium view
   compiles its shaders in the first seek that draws it. Call
   `renderer.compile(scene, camera)` in `init()`.

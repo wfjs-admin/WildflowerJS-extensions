@@ -48,7 +48,7 @@ describe(`data (${BUILD} extension, ${CORE_TIER} core)`, () => {
       { id: 'w2', text: 'Big', start: 0.9, end: 1.2 },
       { id: 'w3', text: 'wide', start: 1.2, end: 1.5 },
       { id: 'w4', text: 'world', start: 1.5, end: 1.9 },
-      { id: 'w5', text: 'again', start: 1.9, end: 2.2 },          // maxWords 3: a new line
+      { id: 'w5', text: 'again', start: 1.9, end: 2.2 },          // maxWords 3: two lines, balanced
       { id: 'w6', text: 'later', start: 4, end: 4.5 },            // gap over maxGap: a new line
     ];
     const o = { maxWords: 3 };
@@ -57,14 +57,14 @@ describe(`data (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(l0.index).toBe(0);
     expect(l0.text).toBe('Hello there.');
     expect(l0.words.map((w) => [w.key, w.state, Number(w.p.toFixed(2))])).toEqual([['w0', 'past', 1], ['w1', 'active', 0.25]]);
-    const l1 = captions(1.3, words, o);
-    expect(l1.text).toBe('Big wide world');
-    expect(l1.words.map((w) => w.state)).toEqual(['past', 'active', 'future']);
-    expect(captions(2, words, o).text).toBe('again');
+    const l1 = captions(1.1, words, o);
+    expect(l1.text).toBe('Big wide');
+    expect(l1.words.map((w) => w.state)).toEqual(['active', 'future']);
+    expect(captions(2, words, o).text).toBe('world again');
     // After a line's end: held for 0.4 s, then empty until the next line.
-    expect(captions(2.5, words, o).text).toBe('again');
+    expect(captions(2.5, words, o).text).toBe('world again');
     expect(captions(2.7, words, o).empty).toBe(true);
-    expect(captions(2.7, words, { maxWords: 3, hold: Infinity }).text).toBe('again');
+    expect(captions(2.7, words, { maxWords: 3, hold: Infinity }).text).toBe('world again');
     expect(captions(4.2, words, o).text).toBe('later');
     expect(captions(9, words, o).empty).toBe(true);
     // Line 0 ends at 0.8 and line 1 starts at 0.9: the hold stops at the next line.
@@ -118,13 +118,36 @@ describe(`data (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(ticks(0, 1e308, 6)).toEqual([0, 2e307, 4e307, 6e307, 8e307, 1e308]);
   });
 
+  it('captions: balanced lines, the fewest the limits allow, about equal in length, broken at a comma near the middle', async () => {
+    const { wf } = await load();
+    const { captions } = wf.kinetic;
+    const say = (text) => text.split(' ').map((t, i) => ({ text: t, start: i * 0.3, end: i * 0.3 + 0.3 }));
+    const lines = (words, o) => {
+      const out = [];
+      for (let t = 0.1; t < words.length * 0.3; t += 0.3) { const l = captions(t, words, o); if (out[out.length - 1] !== l.text) out.push(l.text); }
+      return out;
+    };
+    // Seven words at five a line: four and three, never five and a stranded two.
+    expect(lines(say('one two three four five six seven'))).toEqual(['one two three four', 'five six seven']);
+    expect(lines(say('Please turn the sound off.'), { maxWords: 3 })).toEqual(['Please turn', 'the sound off.']);
+    // A comma near the middle takes the break, though the even split is a word later.
+    expect(lines(say('Turn the sound on, then turn the sound off.'))).toEqual(['Turn the sound on,', 'then turn the sound off.']);
+    // maxChars still holds every line, and three lines stay three.
+    const long = say('a long line of words that has to fill three lines of captions here');
+    for (const l of lines(long, { maxChars: 24 })) expect(l.length).toBeLessThanOrEqual(24);
+    expect(lines(long, { maxChars: 24 })).toHaveLength(3);
+    // Sentence ends and gaps still break first; one word over maxChars is a line of its own.
+    expect(lines(say('Stop. Look both ways'))).toEqual(['Stop.', 'Look both ways']);
+    expect(lines(say('tiny ' + 'x'.repeat(50) + ' tail'), { maxChars: 20 })).toEqual(['tiny', 'x'.repeat(50), 'tail']);
+  });
+
   it('captions: an option passed as undefined takes its default', async () => {
     const { wf } = await load();
     const { captions } = wf.kinetic;
     expect(captions(40, [{ text: 'a.', start: 0, end: 1 }], { hold: undefined }).empty).toBe(true);
     const words = ['one', 'two', 'three', 'four', 'five', 'six', 'seven'].map((text, i) => ({ text, start: i * 0.3, end: i * 0.3 + 0.3 }));
     const opts = { maxWords: undefined, maxChars: undefined, maxGap: undefined, sentences: undefined, hold: undefined };
-    expect(captions(0.1, words, opts).text).toBe('one two three four five');
+    expect(captions(0.1, words, opts).text).toBe('one two three four');
     expect(captions(0.1, words, opts)).toEqual(captions(0.1, words));
     const long = [{ text: 'a'.repeat(30), start: 0, end: 0.5 }, { text: 'b'.repeat(30), start: 0.5, end: 1 }];
     expect(captions(0.2, long, { maxChars: undefined }).text).toBe('a'.repeat(30));

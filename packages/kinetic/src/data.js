@@ -116,26 +116,62 @@ function checkOptions(o) {
   }
 }
 
+// A word a line may end on by choice: a clause's end or a sentence's.
+const CLAUSE_END = /[,;:.!?–—]["')\]]?$/;
+
+// A run of words between two breaks it must take (a gap over maxGap, a
+// sentence end) split into the fewest lines maxWords and maxChars allow,
+// as near equal in length as they can be: the split with the least sum of
+// squared lengths, less a bonus for each break after a clause's end, worth
+// a line an eighth of the average length longer or shorter. A word longer
+// than maxChars is a line of its own.
+function balance(run, o) {
+  const n = run.length, pre = [0];
+  for (const w of run) pre.push(pre[pre.length - 1] + w.text.length);
+  const len = (a, b) => pre[b] - pre[a] + b - a - 1;
+  const fits = (a, b) => b - a === 1 || (b - a <= o.maxWords && len(a, b) <= o.maxChars);
+  let k = 0;
+  for (let a = 0; a < n; k++) { let b = a + 1; while (b < n && fits(a, b + 1)) b++; a = b; }
+  if (k === 1) return [run];
+  const avg = (len(0, n) - k + 1) / k, bonus = (avg * avg) / 8;
+  // cost[j][i]: the best split of the first i words into j lines; from[j][i]
+  // where its last line starts.
+  const cost = [[]], from = [[]];
+  cost[0][0] = 0;
+  for (let j = 1; j <= k; j++) {
+    cost.push([]); from.push([]);
+    for (let i = j; i <= n; i++) {
+      let best = Infinity, at = -1;
+      for (let a = i - 1; a >= j - 1 && fits(a, i); a--) {
+        const prev = cost[j - 1][a];
+        if (prev === undefined || prev === Infinity) continue;
+        const c = prev + len(a, i) ** 2 - (a > 0 && CLAUSE_END.test(run[a - 1].text) ? bonus : 0);
+        if (c < best) { best = c; at = a; }
+      }
+      cost[j][i] = best; from[j][i] = at;
+    }
+  }
+  const out = [];
+  for (let j = k, i = n; j > 0; i = from[j][i], j--) out.unshift(run.slice(from[j][i], i));
+  return out;
+}
+
 function buildLines(words, o) {
   const sorted = words.map((w, i) => ({ key: w.id === undefined ? i : w.id, text: w.text, start: w.start, end: w.end })).sort((a, b) => a.start - b.start);
   const lines = [];
-  let line = null;
-  for (const w of sorted) {
-    const prev = line && line.words[line.words.length - 1];
-    const breakHere = !line
-      || line.words.length >= o.maxWords
-      || line.text.length + 1 + w.text.length > o.maxChars
-      || w.start - prev.end > o.maxGap
-      || (o.sentences && SENTENCE_END.test(prev.text));
-    if (breakHere) {
-      line = { index: lines.length, start: w.start, end: w.end, text: w.text, words: [w] };
-      lines.push(line);
-    } else {
-      line.words.push(w);
-      line.end = Math.max(line.end, w.end);
-      line.text += ' ' + w.text;
+  let run = [];
+  const flush = () => {
+    if (run.length) for (const ws of balance(run, o)) {
+      lines.push({ index: lines.length, start: ws[0].start, end: Math.max(...ws.map((w) => w.end)), text: ws.map((w) => w.text).join(' '), words: ws });
     }
+    run = [];
+  };
+  for (const w of sorted) {
+    const prev = run[run.length - 1];
+    if (prev && (w.start - prev.end > o.maxGap || (o.sentences && SENTENCE_END.test(prev.text)))) flush();
+    run.push(w);
   }
+  flush();
   return lines;
 }
 
@@ -144,8 +180,9 @@ function buildLines(words, o) {
 const empty = () => ({ index: -1, start: 0, end: 0, text: '', words: [], empty: true });
 
 // The line current at t from a HyperFrames transcript ([{ id, text, start,
-// end }]): words grouped into lines at a sentence end, a gap over maxGap
-// seconds, maxWords or maxChars. Each word carries state ('past', 'active'
+// end }]): words grouped into lines at a sentence end and a gap over maxGap
+// seconds, and between those into the fewest lines maxWords and maxChars
+// allow, balanced (balance() above). Each word carries state ('past', 'active'
 // or 'future') and p, its own progress 0..1. A line shows from its first
 // word until the next line starts, at most `hold` seconds after its last
 // word ends. Between lines, or before the first, the result is empty, with

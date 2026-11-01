@@ -33,7 +33,9 @@ like a default slide deck has not met the bar.
 ## The intake
 
 Ask the user, in one message, the questions below that the brief leaves open
-and whose answers would change the piece. Ask none that the brief already
+and whose answers would change the piece. When the brief already gives
+enough to build, ask nothing: choose the rest, state the choices in one
+short message, and build. Ask none that the brief already
 answers, and at most five in all, counting the questions the kind file adds:
 pick the five whose answers would change the piece most. Where no one can answer (a batch, an unattended
 run), choose a sensible answer for each, and write the choices at the top of

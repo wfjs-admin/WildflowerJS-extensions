@@ -32,7 +32,7 @@ it plays and then waits for the learner (`wait`, `until`, `next()`), and the
 learner's controls write the store fields that each step's `script` writes
 in the video (Interactive mode in `references/api.md` and `references/rules.md`).
 
-Ask before you read the rest. Step 1 of the procedure needs only
+Settle the intake before you read the rest. Step 1 of the procedure needs only
 `references/craft.md` and the kind's file. Once the questions are answered,
 read `references/start.md`: one complete video page and one complete
 interactive lesson page, each copy-runnable, with the rules that matter for

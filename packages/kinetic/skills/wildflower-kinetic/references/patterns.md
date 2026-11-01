@@ -39,6 +39,7 @@ Contents, one entry for each `##` section below:
 - [Crayon shading on flat shapes](#crayon-shading-on-flat-shapes)
 - [Tilt-shift focus, a light leak and grain at the edges](#tilt-shift-focus-a-light-leak-and-grain-at-the-edges)
 - [Hand-drawn wobble on shapes](#hand-drawn-wobble-on-shapes)
+- [Ink plates out of register](#ink-plates-out-of-register)
 - [A title that swells in weight](#a-title-that-swells-in-weight)
 - [A Lottie logo sting](#a-lottie-logo-sting)
 - [A looping sticker](#a-looping-sticker)
@@ -69,6 +70,7 @@ Contents, one entry for each `##` section below:
 - [A lesson that is also its video](#a-lesson-that-is-also-its-video)
 - [A question that explains a wrong answer](#a-question-that-explains-a-wrong-answer)
 - [Content for the lesson alone](#content-for-the-lesson-alone)
+- [A rate the learner controls](#a-rate-the-learner-controls)
 - [A lesson's layout](#a-lessons-layout)
 - [Shapes from data inside an SVG](#shapes-from-data-inside-an-svg)
 - [A Sankey from a table of flows](#a-sankey-from-a-table-of-flows)
@@ -248,6 +250,35 @@ scene('subtitle', {
 ```
 
 The Launch Title demo (/demos/kinetic-title/) types its subtitle this way.
+
+A centered line re-centers as it grows, so each new letter moves the ones before it.
+To type it in place, keep a hidden copy of the whole line in the same grid cell: it sets the line's width and center, and the typed text starts at its left edge.
+
+```html
+<p class="typed-line">
+    <span class="full" aria-hidden="true" data-bind="line"></span>
+    <span data-bind="typed"></span>
+</p>
+```
+
+```css
+.typed-line { display: grid; margin: 0; }
+.typed-line > span { grid-area: 1 / 1; text-align: left; white-space: pre; }
+.typed-line .full { visibility: hidden; }
+```
+
+```javascript
+const LINE = 'Every frame is a function of time.';
+
+scene('subtitle', {
+    computed: {
+        line() { return LINE; },
+        typed() { return typewriter(this.local - 0.5, LINE, 28); },
+    },
+});
+```
+
+Center the `<p>` as any element is centered (a flex parent's `justify-content: center`); the typed text then grows rightward from where the finished line begins.
 
 ## Style tracks on an element
 
@@ -1230,8 +1261,49 @@ scene('sketch', {
 ```
 
 `amount` is about the largest move in px and `scale` the length along the outline over which the noise changes, in px; a different `seed` keeps two shapes from wobbling in step.
+`detail` is the spacing of the samples along the outline, 2 px by default, and every sample is moved on every frame: for a large shape (a frame, a keyboard's outline) raise it to 4 to 8, which keeps the wobble and costs a fraction of the work.
 `boil()` works on paths only, so HTML text does not wobble; draw a title as a path, or with `text()` on a canvas and through the boil effect.
 A canvas, an image or a video takes the same wobble from `effect(canvas, { source, kind: 'boil', fps: 8 })`, a new seed 8 times a second.
+
+No demo uses this pattern yet.
+
+## Ink plates out of register
+
+A two-ink print: the title is set once in each ink, as layers that multiply where they overlap, and the plates slide into register as it starts and stop a few px out, as a riso or a screen print does.
+
+```html
+<div class="layer" data-component="plates" data-start="0" data-duration="6">
+    <h1 class="plate pink" data-bind-style="pink">JAZZ NIGHT</h1>
+    <h1 class="plate blue" data-bind-style="blue">JAZZ NIGHT</h1>
+</div>
+```
+
+```css
+.plate { position: absolute; left: 96px; top: 220px; margin: 0; font-size: 180px; font-weight: 900; line-height: 1; mix-blend-mode: multiply; }
+.pink { color: #ff48b0; }
+.blue { color: #0078bf; }
+```
+
+```javascript
+// Each ink's plate slides into register over 1.2 s and stops a few px out.
+scene('plates', {
+    keyframes: {
+        pink: {
+            translateX: { at: [0, 1.2], to: [-40, -3], ease: 'power3.out' },
+            translateY: { at: [0, 1.2], to: [18, 2], ease: 'power3.out' },
+        },
+        blue: {
+            translateX: { at: [0, 1.2], to: [36, 2], ease: 'power3.out' },
+            translateY: { at: [0, 1.2], to: [-14, -1], ease: 'power3.out' },
+        },
+    },
+});
+```
+
+`mix-blend-mode: multiply` mixes the inks where they overlap, as printed inks do (pink over blue gives a deep navy, pink over yellow an orange), so the overlap and the fringes both read as print.
+Keep the final offsets small, 1 to 3 px, as a real print shows them; more reads as a mistake.
+Shapes take the same plates: set each ink's shapes in a layer of its own with `multiply` and a small offset, and give their edges `boil()` (above) for a drawn line.
+For the paper, the finish's grain (`config({ finish: { grain } })`) over the whole frame.
 
 No demo uses this pattern yet.
 
@@ -1577,7 +1649,7 @@ The Sales Chart (/demos/kinetic-chart/) and Captions on a Beat (/demos/kinetic-c
 ## Captions from a transcript
 
 A line of words appears dimmed, each word lights up as it is spoken, and the word being spoken swells a little.
-`captions(t, words, options)` groups a transcript into lines at a sentence end, at a pause longer than `maxGap` seconds, or at `maxWords` or `maxChars`.
+`captions(t, words, options)` groups a transcript into lines at a sentence end and at a pause longer than `maxGap` seconds, and between those into the fewest lines `maxWords` and `maxChars` allow, about equal in length and broken after a comma when one is near the middle, so no line strands a word or two.
 It returns the line current at `t`, with `empty: true` and no words between lines.
 Each word carries a `state` of `past`, `active` or `future` and a `p`, its own progress from 0 to 1, so a word's style is a function of those two.
 `hold` is how many seconds a line stays after its last word.
@@ -2715,6 +2787,84 @@ scene('lab', {
 });
 ```
 
+## A rate the learner controls
+
+Something that runs at a rate the learner sets, such as a tank filling from a tap, growth at a chosen rate, a car at a set speed or a reaction at a temperature, takes two paths that must agree.
+The video works the amount out from the scripted settings: `seek(local)` sums the rate over the seconds each setting holds, so any frame is a function of `local`.
+The lesson advances it while the step holds: the clock stands still there, so a store's `tick()` adds the rate of the learner's setting at each frame.
+Both read one `RATE` function, and the step's script and the video's sum read one list of settings, so the two cannot drift apart.
+A store's `tick()` runs in both modes, so it returns unless the mode is interactive and the step is held.
+
+```html
+<div id="stage" data-composition-id="tank" data-start="0" data-duration="8" data-width="1280" data-height="720" data-fps="30">
+    <section id="fill" class="layer cap" data-step data-start="0" data-duration="8">
+        <h2>Filling the tank</h2>
+        <p>The wider the tap, the faster the tank fills.</p>
+    </section>
+    <div class="layer" data-component="tank" data-start="0" data-duration="8">
+        <svg viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">
+            <rect class="glass" x="760" y="160" width="300" height="400"></rect>
+            <rect class="water" x="760" width="300" data-bind-attr="water"></rect>
+        </svg>
+        <!-- The lesson alone: the learner's tap. -->
+        <label class="ctl" data-show="$kinetic.mode === 'interactive'">
+            <span>Tap</span>
+            <input type="range" min="0" max="3" step="1" data-model="tank.tap" data-model-number>
+        </label>
+    </div>
+</div>
+```
+
+```javascript
+const { scene, step } = wildflower.kinetic;
+
+// The one rate both paths read: the share of the tank a second fills at each tap setting.
+const RATE = (tap) => tap * 0.08;
+// The video's tap settings, in the step's seconds, each held from its time.
+const TAP = { at: [0, 1, 3.5], set: [0, 1, 3] };
+
+// The level the scripted taps give at a time: each setting's rate over the seconds it holds.
+function levelAt(t) {
+    let level = 0;
+    for (let i = 0; i < TAP.at.length; i++) {
+        const end = Math.min(t, i + 1 < TAP.at.length ? TAP.at[i + 1] : Infinity);
+        if (end > TAP.at[i]) level += RATE(TAP.set[i]) * (end - TAP.at[i]);
+    }
+    return Math.min(level, 1);
+}
+
+wildflower.store('tank', {
+    state: { tap: 0, level: 0 },
+    computed: { full() { return this.level >= 1; } },
+    // The lesson: the learner's tap fills the tank on the page's clock while the step holds.
+    tick(dt) {
+        const k = wildflower.getStore('kinetic');
+        if (k.mode !== 'interactive' || !k.waiting || this.level >= 1) return;
+        this.level = Math.min(1, this.level + RATE(this.tap) * Math.min(dt, 50) / 1000);
+    },
+});
+
+step('fill', {
+    wait: 1,                                     // the page: holds 1 s in, for the tap
+    until: 'tank.full',                          // the page: plays on once the tank is full
+    entry: { 'tank.tap': 0, 'tank.level': 0 },   // the page: empty on the way in
+    script: { 'tank.tap': TAP },                 // the video: the scripted taps
+});
+
+scene('tank', {
+    subscribe: ['tank', 'kinetic'],
+    // The video: the level is the scripted taps' sum up to this time.
+    seek(local) { if (this.stores.kinetic.mode === 'video') this.stores.tank.level = levelAt(local); },
+    computed: {
+        water() { const h = 400 * this.stores.tank.level; return { y: (560 - h).toFixed(1), height: h.toFixed(1) }; },
+    },
+});
+```
+
+The scene's clip starts with the step, so its `local` is the step's seconds, the time `TAP.at` is in.
+A rate that changes smoothly, such as a scripted track in place of settings, is summed the same way in small steps of `local`, or in closed form where the rate has one.
+The page lays out as every lesson does ("A lesson's layout", below), with the tap in the left column and the band along the bottom.
+
 ## A lesson's layout
 
 Every lesson uses this one layout in the default style (`style.md`, "Interactive pieces"), so one lesson is consistent with the next.
@@ -3124,7 +3274,7 @@ The layout is pele's at its pinned version: a newer pele may place the same flow
 ## A flowchart laid out by pele
 
 A flowchart, state diagram or timeline written as Mermaid text, drawn by pele into the stage in the page's font and colors, and animated on pele's own SVG: each node rises in and each edge draws along its length, in reading order.
-pele measures every label in the font, so it lays out in `init()` once the font has loaded, and `seek()` returns that promise, which holds every frame until the diagram is there; the first seek waits for it, and a development build reports that one wait as KN-170, once.
+pele measures every label in the font, so it lays out in `init()` once the font has loaded, and `seek()` returns that promise, which holds every frame until the diagram is there; the first seek waits for it, and that one slow seek is not enough to print KN-170, which needs 3 of the last 30.
 Its colors and font come from its CSS variables on the box it draws into, `--pele-bg` among them, which is the patch behind an edge's label.
 A node's group keeps pele's `transform` attribute, which places it, so a rise moves the node's children: a CSS `transform` on the group would replace the attribute and send every node to the corner.
 An edge is a path made one unit long with `pathLength="1"`, its dash moved off by `strokeDashoffset`, and its arrowhead shown once the line has arrived.

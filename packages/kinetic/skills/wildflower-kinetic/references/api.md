@@ -575,7 +575,8 @@ scene('title', {
 ```
 
 `text(canvas, { scene, font, lines })` draws lines of type on a canvas from a
-variable font's baked outlines, each letter with its own weight and slant.
+variable font's baked outlines, each letter with its own weight, slant or
+any other axis the outlines were baked with.
 The outline baker (https://kinetic.wildflowerjs.com/docs/baker/) makes the
 outlines from a `.ttf` or `.otf` for chosen characters, and offers them as a
 `.js` file that sets a global (`window.OUTLINES` by default) or as JSON.
@@ -600,9 +601,10 @@ the default, or `'middle'`, the capitals' middle on y), `tracking` (em
 between letters, 0), `spacing` (`'natural'`, the default, each letter at
 its own advance and kerning, as After Effects' per-character spacing;
 `'fixed'`, each centered in the slot of its default advance with no
-kerning, so the line keeps its width), `color` (`'#000'`) and `wght` or
-`slnt` for the whole line. `letter(i, ch)` returns that letter's values,
-which replace the line's: `wght`, `slnt`, `dx`, `dy` (px), `scale` and
+kerning, so the line keeps its width), `color` (`'#000'`) and `wght`,
+`slnt` or another baked axis by its tag (Shantell Sans's Bounce is
+`BNCE`) for the whole line. `letter(i, ch)` returns that letter's values,
+which replace the line's: any of those axes, `dx`, `dy` (px), `scale` and
 `rotate` (degrees, about its middle), `opacity` (1; at 0 it still takes
 its space), `blur` (px) and `color`. On a font with no slnt axis, `slnt`
 skews the letter (negative leans right). A kerning pair takes the left
@@ -1016,6 +1018,7 @@ rank(t, rows, (row, keyframe, index) => row.values[keyframe], { ascending: false
    // [{ row, index, value, position }] at a fractional keyframe t; position 0 is first
    // by() is called for the whole keyframes either side of any t; a value that is not finite (a keyframe past the data) counts as 0
 captions(t, words, { maxWords: 5, maxChars: 40, maxGap: 1, sentences: true, hold: 0.4 });
+   // between sentence ends and gaps, the fewest lines the limits allow, balanced: seven words at maxWords 5 are 4 + 3, not 5 + 2
    // maxWords, maxChars whole from 1; maxGap, hold seconds from 0 (any may be Infinity); sentences a boolean;
    // another value is KN-100, captions(t, words, { maxGap }) in its where
    // words: [{ id?, text, start, end }], a word-timed transcript in seconds
@@ -1338,10 +1341,19 @@ development builds name such a scene once when it is part of a `render()`, or
 the page is in video mode (KN-151); `check()` makes no video and an
 interactive page using `tick()` hears nothing.
 
+A lesson is read in video mode by `scripts/check.cjs` and by a render, so
+a scene's `tick()` on a lesson prints KN-151 there, and the script fails.
+Put a lesson's frame-loop work on a store instead. A store's `tick()` runs
+in both modes, so it checks the mode and the hold itself:
+
 ```javascript
-wildflower.kinetic.scene('bowl', {
+wildflower.store('bowl', {
+    state: { balls: 0 },
     // The learner's balls roll on the page's clock while the step holds.
-    tick(dt) { if (this.stores.kinetic.waiting) world.step(Math.min(dt, 50) / 1000); },
+    tick(dt) {
+        const k = wildflower.getStore('kinetic');
+        if (k.mode === 'interactive' && k.waiting) world.step(Math.min(dt, 50) / 1000);
+    },
 });
 ```
 `until` and `entry` take store paths, `store.field`. A script entry is a
