@@ -1,6 +1,6 @@
 {
   "name": "@wildflowerjs/kinetic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kinetic turns a WildflowerJS page into a video, previewed, checked and rendered in the browser. HyperFrames-compatible; not affiliated with HeyGen.",
   "main": "dist/kinetic.wf.js",
   "types": "types.d.ts",

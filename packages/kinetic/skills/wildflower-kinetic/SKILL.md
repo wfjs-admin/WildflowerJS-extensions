@@ -55,7 +55,7 @@ scenes.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1.0/dist/kinetic.wf.js" data-preview></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js" data-preview></script>
 <script defer src="scenes.js"></script>
 <style>[data-composition-id]:not([data-kinetic-ready]) { visibility: hidden; }</style>
 
@@ -94,7 +94,7 @@ A page with Trillium adds its script after Kinetic's, an import map for
 three.js, and the scenes as a module, which runs after the deferred scripts:
 
 ```html
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/three@0.1.0/dist/three.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/three@0.2/dist/three.wf.js"></script>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js" } }</script>
 <script type="module" src="scenes.js"></script>
 ```

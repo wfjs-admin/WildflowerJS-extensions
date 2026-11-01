@@ -38,7 +38,7 @@ File `index.html`:
     <title>Launch</title>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1.0/dist/kinetic.wf.js" data-preview></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js" data-preview></script>
     <script defer src="scenes.js"></script>
     <style>
         html, body { margin: 0; background: #efe8db; }
@@ -207,7 +207,7 @@ File `index.html`:
     <title>A quarter turn</title>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1.0/dist/kinetic.wf.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js"></script>
     <script defer src="lesson.js"></script>
     <style>
         * { box-sizing: border-box; }

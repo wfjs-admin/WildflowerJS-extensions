@@ -80,13 +80,15 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     const r = await wf.kinetic.render({ download: false, bitrate: 2e6, onProgress: (i, n) => {
       progress.push([i, n]);
       // Chrome renamed the canvas opt-in: layoutsubtree before 155 (or 156),
-      // content="drawable" after.
+      // content="drawable" after; from 157 the drawn element itself must be
+      // marked drawable.
       if (i === 1) {
         const c = root.parentElement;
-        wrapper = c.tagName + ' layoutsubtree=' + c.hasAttribute('layoutsubtree') + ' content=' + c.getAttribute('content');
+        wrapper = c.tagName + ' layoutsubtree=' + c.hasAttribute('layoutsubtree') + ' content=' + c.getAttribute('content') + ' root drawable=' + root.hasAttribute('drawable');
       }
     } });
-    expect(wrapper).toBe('CANVAS layoutsubtree=true content=drawable');
+    expect(wrapper).toBe('CANVAS layoutsubtree=true content=drawable root drawable=true');
+    expect(root.hasAttribute('drawable'), 'drawable is taken off after the render').toBe(false);
     expect(r.frames).toBe(10);
     expect(r.width).toBe(320); expect(r.height).toBe(180); expect(r.fps).toBe(10);
     expect(r.name).toBe('rv1.mp4');

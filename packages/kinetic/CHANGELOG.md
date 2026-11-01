@@ -4,6 +4,19 @@ Notable changes to Kinetic (`@wildflowerjs/kinetic`). The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-31
+
+### Fixed
+
+- `render()` of a DOM composition in Chrome 157 and later, where HTML-in-Canvas
+  is on by default: the composition root is marked `drawable` for the render,
+  which Chrome now requires of an element it draws, and unmarked after.
+
+### Changed
+
+- The guide's script tags load `@wildflowerjs/kinetic@0.1` (and Trillium
+  `@0.2`), so a page built from it picks up patch releases.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added

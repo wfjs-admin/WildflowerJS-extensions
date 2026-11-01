@@ -14,7 +14,9 @@
  *     draws an element inside the canvas's own subtree, so the root is
  *     wrapped in a <canvas layoutsubtree content="drawable"> for the render
  *     and unwrapped after (the opt-in under both its names: Chrome renamed
- *     layoutsubtree to content="drawable" in 155 or 156).
+ *     layoutsubtree to content="drawable" in 155 or 156), and the root
+ *     itself is marked `drawable` for the render, which Chrome 157 requires
+ *     of an element it draws.
  *     Components and the runtime's timing survive the move (probed). A stage
  *     fitted to the window (fit.js) has its scale moved onto the canvas for
  *     the render, so the root draws at the composition's own size while the
@@ -503,12 +505,15 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     const broke = (what, why) => fail(CODES.ENCODER_FAILED, 'render(): the ' + what, __DEV__ && why + '; another codec, a smaller size or a lower bitrate may encode');
     // Video mode for the frames (lesson.js), until the seek back is done.
     let release = null;
+    // Whether the root carried `drawable` before the render marked it.
+    let hadDrawable = false;
     function unwrap() {
       if (!wrap) return;
       removeCopies(copies);
       wrap.parentNode.insertBefore(source, wrap);
       wrap.remove();
       wrap = null;
+      if (!hadDrawable) source.removeAttribute('drawable');
       if (fit) fit.refresh();
     }
     try {
@@ -546,6 +551,11 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
         c.style.display = 'block';
         source.parentNode.insertBefore(c, source);
         wrap = c;
+        // Chrome 157 draws only an element marked `drawable` (the canvas's
+        // content="drawable" alone is no longer enough, and layoutsubtree is
+        // gone); earlier Chromes ignore the attribute. Taken off again after.
+        hadDrawable = source.hasAttribute('drawable');
+        source.setAttribute('drawable', '');
         c.appendChild(source);
         if (fit) fit.refresh();
         canvas = c;

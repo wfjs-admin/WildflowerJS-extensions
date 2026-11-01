@@ -84,7 +84,7 @@ Kinetic loads after the framework, and the scene file loads after both.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1.0/dist/kinetic.wf.js" data-preview></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js" data-preview></script>
 <script defer src="app.js"></script>
 
 <div id="stage" data-composition-id="main"
@@ -2442,7 +2442,7 @@ The page's CSS is the layout's, with the lines below for the circle, the wave, a
 ```html
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1.0/dist/kinetic.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js"></script>
 <script defer src="app.js"></script>
 
 <main class="lesson">
@@ -2734,7 +2734,7 @@ Kinetic loads with no `data-preview` here, since the bar would put the lesson in
 ```html
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1.0/dist/kinetic.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js"></script>
 <script defer src="app.js"></script>
 
 <main class="lesson">

@@ -29,7 +29,8 @@ export default defineConfig({
   test: {
     browser: {
       enabled: true,
-      provider: playwright({ launchOptions: { channel: 'chrome', args: ['--enable-blink-features=CanvasDrawElement'] } }),
+      // WILDFLOWER_BROWSER_CHANNEL picks another installed Chrome (chrome-beta).
+      provider: playwright({ launchOptions: { channel: process.env.WILDFLOWER_BROWSER_CHANNEL || 'chrome', args: ['--enable-blink-features=CanvasDrawElement'] } }),
       instances: [{ browser: 'chromium' }],
       headless: true,
     },
