@@ -1,0 +1,82 @@
+name: Focused run
+
+# One extension against one framework version, narrowed to the tiers, builds,
+# legs and test files given: for looking at a few tests without the whole of
+# CI. Started by hand (Actions, "Focused run", or `gh workflow run`); CI on
+# main stays the gate for a release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: The extension, such as kinetic
+        required: true
+      core:
+        description: The framework version from npm, such as 1.5.6
+        required: true
+      tiers:
+        description: Tiers, comma-separated (all the manifest declares when empty)
+        required: false
+      builds:
+        description: Builds, dev or min or both, comma-separated (both when empty)
+        required: false
+      legs:
+        description: Legs, from tiers, node, render and size, comma-separated (all when empty)
+        required: false
+      files:
+        description: Test files in the package's test folder, comma-separated (all when empty)
+        required: false
+      repeat:
+        description: How many times to run it, for a test that fails only sometimes
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    name: ${{ inputs.package }} on wildflowerjs@${{ inputs.core }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Framework under test
+        env:
+          CORE: ${{ inputs.core }}
+        run: npm install --no-save "wildflowerjs@$CORE"
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium chrome
+      - name: Build (vendored rollup + terser, SHA-512 pinned)
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: npm run fetch-tools && node scripts/build-extension.cjs "$PACKAGE"
+      - name: The legs and files asked for
+        env:
+          WILDFLOWER_BROWSER_CHANNEL: chrome
+          PACKAGE: ${{ inputs.package }}
+          TIERS: ${{ inputs.tiers }}
+          BUILDS: ${{ inputs.builds }}
+          LEGS: ${{ inputs.legs }}
+          FILES: ${{ inputs.files }}
+          REPEAT: ${{ inputs.repeat }}
+        run: |
+          set -- "$PACKAGE" --core-dir node_modules/wildflowerjs/dist
+          [ -n "$TIERS" ] && set -- "$@" --tiers "$TIERS"
+          [ -n "$BUILDS" ] && set -- "$@" --builds "$BUILDS"
+          [ -n "$LEGS" ] && set -- "$@" --legs "$LEGS"
+          [ -n "$FILES" ] && set -- "$@" --files "$FILES"
+          failed=0
+          for i in $(seq 1 "${REPEAT:-1}"); do
+            echo "#### run $i of ${REPEAT:-1}"
+            node scripts/test-extension.cjs "$@" || failed=$((failed + 1))
+          done
+          echo "$failed of ${REPEAT:-1} runs failed"
+          [ "$failed" -eq 0 ]

@@ -144,16 +144,30 @@ async function runtimePage(body, script) {
   return w;
 }
 
-// The frame of a rendered file at `at` seconds, as ImageData.
-async function frameAt(blob, at) {
+// The frame of a rendered file at `at` seconds, as ImageData. `seeked` can
+// fire before the frame at the new time is ready to draw, and the canvas
+// then gets the file's first frame or nothing, so the draw waits for the
+// element to present a frame: with `fps`, the frame `at` falls in; without,
+// the first one presented after the seek. Two seconds is the most it waits.
+async function frameAt(blob, at, fps) {
   const url = URL.createObjectURL(blob);
   const v = document.createElement('video');
   v.muted = true; v.preload = 'auto'; v.src = url;
   document.body.appendChild(v);
   try {
     await new Promise((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('video failed to load')); });
+    const want = fps ? Math.floor(at * fps + 1e-6) / fps : null;
+    const shown = typeof v.requestVideoFrameCallback !== 'function' ? Promise.resolve() : new Promise((res) => {
+      const give = setTimeout(res, 2000);
+      const heard = (now, meta) => {
+        if (want === null || Math.abs(meta.mediaTime - want) < 1e-3) { clearTimeout(give); res(); }
+        else v.requestVideoFrameCallback(heard);
+      };
+      v.requestVideoFrameCallback(heard);
+    });
     v.currentTime = at;
     await new Promise((res) => { v.onseeked = () => res(); });
+    await shown;
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);
@@ -221,7 +235,7 @@ describe(`render({ shutter }) with the HyperFrames runtime (${BUILD} extension, 
     expect(distinct).toEqual(Array.from({ length: 12 }, (_, i) => Math.round(i / 30 * 3000) / 3000));
     expect(times.length).toBe(12);
     // The leading edge at 0.3 s, x = 360: black to white within 2 px.
-    const img = await frameAt(r.blob, 0.31);
+    const img = await frameAt(r.blob, 0.31, 30);
     const v = (x) => img.data[(60 * img.width + x) * 4];
     let top = -1, bottom = -1;
     for (let x = 300; x < img.width; x++) {
@@ -245,7 +259,7 @@ describe(`render({ shutter }) with the HyperFrames runtime (${BUILD} extension, 
     expect(r.frames).toBe(18);
     const wrong = [];
     for (let i = 0; i < 18; i++) {
-      const img = await frameAt(r.blob, (i + 0.5) / 30);
+      const img = await frameAt(r.blob, (i + 0.5) / 30, 30);
       let purple = 0;
       for (let p = 0; p < img.data.length; p += 4) if (img.data[p] > 24 && img.data[p + 2] > 24) purple++;
       const m = (45 * img.width + 80) * 4;
@@ -302,7 +316,7 @@ async function stripePage(fps, duration, { before = '', runtime = true, runtimeA
 async function stripesOf(blob, n, fps) {
   const out = [];
   for (let i = 0; i < n; i++) {
-    const img = await frameAt(blob, (i + 0.5) / fps);
+    const img = await frameAt(blob, (i + 0.5) / fps, fps);
     let t = 0;
     for (let j = 0; j < STRIPES; j++) if (img.data[(Math.floor(img.height / 2) * img.width + Math.floor((j + 0.5) * img.width / STRIPES)) * 4] > 128) t |= 1 << j;
     out.push(t);
@@ -320,7 +334,8 @@ async function landing(w, t) {
 describe(`the player's frame grid with Kinetic loaded in page order (${BUILD} extension, ${CORE_TIER} core)`, () => {
   // Long enough to pass the first frame a plain floor(i / fps * fps) puts on
   // the frame before (i = 29 at 25 fps, 123 at 30 and 60 fps); the pinned
-  // player lands on every one (probed 2026-10-09), and render() checks each.
+  // player lands on every one, and render() checks each. The file is read
+  // back one <video> a frame, so each test has 90 s.
   for (const [fps, n] of [[25, 62], [30, 126], [60, 126]]) {
     it(`a render at the root's ${fps} fps writes all ${n} frames at their own times, with no repeat or skip`, async ({ skip }) => {
       if (!canRender()) skip();
@@ -334,8 +349,12 @@ describe(`the player's frame grid with Kinetic loaded in page order (${BUILD} ex
       // The scene heard each frame's own time (frame 0 found the clock at 0),
       // then the seek back to 0.
       expect(times).toEqual([...want.slice(1).map(r6), 0]);
-      expect(await stripesOf(r.blob, n, fps)).toEqual(want.map((t) => Math.round(t * 300)));
-    });
+      // Each frame of the file carries its own time; a frame that reads as
+      // another is listed with its number, what it read and what it should.
+      const read = await stripesOf(r.blob, n, fps);
+      const off = read.map((t, i) => (t === Math.round(want[i] * 300) ? '' : `frame ${i} read ${t}, not ${Math.round(want[i] * 300)}`)).filter(Boolean);
+      expect(off).toEqual([]);
+    }, 90000);
   }
 
   it('a render of one frame, shorter than 1/fps, renders that frame', async ({ skip }) => {

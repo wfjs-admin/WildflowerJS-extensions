@@ -7,6 +7,7 @@
  *   node scripts/test-extension.cjs --all                     # every package with a manifest
  *   node scripts/test-extension.cjs <name> --core-dir node_modules/wildflowerjs/dist
  *   node scripts/test-extension.cjs <name> --tiers nano,full --builds min
+ *   node scripts/test-extension.cjs <name> --legs tiers,node --files runtime.test.js,check.test.cjs
  *
  * The manifest (package.json `wildflower` block) lists `tiers` and `builds`.
  * Each leg runs the package's vitest config with:
@@ -47,7 +48,7 @@ const all = args.includes('--all');
 const opt = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : null; };
 
 if (!name && !all) {
-    console.error('Usage: node scripts/test-extension.cjs <name> | --all [--core-dir DIR] [--tiers a,b] [--builds dev,min]');
+    console.error('Usage: node scripts/test-extension.cjs <name> | --all [--core-dir DIR] [--tiers a,b] [--builds dev,min] [--legs tiers,node,render,size] [--files a.test.js,b.test.cjs]');
     process.exit(1);
 }
 
@@ -98,7 +99,18 @@ function testPackage(pkgName) {
     }
     const config = path.join('packages', pkgName, 'vitest.config.js');
     const results = [];
-    for (const build of useBuilds) {
+    // --legs picks the legs that run (tiers, node, render, size; all of them
+    // by default), and --files names the test files they run, by path or by
+    // name in the package's test folder: .test.js files go to the tier legs
+    // and the render leg, .test.cjs files to the Node leg, and a leg with no
+    // file of its kind named does not run. For a run that looks at a few
+    // tests only.
+    const legs = (opt('--legs') || 'tiers,node,render,size').split(',').filter(Boolean);
+    const named = (opt('--files') || '').split(',').filter(Boolean).map((f) => (f.includes('/') ? f : path.join('packages', pkgName, 'test', f)));
+    const browserFiles = named.filter((f) => f.endsWith('.test.js'));
+    const nodeFiles = named.filter((f) => f.endsWith('.test.cjs'));
+    const runs = (leg, files) => legs.includes(leg) && (!named.length || files.length > 0);
+    for (const build of (runs('tiers', browserFiles) ? useBuilds : [])) {
         for (const tier of useTiers) {
             const rel = path.join(coreDir, coreFile(tier, build));
             const label = `${tier}.${build}`;
@@ -108,7 +120,7 @@ function testPackage(pkgName) {
                 continue;
             }
             console.log(`== ${label}: extension ${build}, core ${rel}`);
-            const run = spawnSync('npx', ['vitest', 'run', '--config', config], {
+            const run = spawnSync('npx', ['vitest', 'run', '--config', config, ...browserFiles], {
                 cwd: ROOT,
                 env: { ...process.env, EXT_BUILD: build, WF_CORE: '/' + rel.split(path.sep).join('/') },
                 encoding: 'utf8',
@@ -128,7 +140,8 @@ function testPackage(pkgName) {
 
     // The package's Node tests, once: anything in test/ named *.test.cjs.
     const testDir = path.join(pkgDir, 'test');
-    const nodeTests = fs.existsSync(testDir) ? fs.readdirSync(testDir).filter((f) => f.endsWith('.test.cjs')).sort() : [];
+    const nodeTests = (runs('node', nodeFiles) && fs.existsSync(testDir) ? fs.readdirSync(testDir).filter((f) => f.endsWith('.test.cjs')).sort() : [])
+        .filter((f) => !nodeFiles.length || nodeFiles.includes(path.join('packages', pkgName, 'test', f)));
     if (nodeTests.length) {
         const files = nodeTests.map((f) => path.join('packages', pkgName, 'test', f));
         console.log(`== node: ${files.join(', ')}`);
@@ -161,10 +174,10 @@ function testPackage(pkgName) {
     // legs above. On a machine with no installed Chrome the leg says it was
     // skipped; it does not fail.
     const renderConfig = path.join('packages', pkgName, 'vitest.render.config.js');
-    if (fs.existsSync(path.join(ROOT, renderConfig))) {
+    if (runs('render', browserFiles) && fs.existsSync(path.join(ROOT, renderConfig))) {
         const renderCore = path.join(coreDir, coreFile('full', 'dev'));
         console.log(`== render: ${renderConfig}, core ${renderCore}`);
-        const run = spawnSync('npx', ['vitest', 'run', '--config', renderConfig], {
+        const run = spawnSync('npx', ['vitest', 'run', '--config', renderConfig, ...browserFiles], {
             cwd: ROOT,
             env: { ...process.env, EXT_BUILD: 'dev', WF_CORE: '/' + renderCore.split(path.sep).join('/') },
             encoding: 'utf8',
@@ -189,7 +202,7 @@ function testPackage(pkgName) {
     // (the extensions repo's build) writes no .br beside the file.
     // Every production file the manifest lists, each against its own budget:
     // the package's name, or the output's `budget` key for a second file.
-    for (const prod of (manifest.outputs || []).filter((o) => o.minify)) {
+    for (const prod of (legs.includes('size') && !named.length ? manifest.outputs || [] : []).filter((o) => o.minify)) {
         const min = path.join(pkgDir, prod.file);
         const budgets = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension-budgets.json'), 'utf8'));
         const key = prod.budget || pkgName;
