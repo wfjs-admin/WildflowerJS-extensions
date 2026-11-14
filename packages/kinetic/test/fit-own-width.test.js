@@ -2,11 +2,8 @@
  * config({ fit }) with a root whose width the page gives as a share of its
  * container (fit.js): the root lays out against the wrapper, which is
  * already no wider than the room, so the scale is the room over the root's
- * own laid-out width, and a root at width: 100% fills the wrapper. The scale
- * used to be the room over data-width whatever the root's width, so such a
- * root was narrowed twice: a 640 x 360 stage in 320 px of room showed at
- * 160 x 90. A root at data-width, by the page's rule or Kinetic's, is fitted
- * as before.
+ * own laid-out width, and a root at width: 100% fills the wrapper. A root at
+ * data-width, by the page's rule or Kinetic's, is fitted by that width.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { load, tick, frames, CORE, WF_FILE, BUILD, CORE_TIER } from './helpers.js';

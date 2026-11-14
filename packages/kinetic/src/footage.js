@@ -131,8 +131,8 @@ export function createFootage(clock, clips) {
   // frame is presented, so a drawImage of the clip still gets the frame from
   // before the seek (seen on CI: frame 105 after a seek back to 0); every
   // seek waits for the element to present a frame, which Chrome does after
-  // each seek, one within the frame already shown included (probed
-  // 2026-10-31). For a seek onto the end of the file, Chrome can also fire
+  // each seek, one within the frame already shown included.
+  // For a seek onto the end of the file, Chrome can also fire
   // `seeked` before it has flushed the last frames, and `ended` reads only
   // the position, so that seek waits for `ended` too. Both waits give up
   // after a second.

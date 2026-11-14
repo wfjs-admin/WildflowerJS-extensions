@@ -19,8 +19,8 @@
  * A hidden clip paints nothing at all. visibility: hidden alone let the
  * output of an SVG filter that makes its own pixels (feFlood, feImage,
  * feTurbulence) paint through, on the clip or on a descendant, and so did a
- * descendant with visibility: visible of its own (probed in Chrome 155,
- * 2026-10-09). So a hidden clip also carries data-kinetic-hidden, which one
+ * descendant with visibility: visible of its own (seen in Chrome 155).
+ * So a hidden clip also carries data-kinetic-hidden, which one
  * style sheet Kinetic adopts clips to nothing with clip-path (adopted again
  * on the next seek when page code has replaced document.adoptedStyleSheets).
  * A clip-path changes no layout, and through the sheet it leaves the clip's

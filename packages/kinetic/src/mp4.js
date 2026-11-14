@@ -157,7 +157,7 @@ function soundTrak(audio, length, offset) {
   const mdhd = fullBox('mdhd', 1, 0, u64(0), u64(0), u32(AUDIO_RATE), u64(duration), u16(0x55c4), u16(0));
   // For Opus the edit list starts at 0 and dOps alone carries the pre-skip:
   // Chrome applies both, and a media time of the pre-skip put a click 6.5 ms
-  // early in its decode (measured 2026-10-08, Chrome 154; FFmpeg was exact
+  // early in its decode (measured in Chrome 154; FFmpeg was exact
   // either way). Chrome then drops the pre-skip from inside the edit, so
   // the edit lasts that much longer (createMp4) and its decode is the
   // render's whole length.

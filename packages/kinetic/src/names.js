@@ -13,7 +13,7 @@
  *               Kinetic's own, not for pages to read
  * DIAG_PREFIX   the prefix of the extension's diagnostic codes (KN-101 ...)
  * HF_VERSION    the HyperFrames runtime this build was tested against
- *               (scripts/fetch-hyperframes.cjs pins the same version)
+ *               (the script that fetches it pins the same version)
  */
 
 export const GLOBAL_NAME = 'kinetic';

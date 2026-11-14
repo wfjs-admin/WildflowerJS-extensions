@@ -61,7 +61,7 @@
  * time; one that lands elsewhere (a grid that misses this fps, or a `from`
  * off the grid) would repeat or skip frames, so render() throws KN-206 and
  * its finally puts the page and the clock back. The pinned player lands
- * i / fps exactly at 23.976, 25, 29.97, 30 and 60 fps (probed 2026-10-09).
+ * i / fps exactly at 23.976, 25, 29.97, 30 and 60 fps.
  *
  * The sound: when the composition has an audio clip (audio.js) and `audio`
  * is not false, the clips decoded at readiness are mixed, the codec is
@@ -119,7 +119,7 @@ const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnim
 // drawElementImage draws a canvas that was already on screen when the root
 // moved into the render's canvas from its last composited image, so a WebGL
 // view redrawn on every seek came out frozen at the frame the render began
-// on (probed 2026-10-08 in Chrome 154; a canvas first shown inside the
+// on (seen in Chrome 154; a canvas first shown inside the
 // render's canvas was drawn fresh). A copy made inside it is drawn fresh, so
 // each canvas is hidden and a copy laid over its box, and after every seek
 // the copy takes the canvas's own style and current pixels. A WebGL canvas
@@ -128,15 +128,15 @@ const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnim
 // Chrome also clips a canvas inside the render's canvas to a rectangle of
 // its drawing size, in CSS px, at the place its layout offsets (each box's
 // left, top and border on the way down from the render's canvas) would put
-// the render's top left, while its transforms move it whole (probed
-// 2026-10-10 in Chrome 155): a canvas laid out anywhere else came out cut
+// the render's top left, while its transforms move it whole (seen
+// in Chrome 155): a canvas laid out anywhere else came out cut
 // off or missing, and one drawn smaller than its box cut to that size. So
 // each copy is laid out at that place, its left and top undoing the offsets
 // of the box it is positioned in, moved to the canvas's own place with
 // `translate` (on top of the canvas's own). And a canvas inside the render's
 // canvas is painted at its drawing's own size, one drawing px to the CSS px,
 // from its border box's corner and clipped to its content box, whatever its
-// CSS size, border, padding and object-fit (probed 2026-10-10: a 10 x 10
+// CSS size, border, padding and object-fit (measured: a 10 x 10
 // drawing in a 100 x 100 box showed 10 x 10, and a bordered canvas's
 // drawing sat a border's width up and left). So the copy's drawing is its
 // border box, with the canvas drawn into it where the content box and
@@ -162,7 +162,7 @@ const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnim
 // the copy's containing block too: an ancestor that is positioned, or that
 // has a transform, translate, rotate, scale, filter, perspective, contain
 // or will-change (as a clip during a zoom, flip or blur transition does),
-// past a table or cell that is not positioned (probed 2026-10-10).
+// past a table or cell that is not positioned.
 //
 // The page's own style is never written: the canvas is hidden by an
 // attribute, data-kinetic-copied, and one adopted style sheet that hides it
@@ -341,10 +341,10 @@ function removeCopies(pairs) {
 // SVG <image> from another origin black unless it was fetched with CORS
 // (a crossorigin attribute, and Access-Control-Allow-Origin from its
 // server), and a CSS image from another origin black even then, with no
-// error (probed 2026-10-08 in Chrome 154): a video's poster and an
+// error (seen in Chrome 154): a video's poster and an
 // <input type=image> too, a ::before or ::after image and content: url(),
 // and media in an open shadow root. A frame or an <object> from another
-// origin is drawn empty (probed 2026-10-14). Each such element in a DOM
+// origin is drawn empty. Each such element in a DOM
 // source, with its URL, found before the page is touched (KN-204).
 const CSS_IMAGES = ['background-image', 'mask-image', 'border-image-source', 'list-style-image', 'content'];
 // The page's origin is self.origin, which a srcdoc frame shares with its
@@ -662,7 +662,7 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
           // Each colour weighted by its alpha, so the average is over black,
           // as the file shows a transparent pixel: an unweighted average
           // darkened a pixel covered by m of n samples to (m / n)^2 of its
-          // colour on a transparent root (measured 2026-10-09). The frame is
+          // colour on a transparent root. The frame is
           // written opaque (avg's alpha is 255 throughout), and
           // Uint8ClampedArray rounds each level.
           for (let j = 0; j < sum.length; j++) if ((j & 3) < 3) { avg.data[j] = sum[j] / (255 * samples); sum[j] = 0; }

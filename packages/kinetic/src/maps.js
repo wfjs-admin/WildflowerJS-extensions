@@ -39,7 +39,7 @@
  *
  * Both are the same PNG on every page load. Chrome paints an feImage from a
  * fresh blob or data: URL in the frame after it is set, a 1920 x 1080 noise
- * map too (probed in Chrome 155, 2026-10-09), so a map drawn during a seek
+ * map too (seen in Chrome 155), so a map drawn during a seek
  * is there when the frame is captured.
  *
  * An image map, luma url(path), is fetched at readiness (and by check() and

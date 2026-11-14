@@ -1,17 +1,13 @@
 /**
  * The preview bar's As Rendered against the real render.still(), which
  * seeks the clock through the frame's shutter samples and back to where it
- * started: a frame step or scrub made while a frame draws is kept (it used to
- * be undone by the still's seek back, so the clock, readout and scrubber went
- * back a frame), and holding a step key through twenty frames ends on the
- * twentieth frame with the last draw for that frame. The frame laid over the
- * stage never outlives what it shows: turning the bar off takes it away (it
- * used to stay over the stage, with the root left position: relative), and a
- * seek from outside the bar (page code, a lesson, an embed host) draws the
- * new frame (the old one used to stay up). Render and Check are off while a
- * frame draws (they looked on and a click did nothing), and render() called
- * from page code while As Rendered is on does not draw the laid-over frame
- * into the file (every frame of the MP4 used to be the one frozen frame).
+ * started: a frame step or scrub made while a frame draws is kept, and
+ * holding a step key through twenty frames ends on the twentieth frame with
+ * the last draw for that frame. The frame laid over the stage never outlives
+ * what it shows: turning the bar off takes it away, and a seek from outside
+ * the bar (page code, a lesson, an embed host) draws the new frame. Render
+ * and Check are off while a frame draws, and render() called from page code
+ * while As Rendered is on does not draw the laid-over frame into the file.
  *
  * Headless Chromium has no drawElementImage; a no-op stands in, so the
  * still runs its own seeks and waits and returns a blank frame.

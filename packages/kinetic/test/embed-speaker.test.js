@@ -1,9 +1,7 @@
 /**
- * An embedded piece with sound (option (a) for the embed's sound control):
- * under ?embed, Kinetic's speaker over the stage's corner stays shown while
- * everything else beside the root is hidden, so the viewer can turn the
- * sound on; it used to be hidden with the rest, and the first-gesture unlock
- * stood aside for it, so an embed had no way to sound. In a render's capture
+ * An embedded piece with sound: under ?embed, Kinetic's speaker over the
+ * stage's corner stays shown while everything else beside the root is
+ * hidden, so the viewer can turn the sound on. In a render's capture
  * there is no speaker at all, and the speaker is never in what render()
  * draws, since it sits beside the root.
  */
