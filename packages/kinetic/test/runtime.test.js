@@ -145,22 +145,36 @@ async function runtimePage(body, script) {
 }
 
 // The frame of a rendered file at `at` seconds, as ImageData; `fps` is the
-// file's, for the wait on the frame (seekVideo).
+// file's, for the wait on the frame (seekVideo). A <video> that does not
+// load or does not report its seek done in 8 s is dropped and the frame read
+// with a new one, three times at most: these tests are about the file, and
+// they open a <video> for every frame of it.
 async function frameAt(blob, at, fps) {
-  const url = URL.createObjectURL(blob);
-  const v = document.createElement('video');
-  v.muted = true; v.preload = 'auto'; v.src = url;
-  document.body.appendChild(v);
-  try {
-    await new Promise((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('video failed to load')); });
-    await seekVideo(v, at, fps);
-    const c = document.createElement('canvas');
-    c.width = v.videoWidth; c.height = v.videoHeight;
-    c.getContext('2d').drawImage(v, 0, 0);
-    return c.getContext('2d').getImageData(0, 0, c.width, c.height);
-  } finally {
-    v.remove();
-    URL.revokeObjectURL(url);
+  for (let attempt = 1; ; attempt++) {
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement('video');
+    v.muted = true; v.preload = 'auto'; v.src = url;
+    document.body.appendChild(v);
+    try {
+      await new Promise((res, rej) => {
+        const late = setTimeout(() => rej(Object.assign(new Error('the video did not load in 8 s'), { stalled: true })), 8000);
+        v.onloadedmetadata = () => { clearTimeout(late); res(); };
+        v.onerror = () => { clearTimeout(late); rej(new Error('video failed to load')); };
+      });
+      await seekVideo(v, at, fps);
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v, 0, 0);
+      return c.getContext('2d').getImageData(0, 0, c.width, c.height);
+    } catch (e) {
+      if (!e.stalled || attempt === 3) throw e;
+    } finally {
+      // Hands the decoder back at once, with a <video> made for every frame.
+      v.remove();
+      v.removeAttribute('src');
+      v.load();
+      URL.revokeObjectURL(url);
+    }
   }
 }
 

@@ -262,7 +262,9 @@ export async function siteHas(file) {
 // without, the first one presented once the seek is set. A new element can
 // present the file's first frame before the seek's, so without `fps` a
 // first frame is taken only when no other follows it within 150 ms. Two
-// seconds is the most it waits in all.
+// seconds is the most it waits for the frame. A seek the element does not
+// report done in 8 s rejects with an error whose `stalled` is true, where a
+// reader can start over with a new element.
 export async function seekVideo(v, at, fps) {
   const want = fps ? Math.floor(at * fps + 1e-6) / fps : null;
   const shown = typeof v.requestVideoFrameCallback !== 'function' ? Promise.resolve() : new Promise((res) => {
@@ -278,7 +280,10 @@ export async function seekVideo(v, at, fps) {
     v.requestVideoFrameCallback(heard);
   });
   v.currentTime = at;
-  await new Promise((res) => { v.onseeked = () => res(); });
+  await new Promise((res, rej) => {
+    const late = setTimeout(() => rej(Object.assign(new Error('the video did not report its seek to ' + at + ' s done in 8 s'), { stalled: true })), 8000);
+    v.onseeked = () => { clearTimeout(late); res(); };
+  });
   await shown;
 }
 
