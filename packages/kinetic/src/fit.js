@@ -33,10 +33,12 @@
  * preview bar is asked for (?preview, data-preview, config({ preview: true })).
  * The root is moved into a plain element the extension owns,
  * <div class="kinetic-fit">, as wide as data-width and no wider than its
- * container, with the root's aspect ratio, and the root is scaled from its
- * top left corner by k = min(1, the wrapper's width / data-width), so its
- * layout stays data-width by data-height. A ResizeObserver on the wrapper
- * recomputes k. The wrapper is no component, so a scene directly inside the
+ * container and, in a top-level window, no wider than lets its height, from
+ * the root's aspect ratio, fit the window above the preview bar (in a frame
+ * the page around it sizes it), and the root is scaled from
+ * its top left corner by k = min(1, the wrapper's width / data-width), so
+ * its layout stays data-width by data-height. A ResizeObserver on the
+ * wrapper and the bar, and the window's resize, recompute k. The wrapper is no component, so a scene directly inside the
  * root has no parent component. Applied before readiness marks the root
  * shown, undone when fit is turned off, and never in a render. render()
  * moves the root into a canvas inside the wrapper; refresh() then moves the
@@ -118,7 +120,9 @@ function isolate() {
   for (let el = root; el !== html; el = el.parentElement) {
     const parent = el.parentElement;
     if (el !== document.body) {
-      for (const sib of parent.children) if (sib !== el && !LEFT_ALONE.includes(sib.tagName)) set(sib, 'display', 'none');
+      // Kinetic's own pause mark over the stage stays (an embed's click shows
+      // it), and outside a render its speaker, an embed's only sound control.
+      for (const sib of parent.children) if (sib !== el && !LEFT_ALONE.includes(sib.tagName) && !sib.hasAttribute('data-kinetic-paused') && !(sib.hasAttribute('data-kinetic-speaker') && !rendering())) set(sib, 'display', 'none');
     }
     set(parent, 'margin', '0');
     set(parent, 'padding', '0');
@@ -130,6 +134,8 @@ export function createFit(clock, previewWanted) {
   let wanted = null;          // config({ fit }); null follows the preview bar
   let wrap = null;            // the wrapper, while the root is fitted
   let width = 0;              // the root's data-width, while it is fitted
+  let height = 0;             // and its data-height
+  let barSeen = null;         // the preview bar, once the observer watches it
   let scaled = null;          // the element carrying the scale: the root, or render()'s canvas
   let saved = null;           // that element's own transform and transform-origin
   let ro = null;
@@ -188,14 +194,37 @@ export function createFit(clock, previewWanted) {
     }
     // 0 while the wrapper is not laid out (inside display: none); the
     // observer calls again once it is.
-    const room = wrap.clientWidth;
+    // The exact width, since clientWidth rounds, which a tall stage fitted
+    // by height would multiply into several pixels of its height.
+    const room = wrap.getBoundingClientRect().width;
     if (!(room > 0)) return;
+    // Over the root's own laid-out width: a root the page sizes as a share
+    // of its container lays out against the wrapper, already narrowed.
+    // render()'s canvas is data-width (rounded up to even) wide.
+    const own = el.hasAttribute('data-kinetic-render') ? width : el.offsetWidth || width;
     el.style.transformOrigin = '0 0';
-    el.style.transform = 'scale(' + Math.min(1, room / width) + ')';
+    el.style.transform = 'scale(' + Math.min(1, room / own) + ')';
   }
+
+  // The wrapper's widest, so that its height (from its aspect ratio) fits the
+  // window above the preview bar: a portrait stage, or any stage taller than
+  // the window, shows whole. Only in a top-level window: in a frame, the page
+  // around it sizes it (the docs site's sandbox, an embed). The bar is
+  // watched once it is there, since it mounts after the fit and wraps onto
+  // more lines in a narrow window.
+  function bound() {
+    if (self.top !== self) return;
+    const bar = document.querySelector('[data-kinetic-preview]');
+    if (bar && bar !== barSeen) { barSeen = bar; ro.observe(bar); }
+    const room = self.innerHeight - (bar ? bar.offsetHeight : 0);
+    wrap.style.maxWidth = room > 0 ? 'min(100%, ' + (room * width / height) + 'px)' : '100%';
+  }
+  const resized = () => { if (wrap) { bound(); scale(); } };
 
   function unwrap() {
     ro.disconnect();
+    barSeen = null;
+    self.removeEventListener('resize', resized);
     unscale();
     const parent = wrap.parentNode;
     if (parent) while (wrap.firstChild) parent.insertBefore(wrap.firstChild, wrap);
@@ -214,11 +243,14 @@ export function createFit(clock, previewWanted) {
       wrap.className = 'kinetic-fit';
       root.parentNode.insertBefore(wrap, root);
       wrap.appendChild(root);
-      ro = new ResizeObserver(() => { if (wrap) scale(); });
+      ro = new ResizeObserver(resized);
       ro.observe(wrap);
+      self.addEventListener('resize', resized);
     }
     width = W;
+    height = H;
     wrap.setAttribute('style', WRAP_STYLE + 'width:' + W + 'px;aspect-ratio:' + W + ' / ' + H);
+    bound();
     scale();
   }
 
@@ -234,6 +266,15 @@ export function createFit(clock, previewWanted) {
     // The undo starts watching, and the fit applies once the root is parsed.
     start() {
       watch();
+      // Under ?embed, an element the page adds beside the root or one of its
+      // ancestors later is hidden too, at once; a change inside the root is
+      // the composition's own.
+      if (embedded()) {
+        new MutationObserver((rs) => {
+          const root = compositionRoot(document);
+          if (rs.some((r) => !(root && root.contains(r.target)))) isolate();
+        }).observe(document.documentElement, { childList: true, subtree: true });
+      }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sync, { once: true });
       else sync();
     },

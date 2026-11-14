@@ -99,7 +99,8 @@ describe(`clock (${BUILD} extension, ${CORE_TIER} core)`, () => {
   it('config() reports the settings', async () => {
     const { wf } = await load();
     const c = wf.kinetic.config();
-    expect(c).toEqual({ fps: 30, channel: 'event', autoplay: false, preview: false, loop: { hold: 3 }, fit: false, sound: true, shutter: false, finish: false, mode: 'auto' });
+    // frameNotice is false here because the test helper's load() turns it off.
+    expect(c).toEqual({ fps: 30, channel: 'event', autoplay: false, preview: false, frameNotice: false, loop: { hold: 3 }, fit: false, sound: true, shutter: false, finish: false, encode: false, mode: 'auto' });
   });
 
   it('config() rejects an unknown option with KN-100, naming it and the known ones, and applies nothing', async () => {
@@ -325,11 +326,22 @@ describe(`clock (${BUILD} extension, ${CORE_TIER} core)`, () => {
     const { wf } = await load();
     const store = wf.getStore('kinetic');
     wf.kinetic.seek(0);
+    const started = performance.now();
     wf.kinetic.play();
     expect(store.playing).toBe(true);
-    await frames(4);
+    // Four frames, as frames(4) waits, keeping what each one showed, so a
+    // failure says what the frames were.
+    const seen = [];
+    for (let i = 0; i < 4; i++) {
+      const ts = await new Promise((r) => requestAnimationFrame(r));
+      seen.push({ ts, now: performance.now(), time: store.time, playing: store.playing });
+    }
+    await tick(0);
     const moved = store.time;
-    expect(moved).toBeGreaterThan(0);
+    expect(moved, 'time did not advance: ' + JSON.stringify({
+      started, seen, duration: store.duration, fps: store.fps,
+      player: '__player' in window, renderReady: '__renderReady' in window, hyperframes: typeof window.__hyperframes,
+    })).toBeGreaterThan(0);
     wf.kinetic.pause();
     expect(store.playing).toBe(false);
     await frames(3);

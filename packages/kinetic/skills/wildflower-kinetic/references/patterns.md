@@ -52,6 +52,7 @@ Contents, one entry for each `##` section below:
 - [A pulse on the beat](#a-pulse-on-the-beat)
 - [Music under a scene](#music-under-a-scene)
 - [A track shorter than the film](#a-track-shorter-than-the-film)
+- [Cutting to a track](#cutting-to-a-track)
 - [A sound on a cut](#a-sound-on-a-cut)
 - [Bars that move with the music](#bars-that-move-with-the-music)
 - [A pulse on the bass](#a-pulse-on-the-bass)
@@ -86,7 +87,7 @@ Kinetic loads after the framework, and the scene file loads after both.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js" data-preview></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js" data-preview></script>
 <script defer src="app.js"></script>
 
 <div id="stage" data-composition-id="main"
@@ -160,7 +161,7 @@ The Launch Title demo (/demos/kinetic-title/) styles the letters of its title th
 
 ## A title that sweeps in
 
-The letters of a title rise and fade in under a window that sweeps through the word, each letter's change scaled by its weight, so neighbouring letters overlap in motion instead of starting one after another.
+The letters of a title rise and fade in under a window that sweeps through the word, each letter's change scaled by its weight, so neighboring letters overlap in motion instead of starting one after another.
 `sweep(i, n, p, options)` gives letter i's weight: 0 before the window reaches it, 1 once the window has passed, and in between the window's shape at the letter's place in it.
 `p` is the sweep's progress, here `ramp(local, 0.2, 1.4)`.
 The weight is then the time of a one-second track set: `styleAt(w, RISE)`, with `RISE`'s keys at 0 and 1, gives the letter's style from its weight, with the units and the transform folded as `styleAt()` folds them.
@@ -1469,7 +1470,7 @@ The Sales Chart demo (/demos/kinetic-chart/) grows its bars in this way before t
 
 Bars for three products change length and swap places as the years pass from 2021 to 2024, with the year shown above them.
 `rank(t, rows, by)` takes `t` as a fractional keyframe.
-Whole numbers are the keyframes that `by(row, k)` reads, here an index into each row's `values`, and a fraction blends the two neighbouring values and the two orderings.
+Whole numbers are the keyframes that `by(row, k)` reads, here an index into each row's `values`, and a fraction blends the two neighboring values and the two orderings.
 `year` maps the clock onto that `t` with `interpolate`, and holds each year for its first 45 percent before easing to the next.
 Each result's `position` (0 is first) times the row height gives the row's `translateY`, and its blended `value` sets the bar's width.
 
@@ -1795,6 +1796,31 @@ const bar = (n) => tempo('music').at(n * 4);   // bar n's start in composition s
 ```
 
 Listen to the seams before the film is done: a track whose last bars change (a fill, a cymbal) repeats better from an earlier bar line, and one with a long tail needs its repeat to start before the tail ends.
+
+## Cutting to a track
+
+A loop of 8 bars cut to a 115 BPM track, its drop the first strike.
+Ask the user for a track within about 5 BPM of the tempo the piece was designed at, in 4/4, with a clear kick on the beats (a kick on dotted or syncopated counts never sits under a cut), dry, punchy hits for the strikes, a phrase of 4 bars, and a license for where the piece will go.
+`scripts/beatgrid.cjs` finds the tempo and the first downbeat for the clip's `data-tempo` and `data-downbeat`; confirm the drop by its low kick (below 120 Hz) and by the user's ear, since the model cannot listen.
+Find the phrase before choosing the length: compare each bar's spectrum with the drop bar's, and the bar that matches best is where the groove repeats (here bar 13 matched bar 9, a phrase of 4 bars). A loop of 4 or 8 bars is seamless; 6 bars cuts a phrase.
+The clip starts one beat before the drop (`data-media-start` = the drop's time in the file − one beat), so the drop is the first strike and every pass of the loop gets one beat of the build as a pickup.
+Write the beat grid once and place everything on it: a contact (a strike, a landing) on the beat's whole frame, a move started early so it lands on the beat (`rules.md`, "Motion habits"), a clip's edge on the whole frame nearest its beat.
+Before placing anything, write down where each event reads: a contact on its frame, a move where it lands, an entrance almost at once.
+
+```html
+<audio id="music" src="music.mp3" data-start="0" data-duration="16.7" data-media-start="16.209"
+       data-fade-out="0.03" data-tempo="115" data-downbeat="0.035" data-meter="4"></audio>
+```
+
+```javascript
+const FPS = 30, BEAT = 60 / 115, LAND = 0.24;                // arrival('power2.inOut', 0.3) is 0.241 s, arrival('spring', 0.3) 0.232 s
+const B = (k) => k * BEAT;                                   // beat k from the clip's start, the drop at k = 1
+const onFrame = (t) => Math.round(t * FPS) / FPS;
+const hit = (k) => onFrame(B(k));                             // a strike or a landing
+const moveFrom = (k) => onFrame(B(k) - LAND);                 // a 0.3 s spring or ease that lands on beat k
+```
+
+8 bars at 115 is 32 beats, 16.696 s, which rounds to 501 frames, 16.7 s.
 
 ## A sound on a cut
 
@@ -2277,6 +2303,54 @@ scene('cuts', {
 
 The rhythm scene of the Showreel (/demos/kinetic-showreel/) demo cuts between its words this way.
 
+## Solids in 2.5D
+
+A cage of twelve beams around a cube tumbles a quarter turn and lands on itself, so the piece loops.
+This pattern uses kinetic.25d.js, loaded after kinetic.wf.js, which adds `wildflower.kinetic.solids`: solids in 3D only as numbers, each face projected and drawn as an SVG path, shaded by its angle to one light.
+It needs no WebGL context, stays sharp at any size, and the finish works on it as on anything else; for curved lit surfaces or solids that pass through each other, use Trillium (directions.md, "3D or 2.5D").
+`solids()` is made in `init()`, and `seek()` places the shapes and calls `draw()`, which gives the same SVG for the same values whatever was drawn before.
+A shape a quarter turn on from where it started writes the same SVG, so a loop built on a turn of its symmetry closes exactly (`check.cjs --seam` reads it as smooth).
+
+```html
+<script defer src="kinetic.wf.js" data-preview></script>
+<script defer src="kinetic.25d.js"></script>
+<script defer src="scene.js"></script>
+<div data-composition-id="prism" data-start="0" data-duration="2.4" data-width="1080" data-height="1080" data-fps="30">
+    <div data-component="prism" data-start="0" data-duration="2.4" style="position: absolute; inset: 0">
+        <svg viewBox="0 0 1080 1080" style="width: 1080px; height: 1080px" aria-hidden="true">
+            <rect width="1080" height="1080" fill="#EE8434"/>
+            <g id="world"></g>
+        </svg>
+    </div>
+</div>
+```
+
+```javascript
+const { scene, ramp, solids } = wildflower.kinetic;
+
+scene('prism', {
+    init() {
+        this.stage = solids(this.element.querySelector('#world'), {
+            camera: { distance: 3.7, focal: 1350, roll: 45 },            // focal: px at a distance of 1; roll in degrees
+            light: { dir: [-0.25, 0.35, 0.9], ramp: ['#2A141D', '#5A2F2A', '#B45A35', '#EE8D4E', '#F5BC98', '#FBE4DE'], bounce: 0.18 },
+            rim: { color: '#FBE4DE', width: 1.6 },                          // brighter as a face turns edge-on
+            glows: [{ dir: [-0.85, 0.25, 0.45], color: '#F58DBA', bleed: {} }],   // soft color sliding across the faces
+        });
+        this.stage.add('cage', solids.cage({ size: 2, beam: 0.26 }), { albedo: 0.42 });
+        this.stage.add('core', solids.box({ size: 0.8 }));
+    },
+    seek(t) {
+        if (!this.stage) return;
+        this.stage.set('cage', { rotate: [90 * ramp(t, 0.55, 2.25, 'power3.inOut'), 0, 0] });
+        this.stage.set('core', { rotate: [-90 * ramp(t, 0.45, 2.15, 'power3.inOut'), 0, 0] });
+        this.stage.draw();
+    },
+});
+```
+
+For a mirror at the horizon, draw into a group clipped to the top half and repeat it with `<use transform="matrix(1 0 0 -1 0 H)">`; a filter goes on a group around both, never inside the copy (directions.md, "No filter inside a mirrored copy").
+For a nest of shapes that grow into each other's places, set each one's `scale` and `opacity` from its size alone, never from which one it is, so the loop closes.
+
 ## A camera push and a fly-through
 
 A sphere of 600 purple beads bursts outward from its center as the camera pushes in, and at the end the beads fly out past the camera.
@@ -2514,7 +2588,7 @@ The page's CSS is the layout's, with the lines below for the circle, the wave, a
 ```html
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js"></script>
 <script defer src="app.js"></script>
 
 <main class="lesson">
@@ -2627,7 +2701,8 @@ wildflower.component('sine-quiz', {
     subscribe: ['sine', 'kinetic'],
     computed: {
         choices() {
-            const c = this.stores.sine.choice, off = this.stores.kinetic.mode === 'video';   // the video's script answers
+            const c = this.stores.sine.choice;
+            const off = this.stores.kinetic.mode === 'video' || this.stores.sine.right;   // the video's script answers, and the right answer is final
             return [90, 180, 270, 360].map((a) => ({ a, off, label: a + '°', cls: c !== a ? '' : a === 270 ? 'right' : 'wrong' }));
         },
         why() { return WHY[this.stores.sine.choice] || ''; },
@@ -2726,7 +2801,8 @@ wildflower.component('quiz', {
     subscribe: ['quiz', 'kinetic'],
     computed: {
         choices() {
-            const p = this.stores.quiz.pick, off = this.stores.kinetic.mode === 'video';   // the video's script picks
+            const p = this.stores.quiz.pick;
+            const off = this.stores.kinetic.mode === 'video' || this.stores.quiz.right;   // the video's script picks, and the right pick is final
             return CHOICES.map((c) => ({ id: c.id, label: c.label, off, cls: p !== c.id ? '' : c.id === 'mercury' ? 'right' : 'wrong' }));
         },
         why() { const c = CHOICES.find((c) => c.id === this.stores.quiz.pick); return c ? c.why : ''; },
@@ -2884,7 +2960,7 @@ Kinetic loads with no `data-preview` here, since the bar would put the lesson in
 ```html
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js"></script>
 <script defer src="app.js"></script>
 
 <main class="lesson">
@@ -3013,7 +3089,8 @@ wildflower.component('quiz', {
     subscribe: ['area', 'kinetic'],
     computed: {
         choices() {
-            const p = this.stores.area.pick, off = this.stores.kinetic.mode === 'video';   // the video's script picks
+            const p = this.stores.area.pick;
+            const off = this.stores.kinetic.mode === 'video' || this.stores.area.right;   // the video's script picks, and the right pick is final
             return CHOICES.map((c) => ({ id: c.id, label: c.label, off, cls: p !== c.id ? '' : c.id === '4' ? 'right' : 'wrong' }));
         },
         why() { const c = CHOICES.find((c) => c.id === this.stores.area.pick); return c ? c.why : ''; },

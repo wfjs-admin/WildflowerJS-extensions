@@ -54,6 +54,7 @@ export const CODES = {
   RESERVED:      'KN-152',   // a scene defines a computed or state the extension provides
   KEYS_SHADOW:   'KN-153',   // a scene's keyframes entry and computed share a name; keyframes win
   ROOT_BINDING:  'KN-154',   // a binding on the root tag of a scene inside another scene reads one of Kinetic's values (progress, local...); it reads the outer scene's (the general case is the core's WF-521)
+  SECOND_ROOT:   'KN-155',   // a second composition root beside the first; Kinetic drives the first alone
   STYLE_CLASH:   'KN-156',   // a binding or a scene's root: block writes a property a transition writes on the same clip
   LESSON_GAP:    'KN-157',   // step() for an id no data-step has, an until or follow target with no store at readiness, a wait past the step's range, a settings entry after 0 in the first step that scripts its path
   PREVIEW_VIDEO: 'KN-158',   // a page with steps put in video mode by the preview bar alone, under config({ mode: 'auto' })
@@ -177,14 +178,14 @@ export function fail(code, where, detail) {
 // takes it. These run every frame, so the number's test comes first and the
 // rest only for a bad t.
 const USAGE = {
-  spring: 'options', ramp: 'from, to, ease', posterize: 'fps', loop: 'from, to', hold: 'at, length', styleAt: 'tracks', smear: 'style, options',
-  camera: 'tracks, options', shake: 'profile, options', wiggle: 'options', typewriter: 'text, cps', scramble: 'text, options',
+  spring: 'options', ramp: 'from, to, ease', land: 'at, duration, ease', onFrame: '', posterize: 'fps', loop: 'from, to', hold: 'at, length', styleAt: 'tracks', smear: 'style, options',
+  camera: 'tracks, options', cameraAt: 'tracks, options', shake: 'profile, options', wiggle: 'options', typewriter: 'text, cps', scramble: 'text, options',
   rank: 'rows, by, options', captions: 'words, options', moment: 'rows', beat: 'beats, options', level: 'band, options', spectrum: 'bins',
 };
 export function checkTime(t, name, finite) {
   if (typeof t === 'number' && (finite ? Number.isFinite(t) : t === t)) return;
   throw fail(CODES.BAD_CALL, name + '(t)', __DEV__ && 't is the time in seconds, a ' + (finite ? 'finite ' : '') + 'number, not ' + show(t)
-    + (t && typeof t === 'object' ? "; an object there is Remotion's shape, and Kinetic's is " + name + '(t, ' + USAGE[name] + ')' : ''));
+    + (t && typeof t === 'object' ? "; an object there is Remotion's shape, and Kinetic's is " + name + '(t' + (USAGE[name] ? ', ' + USAGE[name] : '') + ')' : ''));
 }
 
 // A value as a development build's error message prints it. JSON, except

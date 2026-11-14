@@ -120,7 +120,7 @@
 import { CODES, warn, fail, show } from './diagnostics.js';
 import { compositionRoot, resolveTiming, timingEpoch, parseStart } from './timing.js';
 import { interpolate, checkTracks } from './motion.js';
-import { started, clipName, EPS } from './clips.js';
+import { started, clipName, EPS, adopter } from './clips.js';
 import { lastFrameBefore } from './clock.js';
 
 const STEP_OPTIONS = ['wait', 'until', 'entry', 'script'];
@@ -697,9 +697,27 @@ export function createLesson(wf, clock) {
     try { clock.play({ to: stopOf(tb, last) }); } finally { steering--; }
   }
 
+  // ---- the view --------------------------------------------------------------------
+
+  // The store's `viewmode`: 'render' while check() or render() runs or a
+  // renderer captures, 'live' otherwise. A tool sets self.__KINETIC_VIEW to
+  // 'render' or 'live' before the page loads to hold one (check.cjs --view).
+  // An element with data-viewmode="render" shows only in the render view, one
+  // with "live" only in the live view; the marker is on <html>.
+  const adoptView = adopter('[data-kinetic-viewmode="live"] [data-viewmode="render"],[data-kinetic-viewmode="render"] [data-viewmode="live"]{display:none!important}');
+  function view() {
+    const held = self.__KINETIC_VIEW;
+    const v = held === 'render' || held === 'live' ? held : forced || self.__HF_RENDER_CAPTURE_MODE ? 'render' : 'live';
+    const html = document.documentElement;
+    if (html.getAttribute('data-kinetic-viewmode') !== v) html.setAttribute('data-kinetic-viewmode', v);
+    adoptView();
+    if (store.viewmode !== v) store.viewmode = v;
+  }
+
   // ---- the mode --------------------------------------------------------------------
 
   function resolve() {
+    view();
     const setting = clock.mode();
     const decided = forced || clock.hasRuntime() || self.__HF_RENDER_CAPTURE_MODE || setting === 'video';
     const m = decided || (setting === 'auto' && clock.previewing()) ? 'video' : 'interactive';

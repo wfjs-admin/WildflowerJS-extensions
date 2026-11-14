@@ -32,7 +32,9 @@ export function load() {
     await loadScript(CORE);
     await loadScript(WF_FILE).catch(() => { throw new Error('could not load ' + WF_FILE + '; build it first: node scripts/build-rollup.cjs kinetic.wf'); });
     const wf = window.wildflower;
-    wf.kinetic.config({ autoplay: false });
+    // The test page runs in Vitest's frame, so the bar's frame notice would
+    // stop every Render click; preview.test.js turns it on where it tests it.
+    wf.kinetic.config({ autoplay: false, frameNotice: false });
     return { wf };
   })();
   return loaded;

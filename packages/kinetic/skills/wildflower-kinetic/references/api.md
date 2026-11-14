@@ -700,7 +700,7 @@ an object, an unknown option, a `loop` not a boolean.
 ## Motion
 
 ```javascript
-const { interpolate, styleAt, ease, spring, settle, ramp, mix, stagger, posterize, loop, hold, focus, random, noise, noise2, noise3 } = wildflower.kinetic;
+const { interpolate, styleAt, ease, spring, settle, ramp, land, arrival, tempo, mix, stagger, posterize, loop, hold, focus, random, noise, noise2, noise3 } = wildflower.kinetic;
 interpolate(t, [0, 1], [0, 100], { ease: 'power2.out', extrapolate: 'clamp', round: true });
    // numbers, colors or text; extrapolate 'clamp' (default) | 'extend' | 'identity' (numbers only)
    //   | 'wrap' (the keyframes repeat) | 'mirror' (forward, then backward, in turn), or extrapolateLeft/Right
@@ -709,6 +709,8 @@ interpolate(t, [0, 1], [0, 100], { ease: 'power2.out', extrapolate: 'clamp', rou
    //   an ease array is read when first seen, so new eases take a new array (an edit in place is not seen)
    // space: 'rgb' (default) | 'oklch', how colors mix, in a color or a text track too
 ramp(t, 1.2, 2, 'power3.inOut');  // t's progress from 1.2 to 2 s as 0 to 1, clamped, eased; KN-100 unless to > from
+land(t, tempo().at(9), 0.3, 'power3.inOut');   // ramp() started so the move arrives (within 3% of its end) on beat 9
+arrival('spring', 0.6);           // seconds from a move's start until it arrives, to place keyframes by their landing
 mix(-300, 0, p);                  // a + (b - a) * p, p not clamped
 mix('#521a78', '#aa3de6', p);     // two colors mixed as interpolate mixes them: 'rgb(...)' or 'rgba(...)'
 mix('#0000ff', '#ffff00', 0.5, { space: 'oklch' });   // 'rgb(0, 186, 174)': lightness and chroma linear, hue the shorter way,
@@ -773,8 +775,9 @@ wiggle(posterize(t, 15), { frequency: 15, amplitude: 2, seed: 3 });   // stop mo
 ## Camera
 
 ```javascript
-const { camera, depth, shake } = wildflower.kinetic;
-camera(t, { z: { at: [0, 2.5], to: [0, 260] }, pan: 5 }, { perspective: 1000, shake: shake(t, 'handheld') });
+const { camera, cameraAt, depth, shake } = wildflower.kinetic;
+const TRACKS = { z: { at: [0, 2.5], to: [0, 260] }, pan: 5 };
+camera(t, TRACKS, { perspective: 1000, shake: shake(t, 'handheld') });
    // the world's style: { transform, transformStyle: 'preserve-3d', transformOrigin: '50% 50%' }
    // keys x, y, z, pan, tilt, roll, zoom: each a track of numbers (as styleAt() takes, no unit) or a number;
    // left out or undefined = at rest (0, zoom 1); tracks that is not an object = all at rest
@@ -785,14 +788,43 @@ camera(t, { z: { at: [0, 2.5], to: [0, 260] }, pan: 5 }, { perspective: 1000, sh
    // shake: one shake() result or an array of them, added to x, y and roll; null or undefined = none
 depth(-1600);                     // a layer's style: { transform: 'translateZ(-1600px) scale(2.6)' }, (P - z) / P, so it fills the frame at rest
 depth(-1600, { perspective: 1000, fill: false });   // the same P as the camera's; fill: false leaves out the scale
+cameraAt(t, TRACKS, { shake: shake(t, 'handheld') });   // the camera's numbers at t, { x, y, z, pan, tilt, roll, zoom }, shake added
+depth(0, { detail: 3, camera: cameraAt(t, TRACKS) });   // the layer drawn 3 times finer: { transform, zoom: '3' }, the same picture
+   // for a layer the camera magnifies while it is turned (pan, tilt or roll): Chrome draws such a layer at its
+   // CSS size and stretches the bitmap, so a push in steps its edges; a push with no turn stays sharp.
+   // detail at the most magnification the layer reaches (P - z) / (P - z - camera z), 1 to 8; k * k the pixels to draw,
+   // so only on the layers that need it. The layer is 100% of the world, as .layer is.
 shake(t, 'handheld', { seed: 1, amount: 1, speed: 1 });   // { x, y, roll } px and deg, layered noise, the same everywhere
    // 'handheld' 0.7 Hz 16/11 px 1.1 deg; 'rumble' 7 Hz 5.4/7.2 px 0.36 deg;
    // 'impact' 11 Hz 61/47 px 4.3 deg, t = seconds since the hit, 0 before it, then x e^(-t / 0.32)
+
+const { moves, look } = wildflower.kinetic;
+const CAM = moves([
+    { to: { x: -260, y: 120, z: 350 } },                                       // where the camera starts (t 0 by default)
+    { t: 1.6, d: 1.0, to: { x: 0, y: 0, z: 60 }, lag: { x: 0.3, y: 0.45 } },   // lag: that key starts later, so the path curves
+    { t: 4, d: 0.9, to: { z: 600 }, ease: 'attack', kick: { roll: -4 }, swing: { x: 380 }, drift: 15 },
+    { t: 6, d: 1.2, to: { eye: [400, -150, 900], at: [0, 0, -400] }, lag: { 'eye.x': 0.2 } },
+    { t: 9, d: 1.2, to: { z: 990 }, dolly: true },                             // z at a steady rate of zoom toward the z = 0 plane
+]);
+camera(t, CAM(t));                // CAM(t): { x, y, z, pan, tilt, roll, zoom }, also for depth(z, { detail, camera: CAM(t) })
+   // call it: camera(t, CAM) with the function itself is KN-100
+   // moves add: each adds (its to - where the moves before have the camera as it lands) x its progress, so moves that
+   // overlap blend, a lagged key keeps moving with the move before, and each lands on its to at t + d (+ its lag) and
+   // holds dead still; keys left out keep their value. d default 0.8; ease default 'power2.inOut', 'attack' = fast in,
+   // long settle; over: { key: 0.04 } 4% past the mark and back; kick (pan, tilt, roll, deg) and swing (positions, px)
+   // add and return to 0; drift px/s (a number is z) rises over its move, holds, and falls away over the next, which
+   // counts it, so the next to is still exact; dolly: true or the plane's z
+   // to: { eye, at, roll, zoom } is a look: the eye and the target move (their keys 'eye.x' … 'at.z' for lag, over
+   // and swing), and the camera looks; to: (t) => camera numbers is a shot followed for d s, joined over blend s
+   // (0.4), handed on at its speed; make the moves after anything the function measures (fonts, layout)
+   // KN-100 names the entry and field, moves(list)[2].lag.x; KN-121 an unknown ease; a spring ease is KN-100
+look([400, -150, 900], [0, 0, -400], { perspective: 1000 });   // { x, y, z, pan, tilt }: an eye looking at a point
+   // world points [x, y, z], z toward the viewer; z comes back as the camera's, P - the eye's z
 ```
 
 ```html
 <div data-component="shot" data-start="0" data-duration="12" style="position:absolute;inset:0">
-  <div data-bind-style="world" style="position:absolute;inset:0">        <!-- world() { return camera(this.local, CAM); } -->
+  <div data-bind-style="world" style="position:absolute;inset:0">        <!-- world() { return camera(this.local, CAM(this.local)); } -->
     <div class="layer" data-bind-style="far">…</div>                      <!-- far() { return depth(-1600); } -->
     <div class="layer" data-bind-style="title">…</div>                    <!-- .layer: absolute, 0 0, 100% x 100% -->
   </div>
@@ -815,10 +847,53 @@ a layer at depth `z` draws that layer over the whole frame and then not at
 all, with no error: keep `z` below that for every layer on screen, or hide the
 layer first. KN-100: a key outside the table (with `pan`, `tilt` or `roll`
 suggested for `rotateY`, `rotateX` or `rotate`), a zoom or perspective below
-0.0001, a shake that is not a shake() result, a depth at or behind the eye, an
-unknown profile, a t that is not finite, an amount below 0 or a speed of 0 or
+0.0001, a shake that is not a shake() result, a depth at or behind the eye, a
+detail outside 1 to 8 or without the camera's numbers, an unknown profile, a t that is not finite, an amount below 0 or a speed of 0 or
 less. KN-120: a malformed track, a track of text or colors, a track with a
 `unit`, or a value neither a number nor a track.
+
+## Solids in 2.5D: kinetic.25d.js
+
+A second file, loaded after kinetic.wf.js (beside it on the CDN, as
+`…/@wildflowerjs/kinetic@0.2/dist/kinetic.25d.js`), adds `solids()`: solids in 3D only
+as numbers, drawn as SVG paths (patterns.md, "Solids in 2.5D").
+
+```javascript
+const { solids } = wildflower.kinetic;                  // with kinetic.25d.js on the page
+const stage = solids(svgGroup, {                         // an SVG element to draw into
+  camera: { distance: 5, focal: 900, roll: 0, near: 0.2, fade: 0, center: [540, 540] },
+    // looks down -z from (0, 0, distance), +y up; focal: px at a distance of 1; roll: degrees;
+    // center: default the middle of the <svg>'s viewBox; a face crossing `near` is clipped there,
+    // and with fade above 0 thins out over that distance past it
+  light: { dir: [-0.35, 0.45, 0.85], ramp: ['#04040F', '#7F6CF5', '#E2E0FF'], gamma: 1.8, floor: 0.03, gain: 0.97, bounce: 0, across: [0.2, 0.18] },
+    // tone = floor + gain * (n . dir)^gamma, times the shape's albedo, plus bounce * (how far it faces down),
+    // read through the ramp (#rrggbb, dark to lit); a gradient across the face from tone + across[0] to tone - across[1]
+  rim: { color: '#ffffff', width: 1.5, base: 0.12, edge: 0.5, power: 2 },   // or false; opacity base + edge * (1 - |n . eye|)^power
+  glows: [{ dir, color, size: 0.85, strength: 1, sharp: 1.5, bleed: { size: 1.7, strength: 0.2, cap: 0 } }],
+    // soft color where the light would reflect into the eye, clipped to the face; `gradient` / `bleed.gradient`
+    // name a radialGradient of the page's own; the bleed spills past the edge, fainter past `cap` px wide
+});
+stage.add('cage', solids.cage({ size: 2, beam: 0.26 }), { albedo: 0.42, glow: 0.85 });
+stage.add('core', solids.box({ size: 0.8 }));            // size: the edge, or [x, y, z]
+stage.add('tri', solids.faces([{ pts: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] }]));   // n from the first three corners when left out
+stage.set('cage', { rotate: [90 * p, 0, 0], scale: 1, position: [0, 0, 0], opacity: 1 });   // degrees about x, then y, then z
+stage.draw();                                            // in seek(): culled, clipped, sorted far to near, shaded
+stage.project([x, y, z]);                                // a point's place in the frame, to put 2D things on a solid
+stage.remove('tri'); stage.dispose();
+```
+
+`draw()` sorts faces by their distance from the eye and a tie by place on
+screen, never by which shape or face; every path runs clockwise on screen
+from its leftmost corner; and every face's elements are made when its shape is
+added. So the same values draw the same SVG whatever was drawn before, and a
+shape turned onto itself (a cube or cage a quarter turn on) draws the frame it
+started from. KN-100 for a target that is no SVG element, a size or beam out
+of range, a ramp that is not #rrggbb colors, a camera, light, rim or glow
+number that is not one (the message names it, `solids({ light: { gamma } })`),
+a `center` or `across` that is not two numbers, an `albedo` or `glow` in
+`add()` that is not a number, an unknown name or key in `set()`, and a
+rotate, scale, position or opacity of the wrong kind. A shape scaled to 0 on
+an axis draws nothing.
 
 ## Motion blur
 
@@ -835,16 +910,19 @@ wildflower.kinetic.config({ shutter: 180 });                              // the
 await wildflower.kinetic.render({ finish: { grain: 0.3, vignette: 0.35 } });   // the finishing pass on every frame, after the shutter, before the encoder
    // fields, each off unless given, a number for its amount or an object of its parts:
    // grain: { amount, size: 1, fps: 0 }  vignette: { amount, radius: 0.5, softness: 0.6 }  bloom: { amount, threshold: 0.8, radius: 24 }
-   // aberration: amount  soften: amount  dust: { amount, size: 1 }
+   // aberration: amount  soften: amount  diffuse: { amount, radius: 16 } (a soft-focus mix of the blurred frame)  dust: { amount, size: 1 }
    // grade: { exposure: 0, contrast: 1, saturation: 1, temperature: 0, lift: 0, gamma: 1, gain: 1 }
    // deterministic by the frame number; dust changes every frame; the grain changes fps times a second (0 to 240; 0, the default, keeps it still,
    // a paper's tooth; the frame rate is film grain); config() reports each field as its named parts, { grain: { amount, size, fps } }, which
    // config({ finish }) takes back; a light frame needs a high bloom threshold
    // 0, false or null: off; a wrong field, part or range is KN-100 naming it; no WebGL 2 is KN-100
+   // any part but the grain's fps can be a track of numbers in its range, read at each frame's time, so the finish changes
+   // over the piece: bloom: { amount: { at: [15.2, 15.6], to: [0.6, 0] }, threshold: 0.82 } fades the bloom out before
+   // a light end card; a field 0 at every key is off; the live overlays follow the track on every seek
    // the pass opens one more WebGL context, and Chrome keeps 16, dropping the oldest: keep a piece with a finish to 15 WebGL layers (KN-192 at 16)
 wildflower.kinetic.config({ finish: { grain: 0.2, vignette: 0.25 } });     // the default for every render(), the Render button's too
    // and the page shows it live: vignette, grain, dust, the grade's exposure/contrast/saturation and soften, as overlays
-   // Kinetic keeps as the root's last children (hidden for a render); bloom and aberration are the file's only.
+   // Kinetic keeps as the root's last children (hidden for a render); bloom, diffuse and aberration are the file's only.
    // An element in the root marked data-finish takes the overlays in the root's place, so controls beside it stay clear of the grade and the soften
    // Grain over the whole frame is this grain (the default), film grain with fps at the frame rate; shade()'s 'grain' kind is for grain that varies across the frame; dust is specks, not grain
 ```
@@ -1065,12 +1143,15 @@ spectrum(t, 16);                         // 16 levels, 0 to 1, 20 Hz to 16 kHz o
 ```
 
 ```javascript
-const { timeOf, tempo } = wildflower.kinetic;
+const { timeOf, tempo, onFrame } = wildflower.kinetic;
 timeOf('stop + 0.4');     // composition seconds; data-start's grammar: a number, a name, a name ± seconds
                           // a name is a marker, else an element's id (when that element ends; 'intro.start' when it starts)
 const g = tempo();        // the one clip with data-tempo, or tempo('music')
 g.beat; g.meter;          // a beat in composition seconds (at the clip's rate); beats to a bar (4 by default)
 g.at(4); g.of(t);         // beat 4's time (the downbeat is 0; fractions, negatives); the beat at t
+g.frame(4);               // beat 4's time on its nearest frame, for a contact
+timeOf('beat 9'); timeOf('frame 170');   // in timeOf() only; data-start keeps its grammar, which HyperFrames reads too
+onFrame(t);               // the time of the frame nearest t
 step('drop', { wait: timeOf('stop') + 1.7 - timeOf('intro') });   // wait stays seconds into the step
 ```
 
@@ -1131,7 +1212,8 @@ speaker button (shown only with an audio clip) or its play button resumes
 it. Without the bar, Kinetic puts a speaker button of its own over the
 stage's lower right corner, beside the composition root and outside it
 (`data-kinetic-speaker`, never in a check or a render): the sound stays off
-until it is pressed, and it toggles the sound alone. It shows for 2 s once
+until it is pressed, and it toggles the sound alone. An `embed` page keeps
+it: it is the only sound control an embed has. It shows for 2 s once
 made, then while the pointer is over the stage (fading 2 s after it leaves
 or 3 s after it last moved), for 3 s after a touch, and while it has
 keyboard focus; left alone it always fades, for a page running unattended.
@@ -1393,7 +1475,7 @@ const report = await wildflower.kinetic.check({ samples: 30, seed: 1 });   // sa
 // { ok: false, reason: 'a seek threw', frames, samples, ready, errors, firstError }
 // { ok: false, frame, time, element, property, first, second, ready, errors }
 const { blob, name, frames, width, height, fps, codec, audioCodec, ms } = await wildflower.kinetic.render({
-    fps: 30, from: 0, to: 6, codec: 'avc1.640028', bitrate: 8e6, source: root, width: 1280, height: 720,
+    fps: 30, from: 0, to: 6, codec: 'avc1.640028', bitrate: 16e6, source: root, width: 1280, height: 720,
     audio: true, audioCodec: 'mp4a.40.2', audioBitrate: 192000,   // audioCodec in the result: null with no sound
     shutter: false,   // or 180, or { angle, samples }: motion blur (Motion blur, above)
     name: 'main', download: true, onProgress: (frame, frames) => {},
@@ -1401,10 +1483,27 @@ const { blob, name, frames, width, height, fps, codec, audioCodec, ms } = await 
 });                             // already aborted: rejects at once; not an AbortSignal: KN-100; the preview bar's Render is Cancel while one runs
 wildflower.kinetic.seek(1.5);  wildflower.kinetic.play();  wildflower.kinetic.pause();
 wildflower.kinetic.play({ from: 0, to: 9 });   // plays 0 to 9 s and holds the last frame, 9 - 1/fps
-wildflower.kinetic.config({ fps: 30, channel: 'event', autoplay: true, preview: false, loop: true /* or false, or { hold: 3 } */, fit: false, sound: true, shutter: false, mode: 'auto' });
+wildflower.kinetic.config({ fps: 30, channel: 'event', autoplay: true, preview: false, frameNotice: true, loop: true /* or false, or { hold: 3 } */, fit: false, sound: true, shutter: false, mode: 'auto' });
+   // frameNotice: in a page inside a frame, the bar's Render first says the site around it may block the download (Render anyway, Close; once a page load)
+wildflower.kinetic.config({ encode: { bitrate: 20e6 } });   // the default for every render(), the Render button's too: codec, bitrate (16e6 unless set),
+   // audioCodec, audioBitrate, any of them; a field render() is given wins; false or null: off; a wrong field or value is KN-100 naming it.
+   // Grain, glows and soft gradients want 16 to 20 Mbps; 20e6 is about the most H.264 at 'avc1.640028' (level 4.0) takes
 wildflower.kinetic.compat.hyperframes;   // the runtime version Kinetic is tested against
 wildflower.kinetic.version;              // the package's version; a second copy of the file does nothing (KN-102 in development)
+wildflower.kinetic.viewmode();           // 'render' while check() or render() runs or a render captures, 'live' otherwise; the store's `viewmode`
 ```
+
+```html
+<div class="grid" data-viewmode="render"></div>   <!-- in the video only; hidden while the page plays -->
+<div class="grid-lite" data-viewmode="live"></div>   <!-- while the page plays only; hidden in the video -->
+```
+
+Two views of one piece: the video a render makes, and the page as it plays.
+An element marked `data-viewmode="render"` adds depth and detail to the
+video and costs the playing page nothing, so a layer too heavy to draw live
+(a large grid, a dense texture) can still be in the video. The page must
+make sense without it. The skill's `check.cjs` checks the render view; `--view live`
+checks the playing page, and `--view both` checks each.
 
 Readiness keeps nothing from one run to the next. The registered entry is
 one run, `ready()` another, and `check()` and `render()` each begin with
@@ -1470,15 +1569,24 @@ nothing. `?preview` on the URL, `data-preview` on the script tag,
 or `config({ preview: true })` adds a bar at the bottom of the window: play,
 pause, a scrubber, one frame back or forward, a speaker button when the
 composition has an audio clip, the time and the frame, and a
-Render button. It never appears while a render captures. A count of the KN
+Render button, which renders with `config({ shutter, finish, encode })` and,
+once done, reads "render complete: name, N frames in X s" until the next
+thing done on the bar. It never appears while a render captures. A count of the KN
 warnings and errors printed since the page loaded sits beside the time, amber
 above 0, and reads "production build, no diagnostics" on the production build.
 A Check button calls `check({ samples: 30 })` and shows "check ok, 180 frames"
 or the first differing frame, and does not run while a render does.
+On a piece with a finish or a shutter, an As Rendered button pauses and lays
+the frame over the stage as the render draws it: the same seeks, shutter
+samples and finish, so the bloom, the diffusion, the aberration and the motion
+blur show as the file has them. Each frame step or scrub draws the new frame;
+playing, a render and a check turn it off. It needs what Render needs
+(HTML-in-Canvas for a page that is not a canvas).
 `fit` defaults to whether the bar is asked for. On, it puts the root in a plain
 `<div class="kinetic-fit">` (no component) and scales it down to that
-element's width, never up; `config({ fit: true })` asks for it on a page with
-no bar. Outside a render Kinetic removes the size, margin, padding and
+element's width, and to the height of the window above the bar, never up; `config({ fit: true })` asks for it on a page with
+no bar. The scale is taken from the root's laid-out width, so a root the CSS
+sizes as a share of its container fits as one sized in pixels does. Outside a render Kinetic removes the size, margin, padding and
 overflow a runtime sets on `html` and `body`. In a render's capture, and with `embed` in the URL,
 Kinetic hides everything beside the composition and leaves the root at the
 window's top left at its own size. The fit is never applied in a render, and

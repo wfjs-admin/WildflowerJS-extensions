@@ -22,11 +22,11 @@ describe(`finish (${BUILD} extension, ${CORE_TIER} core)`, () => {
   it('config({ finish }): a number is a field\'s amount, an object its parts with the defaults filled, 0 and null are off, and config() reads it back', async () => {
     const { wf } = await load();
     expect(wf.kinetic.config().finish).toBe(false);
-    wf.kinetic.config({ finish: { grain: 0.3, vignette: { amount: 0.4, radius: 0.3 }, bloom: 0.5, aberration: 0.2, soften: 0.1, dust: { amount: 0.5, size: 2 }, grade: { lift: 0.05, saturation: 0.7 } } });
+    wf.kinetic.config({ finish: { grain: 0.3, vignette: { amount: 0.4, radius: 0.3 }, bloom: 0.5, aberration: 0.2, soften: 0.1, diffuse: 0.12, dust: { amount: 0.5, size: 2 }, grade: { lift: 0.05, saturation: 0.7 } } });
     // Read back as named parts, the form config({ finish }) takes.
     const set = {
       grain: { amount: 0.3, size: 1, fps: 0 }, vignette: { amount: 0.4, radius: 0.3, softness: 0.6 }, bloom: { amount: 0.5, threshold: 0.8, radius: 24 },
-      aberration: { amount: 0.2 }, soften: { amount: 0.1 }, dust: { amount: 0.5, size: 2 },
+      aberration: { amount: 0.2 }, soften: { amount: 0.1 }, diffuse: { amount: 0.12, radius: 16 }, dust: { amount: 0.5, size: 2 },
       grade: { exposure: 0, contrast: 1, saturation: 0.7, temperature: 0, lift: 0.05, gamma: 1, gain: 1 },
     };
     expect(wf.kinetic.config().finish).toEqual(set);
@@ -58,7 +58,7 @@ describe(`finish (${BUILD} extension, ${CORE_TIER} core)`, () => {
     const { wf } = await load();
     wf.kinetic.config({ finish: { grain: 0.25 } });
     const bad = [
-      [[1, 2], 'config({ finish })', /an object of fields \(grain, vignette, bloom, aberration, soften, dust, grade\)/],
+      [[1, 2], 'config({ finish })', /an object of fields \(grain, vignette, bloom, aberration, soften, diffuse, dust, grade\)/],
       ['film', 'config({ finish })', /film/],
       [{ glow: 1 }, 'config({ finish: { glow } })', /'glow' is not a field of finish; the fields are grain/],
       [{ grain: 'a lot' }, 'config({ finish: { grain } })', /grain is a number, its amount, or an object of amount, size, fps, not/],
@@ -77,6 +77,42 @@ describe(`finish (${BUILD} extension, ${CORE_TIER} core)`, () => {
       let err = null;
       try { wf.kinetic.config({ finish }); } catch (e) { err = e; }
       expectKN(err, 'KN-100', where, detail);
+    }
+    expect(wf.kinetic.config().finish).toEqual({ grain: { amount: 0.25, size: 1, fps: 0 } });
+  });
+
+  it('config({ finish }): a part may be a track, reported back as a copy; a field 0 at every key is off; KN-100 for a track on the grain\'s fps, out of range or with a unit, KN-120 for a malformed one', async () => {
+    const { wf } = await load();
+    const fade = { at: [1, 2], to: [0.6, 0], ease: 'power2.inOut' };
+    wf.kinetic.config({ finish: { bloom: { amount: fade, threshold: 0.82 }, grade: { exposure: { at: [0, 1], to: [0, -1] } } } });
+    const back = wf.kinetic.config().finish;
+    expect(back.bloom).toEqual({ amount: fade, threshold: 0.82, radius: 24 });
+    expect(back.grade.exposure).toEqual({ at: [0, 1], to: [0, -1] });
+    expect(back.grade.contrast).toBe(1);
+    // A copy: changing what was read back changes nothing.
+    back.bloom.amount.to[0] = 2;
+    expect(wf.kinetic.config().finish.bloom.amount.to).toEqual([0.6, 0]);
+    // What config() reports, config() takes back.
+    wf.kinetic.config({ finish: null });
+    wf.kinetic.config({ finish: { bloom: { amount: fade, threshold: 0.82 } } });
+    const saved = wf.kinetic.config().finish;
+    wf.kinetic.config({ finish: saved });
+    expect(wf.kinetic.config().finish).toEqual(saved);
+    // An amount that is 0 at every key is off.
+    wf.kinetic.config({ finish: { vignette: { amount: { at: [0, 1], to: [0, 0] } } } });
+    expect(wf.kinetic.config().finish).toBe(false);
+    wf.kinetic.config({ finish: { grain: 0.25 } });
+    const bad = [
+      [{ grain: { amount: 0.2, fps: { at: [0, 1], to: [0, 24] } } }, 'KN-100', 'config({ finish: { grain: { fps } } })', /fps is a number from 0 to 240; it decides which frames share a grain, so it takes no track/],
+      [{ bloom: { amount: { at: [0, 1], to: [0.5, 3] } } }, 'KN-100', 'config({ finish: { bloom: { amount } } }).to', /amount's track gives numbers from 0 to 2, not 3/],
+      [{ vignette: { amount: { at: [0, 1], to: ['#000', '#fff'] } } }, 'KN-100', 'config({ finish: { vignette: { amount } } }).to', /amount's track gives numbers from 0 to 1/],
+      [{ soften: { at: [0, 1], to: [0, 2], unit: 'px' } }, 'KN-100', 'config({ finish: { soften: { amount } } }).unit', /a finish track gives plain numbers, so it has no unit/],
+      [{ dust: { amount: { at: [1, 0], to: [0.2, 0.4] } } }, 'KN-120', 'config({ finish: { dust: { amount } } }).at[1]', /at must increase/],
+    ];
+    for (const [finish, code, where, detail] of bad) {
+      let err = null;
+      try { wf.kinetic.config({ finish }); } catch (e) { err = e; }
+      expectKN(err, code, where, detail);
     }
     expect(wf.kinetic.config().finish).toEqual({ grain: { amount: 0.25, size: 1, fps: 0 } });
   });
@@ -143,6 +179,30 @@ describe(`finish (${BUILD} extension, ${CORE_TIER} core)`, () => {
     wf.kinetic.config({ finish: null });
     expect(over().length).toBe(0);
     expect(root.style.position).toBe('');
+  });
+
+  it('the live finish: a track moves its overlay\'s value from seek to seek, and the same seek gives the same value', async () => {
+    const { wf } = await load();
+    const name = uniqueName('scene');
+    wf.kinetic.scene(name, {});
+    const host = await mount(`<div data-composition-id="${uniqueName('lf')}" data-start="0" data-duration="2" data-width="320" data-height="180" data-fps="10" style="width:320px;height:180px"><div data-component="${name}"><div style="width:320px;height:180px;background:#444"></div></div></div>`);
+    cleanup.push(host);
+    const root = host.querySelector('[data-composition-id]');
+    wf.kinetic.config({ finish: { vignette: { amount: { at: [0, 1], to: [0, 0.8] }, radius: 0.3, softness: 0.5 }, grain: { amount: { at: [0, 1], to: [0.5, 0] } }, grade: { saturation: { at: [0, 1], to: [1, 0] } } } });
+    const [back, vig, grn] = Array.from(root.querySelectorAll('[data-kinetic-finish]'));
+    const read = async (t) => { await wf.kinetic.seek(t); await tick(); await tick(); return [back.style.backdropFilter, vig.style.background, grn.style.opacity]; };
+    const start = await read(0);
+    expect(start[0]).toContain('saturate(1)');
+    expect(start[1]).toContain('rgba(0, 0, 0, 0)');
+    expect(start[2]).toBe('0.3');
+    const end = await read(1);
+    expect(end[0]).toContain('saturate(0)');
+    expect(end[1]).toContain('rgba(0, 0, 0, 0.8)');
+    expect(end[2]).toBe('0');
+    const mid = await read(0.5);
+    expect(mid[0]).toContain('saturate(0.5)');
+    expect(mid[1]).toContain('rgba(0, 0, 0, 0.4)');
+    expect(await read(0)).toEqual(start);
   });
 
   it('the live finish: an element marked data-finish takes the overlays in the root\'s place, and the controls beside it stay clear', async () => {

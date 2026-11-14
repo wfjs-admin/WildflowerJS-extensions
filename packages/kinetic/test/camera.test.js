@@ -156,6 +156,70 @@ describe(`camera, depth and shake (${BUILD} extension, ${CORE_TIER} core)`, () =
     expect(depth(250, { fill: true })).toEqual({ transform: 'translateZ(250px) scale(0.75)' });
   });
 
+  it('cameraAt(): the numbers camera() draws with, shake added; camera() is built from them', async () => {
+    const { wf } = await load();
+    const { camera, cameraAt, shake } = wf.kinetic;
+    expect(cameraAt(0)).toEqual({ x: 0, y: 0, z: 0, pan: 0, tilt: 0, roll: 0, zoom: 1 });
+    const tracks = { x: { at: [0, 2], to: [0, 100] }, z: 300, tilt: -5, zoom: { at: [0, 2], to: [1, 2] } };
+    expect(cameraAt(1, tracks)).toEqual({ x: 50, y: 0, z: 300, pan: 0, tilt: -5, roll: 0, zoom: 1.5 });
+    const s = shake(0.4, 'rumble', { seed: 3 });
+    const c = cameraAt(1, tracks, { shake: s });
+    expect(c.x).toBeCloseTo(50 + s.x, 9); expect(c.y).toBeCloseTo(s.y, 9); expect(c.roll).toBeCloseTo(s.roll, 9);
+    const f = (v) => String(Math.round(v * 1e4) / 1e4);
+    expect(camera(1, tracks, { shake: s }).transform).toBe('perspective(1000px) scale(1.5) translateZ(1000px) rotateZ(' + f(-c.roll) + 'deg) rotateX(-5deg) rotateY(0deg) translateZ(-1000px) translate3d(' + f(-c.x) + 'px, ' + f(-c.y) + 'px, 300px)');
+    expectKNText(() => cameraAt(0, { rotateX: 4 }), "[KN-100] cameraAt(t, { rotateX }): no key 'rotateX' (use tilt); the keys are x, y, z, pan, tilt, roll, zoom");
+    expectKNText(() => cameraAt(0, { y: '1px' }), '[KN-120] cameraAt(t, tracks).y: a number or a track of numbers, not "1px"');
+    expectKNText(() => cameraAt(NaN), '[KN-100] cameraAt(t): t is the time in seconds, a number, not NaN');
+    expectKNText(() => cameraAt({ frame: 3 }), "[KN-100] cameraAt(t): t is the time in seconds, a number, not {\"frame\":3}; an object there is Remotion's shape, and Kinetic's is cameraAt(t, tracks, options)");
+  });
+
+  it('depth(z, { detail, camera }): zoom k, the layer moved along the lines from the eye; detail 1 is the plain style', async () => {
+    const { wf } = await load();
+    const { depth, cameraAt } = wf.kinetic;
+    expect(depth(-1600, { detail: 1, camera: cameraAt(0, { z: 400 }) })).toEqual(depth(-1600));
+    // z 0, fill: s = 3; the eye at 1000 - 655 = 345: the layer at 345 * (1 - 3) = -690, written over 3.
+    expect(depth(0, { detail: 3, camera: cameraAt(0, { z: 655, tilt: -5 }) })).toEqual({ transform: 'translate(-100%, -100%) translate3d(0px, 0px, -230px)', zoom: '3' });
+    // z -1200 with the fill (f 2.2), detail 4: s = 4 / 2.2; a truck of 110 moves the layer by 110 * (1 - s) / 4.
+    const s = 4 / 2.2, f = (v) => String(Math.round(v * 1e4) / 1e4);
+    expect(depth(-1200, { detail: 4, camera: cameraAt(0, { x: 110, z: 600, roll: 3 }) })).toEqual({
+      transform: 'translate(-150%, -150%) translate3d(' + f(110 * (1 - s) / 4) + 'px, 0px, ' + f((400 * (1 - s) + s * -1200) / 4) + 'px)', zoom: '4',
+    });
+    expectKNText(() => depth(0, { detail: 3 }), "[KN-100] depth(z, { detail, camera }): camera is the camera's numbers at this time, cameraAt(t, tracks), not undefined");
+    expectKNText(() => depth(0, { detail: 3, camera: { x: 0, y: 0 } }), '[KN-100] depth(z, { detail, camera }): camera is the camera\'s numbers at this time, cameraAt(t, tracks), not {"x":0,"y":0}');
+    expectKNText(() => depth(0, { detail: 0.5 }), '[KN-100] depth(z, { detail }): detail is a number from 1 to 8, not 0.5');
+    expectKNText(() => depth(0, { detail: 9 }), '[KN-100] depth(z, { detail }): detail is a number from 1 to 8, not 9');
+    expectKNText(() => depth(0, { detail: '3' }), '[KN-100] depth(z, { detail }): detail is a number from 1 to 8, not "3"');
+    // A camera past the layer leaves it behind the eye, not drawn, as a plain layer is: no error, the same keys.
+    expect(depth(300, { detail: 2, camera: cameraAt(0, { z: 700 }) })).toEqual({ transform: 'translateZ(150px)', zoom: '2' });
+    expect(depth(0, { detail: 3, camera: cameraAt(0, { z: 1605 }) })).toEqual({ transform: 'translateZ(0px)', zoom: '3' });
+  });
+
+  // The picture a detail layer gives is the plain layer's: for a camera that
+  // trucks, cranes, dollies and turns all at once, a marker on a layer with
+  // detail lands on the same box as on the same layer without, to 1 px, near
+  // and far, with the fill and without. Layers are 100% of the world, as a
+  // .layer is: the shift back from zoom's top-left growth is a percentage.
+  it('a detail layer draws the same picture as the plain one under a turned, moving camera, to 1 px', async () => {
+    const { wf } = await load();
+    const { camera, cameraAt, depth } = wf.kinetic;
+    const CAM = { x: 60, y: -30, z: 400, pan: 4, tilt: -5, roll: 3 };
+    const at = cameraAt(0, CAM);
+    const cases = [[0, true, 3], [-1200, true, 4], [-1600, false, 2], [300, true, 3], [-300, false, 6]];
+    const layers = [];
+    for (const [z, fill, k] of cases) {
+      layers.push([depth(z, { fill }), 150, 90]);
+      layers.push([depth(z, { fill, detail: k, camera: at }), 150, 90]);
+    }
+    const { markers } = rig(camera(0, CAM), layers);
+    for (const m of markers) { m.parentElement.style.width = '100%'; m.parentElement.style.height = '100%'; }
+    await tick(0);
+    for (let i = 0; i < cases.length; i++) {
+      const plain = box(markers[2 * i]), fine = box(markers[2 * i + 1]);
+      for (const key of ['x', 'y', 'w', 'h']) expect(Math.abs(fine[key] - plain[key]), JSON.stringify(cases[i]) + ' ' + key + ': ' + JSON.stringify([plain, fine])).toBeLessThanOrEqual(1);
+      expect(markers[2 * i + 1].parentElement.style.zoom).toBe(String(cases[i][2]));
+    }
+  });
+
   it('shake(): the spec formula for a number seed, deterministic, different per seed and per axis', async () => {
     const { wf } = await load();
     const { shake, noise } = wf.kinetic;

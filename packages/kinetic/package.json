@@ -1,6 +1,6 @@
 {
   "name": "@wildflowerjs/kinetic",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Kinetic turns a WildflowerJS page into a video, previewed, checked and rendered in the browser. HyperFrames-compatible; not affiliated with HeyGen.",
   "main": "dist/kinetic.wf.js",
   "types": "types.d.ts",
@@ -26,20 +26,24 @@
     "builds": ["dev", "min"],
     "outputs": [
       { "entry": "src/wf.js", "file": "dist/kinetic.wf.js",     "dev": true,  "minify": false },
-      { "entry": "src/wf.js", "file": "dist/kinetic.wf.min.js", "dev": false, "minify": true }
+      { "entry": "src/wf.js", "file": "dist/kinetic.wf.min.js", "dev": false, "minify": true },
+      { "entry": "src/solids-wf.js", "file": "dist/kinetic.25d.js",     "dev": true,  "minify": false, "budget": "kinetic.25d" },
+      { "entry": "src/solids-wf.js", "file": "dist/kinetic.25d.min.js", "dev": false, "minify": true,  "budget": "kinetic.25d" }
     ]
   },
   "files": [
     "bake",
     "dist/kinetic.wf.js",
     "dist/kinetic.wf.min.js",
+    "dist/kinetic.25d.js",
+    "dist/kinetic.25d.min.js",
     "types.d.ts",
     "types.global.d.ts",
     "skills",
     "scripts"
   ],
   "scripts": {
-    "build": "node ../../scripts/build-rollup.cjs kinetic.wf",
+    "build": "node ../../scripts/build-rollup.cjs kinetic.",
     "test": "cd ../.. && npx vitest run --config packages/kinetic/vitest.config.js",
     "test:min": "cd ../.. && npx cross-env EXT_BUILD=min vitest run --config packages/kinetic/vitest.config.js",
     "test:firefox": "cd ../.. && npx cross-env WILDFLOWER_BROWSER=firefox vitest run --config packages/kinetic/vitest.config.js",

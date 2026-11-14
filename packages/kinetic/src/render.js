@@ -87,6 +87,10 @@
  * as after a render, and rejects with `signal.reason` (an AbortError
  * DOMException unless abort() was given another). Anything else is KN-100.
  *
+ * The encoder: `codec`, `bitrate` (16 Mbps unless set), `audioCodec` and
+ * `audioBitrate` passed, else the ones config({ encode }) set, so a piece
+ * carries its own and the preview bar's Render button uses them.
+ *
  * A `width` and `height` passed scale a DOM source's box to that size, as
  * the encoder scales a canvas source's frames. A clock that was playing
  * plays on from its time once the render is done, as after check().
@@ -98,13 +102,12 @@ import { clipName, adopter } from './clips.js';
 import { createMp4 } from './mp4.js';
 import { RATE } from './mix.js';
 import { soundConfig, encodeSound } from './soundtrack.js';
-import { readShutter } from './clock.js';
+import { readShutter, checkEncoding } from './clock.js';
 import { readFinish, createFinish } from './finish.js';
 
 const DEFAULT_CODEC = 'avc1.640028';   // H.264 High 4.0: 1080p30 and below
-const DEFAULT_BITRATE = 8e6;
+const DEFAULT_BITRATE = 16e6;          // grain, glows and soft gradients keep their detail
 const DEFAULT_AUDIO_BITRATE = 192000;
-const AUDIO_CODECS = ['mp4a.40.2', 'opus'];
 const KEYFRAME_EVERY = 2;              // seconds
 
 // Resolves after the browser has painted once: an animation frame callback
@@ -217,9 +220,20 @@ function offsetOf(el) {
 // (probed in 154 and 156): at one drawing px to the CSS px from its border
 // box's corner, clipped to its content box, whatever its border, padding and
 // object-fit, so a copy's bitmap is the border box with the drawing placed
-// inside it. From 157, the version that turned HTML-in-Canvas on (probed in
-// 158; 157 assumed): as CSS paints any canvas, into its content box, so the
-// bitmap is the content box. Another browser cannot render the DOM at all.
+// inside it. From 158 (probed in 158.0.8127.18): as CSS paints any canvas,
+// into its content box, so the bitmap is the content box. Another browser
+// cannot render the DOM at all.
+//
+// Chrome 157, the version that turned HTML-in-Canvas on, does neither
+// (seen in 157.0.8103.78): it stretches the bitmap to the
+// content box's size but places it at the border box's corner, clipped to
+// the content box, and object-fit and object-position on the copy change
+// nothing. So in 157 a canvas with a border or padding is drawn that much up
+// and left and loses the strip at its right and bottom, whatever bitmap the
+// copy supplies; a canvas with neither is right. 157 takes the content-box
+// branch (its scale is right, its corner is not). A copy with no border or
+// padding of its own, beside one that carries them, would be right in all
+// three; that is not built.
 const CONTENT_BOX_PAINT = (() => {
   const m = typeof navigator !== 'undefined' && /Chrome\/(\d+)/.exec(navigator.userAgent);
   return !m || Number(m[1]) >= 157;
@@ -381,11 +395,20 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
   // One render at a time: a second would wrap the root inside the first's
   // canvas, and their unwraps would leave it out of the document.
   let running = false;
-  return async function render(opts) {
+  async function render(opts) {
     if (running) throw fail(CODES.BAD_CALL, 'render()', __DEV__ && 'a render is running; await the one before starting the next');
     running = true;
     try { return await once(opts); } finally { running = false; }
+  }
+  // The preview bar's As Rendered: the frame at t as the file would have it,
+  // through the same seeks, shutter and finish, with no encoder and no
+  // sound, as a 2D canvas of the composition's size. Not public.
+  render.still = async function still(t) {
+    if (running) throw fail(CODES.BAD_CALL, 'render()', __DEV__ && 'a render is running; await the one before starting the next');
+    running = true;
+    try { return await run({ audio: false }, self, () => {}, (p) => p, t); } finally { running = false; }
   };
+  return render;
   async function once(opts) {
     const o = opts || {};
     const G = self;
@@ -408,8 +431,10 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     const until = (p) => (halted ? Promise.race([p, halted]) : p);
     try { return await run(o, G, stop, until); } finally { if (unhook) unhook(); }
   }
-  async function run(o, G, stop, until) {
-    if (typeof G.VideoEncoder !== 'function') {
+  // `still`, a time, makes the one frame render.still() returns.
+  async function run(o, G, stop, until, still) {
+    const one = still !== undefined;
+    if (!one && typeof G.VideoEncoder !== 'function') {
       throw fail(CODES.NO_WEBCODECS, 'render()', __DEV__ && 'this page has no VideoEncoder; WebCodecs needs a secure context (https or localhost) and a browser that has it (Chrome 94 and later)');
     }
     clock.resolveComposition();
@@ -418,20 +443,26 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     if (!(source instanceof Element)) throw fail(CODES.BAD_CALL, 'render({ source })', __DEV__ && 'source is an element (the composition root when omitted); no composition root was found');
     const fps = o.fps === undefined ? clock.store.fps : o.fps;
     if (!(typeof fps === 'number' && Number.isFinite(fps) && fps > 0)) throw fail(CODES.BAD_CALL, 'render({ fps })', __DEV__ && 'fps is a finite number above 0');
-    const from = o.from === undefined ? 0 : o.from;
     const duration = clock.store.duration;
-    const to = o.to === undefined ? duration : o.to;
+    // A still from the last frame's start to the end, where playback stops
+    // and the bar's step lands, is the last frame, as a render has it.
+    if (one && !(typeof still === 'number' && Number.isFinite(still) && still >= 0)) throw fail(CODES.BAD_CALL, 'render.still(t)', __DEV__ && 't is seconds, 0 or more, not ' + show(still));
+    const at = one && duration > 0 ? Math.min(still, (Math.max(1, Math.round(duration * fps)) - 1) / fps) : still;
+    const from = one ? at : o.from === undefined ? 0 : o.from;
+    const to = one ? at + 1 / fps : o.to === undefined ? duration : o.to;
     // Within the composition: past its end there is nothing to draw.
-    if (!(typeof from === 'number' && from >= 0) || !(typeof to === 'number' && Number.isFinite(to) && to > from) || to > duration + 1e-9) throw fail(CODES.BAD_CALL, 'render({ from, to })', __DEV__ && 'seconds within the composition, with to after from and no later than its duration, ' + show(duration) + ' s (the composition needs data-duration when to is omitted)');
-    const codec = o.codec === undefined ? DEFAULT_CODEC : o.codec;
-    if (typeof codec !== 'string' || !/^(avc1|av01|vp09)\./.test(codec)) throw fail(CODES.BAD_CALL, 'render({ codec })', __DEV__ && "an avc1, av01 or vp09 codec string, such as 'avc1.640028'");
-    const bitrate = o.bitrate === undefined ? DEFAULT_BITRATE : o.bitrate;
-    if (!(typeof bitrate === 'number' && Number.isFinite(bitrate) && bitrate > 0)) throw fail(CODES.BAD_CALL, 'render({ bitrate })', __DEV__ && 'bitrate is bits per second, a number above 0 such as 8e6');
+    if (!one && (!(typeof from === 'number' && from >= 0) || !(typeof to === 'number' && Number.isFinite(to) && to > from) || to > duration + 1e-9)) throw fail(CODES.BAD_CALL, 'render({ from, to })', __DEV__ && 'seconds within the composition, with to after from and no later than its duration, ' + show(duration) + ' s (the composition needs data-duration when to is omitted)');
+    // The encoder's settings: each from the call, else config({ encode }),
+    // else the default (config's were checked when it was set).
+    checkEncoding(o, (k) => 'render({ ' + k + ' })');
+    const set = clock.encode() || {};
+    const pick = (k, d) => (o[k] !== undefined ? o[k] : set[k] !== undefined ? set[k] : d);
+    const codec = pick('codec', DEFAULT_CODEC);
+    const bitrate = pick('bitrate', DEFAULT_BITRATE);
+    const audioCodec = pick('audioCodec', undefined);
+    const audioBitrate = pick('audioBitrate', DEFAULT_AUDIO_BITRATE);
     const withAudio = o.audio === undefined ? true : o.audio;
     if (typeof withAudio !== 'boolean') throw fail(CODES.BAD_CALL, 'render({ audio })', __DEV__ && 'audio is true (the default: the sound, when the composition has an audio clip) or false, not ' + show(o.audio));
-    if (o.audioCodec !== undefined && !AUDIO_CODECS.includes(o.audioCodec)) throw fail(CODES.BAD_CALL, 'render({ audioCodec })', __DEV__ && "audioCodec is 'mp4a.40.2' (AAC-LC, the default) or 'opus', not " + show(o.audioCodec));
-    const audioBitrate = o.audioBitrate === undefined ? DEFAULT_AUDIO_BITRATE : o.audioBitrate;
-    if (!(typeof audioBitrate === 'number' && Number.isFinite(audioBitrate) && audioBitrate > 0)) throw fail(CODES.BAD_CALL, 'render({ audioBitrate })', __DEV__ && 'audioBitrate is bits per second, a number above 0 such as 192000, not ' + show(o.audioBitrate));
     const wanted = o.shutter === undefined ? clock.shutter() : readShutter(o.shutter, 'render');
     // The HyperFrames runtime's player rounds each seek down to one of its
     // own frames, which puts every sample on the frame's own time, so with
@@ -473,7 +504,7 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
         + 'Give an <img>, <video> or SVG <image> crossorigin="anonymous", with Access-Control-Allow-Origin from its server; a CSS image, an <input type=image>, a frame or an <object> (drawn empty) has to come from this origin or a data: URL');
     }
 
-    const support = await G.VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps });
+    const support = one ? { supported: true } : await G.VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps });
     if (!support.supported) {
       const rounded = width !== asked.width || height !== asked.height ? ' (' + asked.width + 'x' + asked.height + ' rounded up to even, which H.264 needs)' : '';
       throw fail(CODES.BAD_CALL, 'render(): ' + codec + ' at ' + width + 'x' + height, __DEV__ && 'this browser cannot encode ' + codec + ' at ' + width + 'x' + height + rounded);
@@ -490,11 +521,11 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     let clips = [], sound = null;
     if (withAudio) {
       clips = await until(audio.load());
-      if (clips.length) sound = await until(soundConfig(o.audioCodec, audioBitrate));
+      if (clips.length) sound = await until(soundConfig(audioCodec, audioBitrate));
     }
     stop();
 
-    let canvas = null, ctx = null, wrap = null, encoder = null, fin = null;
+    let canvas = null, ctx = null, wrap = null, encoder = null, fin = null, kept = null;
     const copies = new Map();
     // The shutter's samples per frame and angle, and the 2D canvas they are
     // read from, its context, their sums and the average written back.
@@ -516,6 +547,9 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     const broke = (what, why) => fail(CODES.ENCODER_FAILED, 'render(): the ' + what, __DEV__ && why + '; another codec, a smaller size or a lower bitrate may encode');
     // Video mode for the frames (lesson.js), until the seek back is done.
     let release = null;
+    // The preview bar's As Rendered frame, laid over the root (preview.js),
+    // is out of the frames and back after.
+    const laid = source.querySelectorAll('[data-kinetic-as-rendered]');
     // Whether the root carried `drawable` before the render marked it.
     let hadDrawable = false;
     function unwrap() {
@@ -531,16 +565,19 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
       release = lesson.force();
       // The live finish's overlays sit in the root; the pass finishes the file.
       if (finishLive) finishLive.hide();
-      encoder = new G.VideoEncoder({
-        output(chunk, meta) {
-          if (meta && meta.decoderConfig && meta.decoderConfig.description && !description) description = meta.decoderConfig.description;
-          const bytes = new Uint8Array(chunk.byteLength);
-          chunk.copyTo(bytes);
-          mp4.addSample(bytes, chunk.type === 'key');
-        },
-        error(e) { failure = broke(codec + ' encoder', __DEV__ && "the browser's video encoder failed (" + (e && e.message || e) + ')'); },
-      });
-      encoder.configure(Object.assign({ codec, width, height, bitrate, framerate: fps, latencyMode: 'quality' }, even ? { avc: { format: 'avc' } } : {}));
+      for (const c of laid) c.style.display = 'none';
+      if (!one) {
+        encoder = new G.VideoEncoder({
+          output(chunk, meta) {
+            if (meta && meta.decoderConfig && meta.decoderConfig.description && !description) description = meta.decoderConfig.description;
+            const bytes = new Uint8Array(chunk.byteLength);
+            chunk.copyTo(bytes);
+            mp4.addSample(bytes, chunk.type === 'key');
+          },
+          error(e) { failure = broke(codec + ' encoder', __DEV__ && "the browser's video encoder failed (" + (e && e.message || e) + ')'); },
+        });
+        encoder.configure(Object.assign({ codec, width, height, bitrate, framerate: fps, latencyMode: 'quality' }, even ? { avc: { format: 'avc' } } : {}));
+      }
       if (finish) {
         if (__DEV__) {
           const n = liveContexts();
@@ -632,6 +669,13 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
           pctx.putImageData(avg, 0, 0);
         }
         const shown = pane || canvas || source;
+        if (one) {
+          // A copy, since the pass's canvas and the wrapper go at the end.
+          kept = document.createElement('canvas');
+          kept.width = width; kept.height = height;
+          kept.getContext('2d').drawImage(fin ? fin.apply(shown, Math.round(t * fps)) : shown, 0, 0);
+          continue;
+        }
         // The finish takes the composition's frame number, so a render from
         // partway has the dust and grain of the same frames in a full one.
         const frame = new G.VideoFrame(fin ? fin.apply(shown, Math.round(t * fps)) : shown, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
@@ -651,12 +695,14 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
         if (typeof o.onProgress === 'function') o.onProgress(i + 1, frames);
       }
       stop();
+      if (one) return kept;
       await until(encoder.flush()).catch((e) => { stop(); throw failure || broke(codec + ' encoder', __DEV__ && "the browser's video encoder failed (" + (e && e.message || e) + ')'); });
       if (failure) throw failure;
     } finally {
       if (encoder) try { encoder.close(); } catch (_) { /* already closed */ }
       unwrap();
       if (finishLive) finishLive.show();
+      for (const c of laid) c.style.display = '';
       if (clock.store.fps !== clockFps) clock.setFps(clockFps, before);
       if (shutter) clock.store.shutter = 0;
       if (fin) fin.dispose();

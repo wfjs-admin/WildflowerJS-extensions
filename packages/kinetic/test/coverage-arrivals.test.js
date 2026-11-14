@@ -92,26 +92,20 @@ describe(`scene arrivals (${BUILD} extension, ${CORE_TIER} core)`, () => {
     });
   }
 
-  // A known gap in the framework, not Kinetic: a
-  // data-bind inside a component nested below a list row's element
-  // (<template><li><div data-component="x"><b data-bind="local">) reads the
-  // list host's value whenever the host has a property of that name, and
-  // the nested component's own only when the host has none (probed with two
-  // plain components on full.dev and mini.dev: "HOST1" both before and after
-  // the child changed its own value). Every scene has local, progress, frame
-  // and the rest, so a scene nested in a row of another scene shows the
-  // host's timing in its bindings while its seek(local) gets its own. With
-  // the scene on the row element the bindings are its own, but that shape is
-  // never destroyed (the gap two tests below). Remove `.fails` once a binding
-  // inside a nested component reads that component first.
-  it.fails('a binding inside a scene nested in a row of another scene reads the nested scene, not the host', async ({ skip }) => {
+  // A data-bind inside a component nested below a list row's element
+  // (<template><li><div data-component="x"><b data-bind="local">) reads that
+  // component's computed, not a same-named one of the list host (WildflowerJS
+  // 1.5.6 and later). Every scene has local, progress, frame and the rest as
+  // computeds, so on an earlier core a scene nested in a row of another scene
+  // shows the host's timing.
+  it('a binding inside a scene nested in a row of another scene reads the nested scene, not the host', async ({ skip }) => {
     const { wf } = await load();
     if (wf.features && wf.features.lists === false) skip();
     const { el, hold } = await rowScenes(wf, 'inside the row', 'ar1b');
     hold.first = false;
     await dispatchSeek(1.5).done;
     // The row scenes start at 0.5, the host at 0: their local is 1, the host's 1.5.
-    expect([...el.querySelectorAll('li .l')].map((b) => b.textContent)).toEqual(['1', '1']);   // receives ['1.5', '1.5']
+    expect([...el.querySelectorAll('li .l')].map((b) => b.textContent)).toEqual(['1', '1']);
   });
 
   it('a scene inside a data-list row the list removes is seeked no more', async ({ skip }) => {
@@ -129,18 +123,11 @@ describe(`scene arrivals (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(calls).toEqual([[1, 0.30000000000000004]]);
   });
 
-  // A known gap in the framework, not Kinetic: a
-  // component whose element is the list row's own root element
-  // (<template><li data-component="x">) is never destroyed when the list
-  // removes the row; one nested inside the row is (probed on full.dev and
-  // lite.dev with a plain wildflower.component: no beforeDestroy or destroy
-  // within 1 s). Kinetic's afterInit/beforeDestroy hooks then keep the scene
-  // in `live`, so it is seeked on its detached element on every later seek,
-  // and each time the row comes back a new instance joins it: check() and a
-  // scrubbed preview grow `live` with every add and remove. No core test pins
-  // the destroy of a row-root component. Remove `.fails` once the list's row
-  // removal destroys a component on the row element itself.
-  it.fails('a scene on the element of a data-list row the list removes is seeked no more', async ({ skip }) => {
+  // A component on the list row's own element (<template><li data-component="x">)
+  // is destroyed when the list removes the row (WildflowerJS 1.5.6 and later).
+  // On an earlier core, the scene stays in `live` and is seeked on its
+  // detached element.
+  it('a scene on the element of a data-list row the list removes is seeked no more', async ({ skip }) => {
     const { wf } = await load();
     if (wf.features && wf.features.lists === false) skip();
     const { el, calls, hold } = await rowScenes(wf, 'on the row element', 'ar1s');
@@ -152,7 +139,7 @@ describe(`scene arrivals (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(el.querySelectorAll('li').length).toBe(1);
     calls.length = 0;
     await dispatchSeek(0.8).done;
-    expect(calls).toEqual([[1, 0.30000000000000004]]);   // receives [[1, 0.3], ['detached', 0.3]]
+    expect(calls).toEqual([[1, 0.30000000000000004]]);
   });
 
   it('a composition root that arrives after readiness has settled is marked ready at its first seek, so the stage rule shows it', async () => {

@@ -625,6 +625,38 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(() => ramp(0.5, 0, 1, 'zoom')).toThrow(/KN-121/);
   });
 
+  it('arrival and land: a move timed by where it arrives, the first moment within 3% of its end', async () => {
+    const { wf } = await load();
+    const { arrival, land, ramp, ease } = wf.kinetic;
+    // Linear arrives 97% of the way through; an ease-out sooner.
+    expect(arrival(undefined, 1)).toBeCloseTo(0.97, 12);
+    expect(arrival('linear', 0.5)).toBeCloseTo(0.485, 9);
+    const p3 = arrival('power3.out', 1);
+    expect(p3).toBeLessThan(0.6);
+    expect(1 - ease('power3.out')(p3)).toBeCloseTo(0.03, 6);
+    // It scales with the duration, and an overshooting ease arrives on its way past.
+    expect(arrival('power3.inOut', 0.5)).toBeCloseTo(arrival('power3.inOut', 1) / 2, 9);
+    const back = arrival('back.out', 1);
+    expect(ease('back.out')(back)).toBeCloseTo(0.97, 6);
+    // A spring arrives at the same time whatever the duration, and well before it settles.
+    const SPRING = { spring: { stiffness: 170, damping: 26 } };
+    expect(arrival(SPRING, 0.3)).toBe(arrival(SPRING, 3));
+    expect(Math.abs(1 - wf.kinetic.spring(arrival(SPRING, 1), SPRING.spring))).toBeCloseTo(0.03, 6);
+    expect(arrival(SPRING, 1)).toBeLessThan(wf.kinetic.settle(SPRING.spring));
+    // land() is ramp() started early by the arrival, so at `at` the move has arrived.
+    const at = 4, a = arrival('power3.inOut', 0.4);
+    expect(land(at, at, 0.4, 'power3.inOut')).toBeCloseTo(0.97, 6);
+    expect(land(3, at, 0.4, 'power3.inOut')).toBe(ramp(3, at - a, at - a + 0.4, 'power3.inOut'));
+    expect(land(at - a, at, 0.4, 'power3.inOut')).toBe(0);
+    expect(land(9, at, 0.4, 'power3.inOut')).toBe(1);
+    expect(land(at, at, 0.6, SPRING)).toBeCloseTo(0.97, 6);
+    expectKN(() => land(1, NaN, 0.4), 'KN-100', 'land(t, at, duration)', /^at is the finite seconds/);
+    expectKN(() => land(1, 2, 0), 'KN-100', 'land(t, at, duration)', /^duration is finite seconds above 0/);
+    expectKN(() => land('1', 2, 0.4), 'KN-100', 'land(t)');
+    expectKN(() => arrival('linear', -1), 'KN-100', 'arrival(ease, duration)');
+    expect(() => land(1, 2, 0.4, 'zoom')).toThrow(/KN-121/);
+  });
+
   it('mix: a + (b - a) * p for numbers, and the colour path interpolate uses for colours', async () => {
     const { wf } = await load();
     const { mix, interpolate } = wf.kinetic;

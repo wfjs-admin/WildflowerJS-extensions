@@ -4,6 +4,8 @@ Read this when the brief says nothing about the look. Anything the user asks for
 
 The aim is a piece the person is proud to show others: calm, considered, and printed in feel. It should look as if a designer made it with time to spare.
 
+This is the calm end of the expression dial. A showreel, a brand film, a sting or a title set lively or bold takes its look from one direction in `directions.md` instead, since these defaults (paper throughout, long holds, nothing moving between moves) make a reel dull.
+
 ## Contents
 
 - The look
@@ -104,6 +106,7 @@ The default palette is the house style's. Vary it to suit the subject (a forest 
 | Shantell Sans, for both | marker-drawn: whiteboard explainers, tutorials, on-screen annotations | 700 at Informal 100 (`font-variation-settings: 'INFM' 100`), loaded with its axes (`Shantell+Sans:BNCE,INFM,wght@-100..100,0..100,300..800`); a reveal can animate its Bounce axis (`BNCE`, −100 to 100, each letter moved up or down by its own amount) with `text()`, from outlines baked with `wght`, `INFM` and `BNCE`, never on page text, where animating an axis stutters | 400 at Informal 0 |
 | Noto Serif Display + Noto Sans | one voice across scripts: a localized cut, an international brand | 700, at 64 px and up at 1920 | 400 to 500; a script Noto Sans lacks, such as Japanese, Arabic or Devanagari, loads its own Noto family |
 | Besley + Karla | bold and friendly, a sturdy serif over a clean, plain sans: magazines, food, community newsletters | 700 to 900, with its italic for emphasis (`Besley:ital,wght@0,400..900;1,400..900`) | 400 to 500 |
+| Plus Jakarta Sans + Lora | competent and professional, authoritative but approachable: brands, business, annual reports | 800 | 400 to 500 |
 
 - **Display in Work Sans:** weight 800 to 900, tracking -0.02 to -0.04 em, short lines. **Body and captions:** weight 500 to 600, line height 1.25 to 1.35, lines no wider than about 18 em.
 - **With Work Sans, at most one serif**, upright, and only where the subject wants warmth (a story, a quotation, a historical subject): Bitter, from Google Fonts. A pairing brings its own faces instead. Italics used sparingly and where they suit the words, such as a stressed word or phrase, a title or a quotation, as in Instrument Serif's and Besley's pairings.
@@ -142,15 +145,15 @@ The shutter gives motion blur in the render, and the grain gives the paper its t
 
 **Gradients stay within one color.** A gradient runs over at most three neighboring steps of one color, from the ground to a tint, or from the deep ground to a shade, drawn `linear-gradient(in oklab, …)`. Between two palette colors, only as a rainbow roll (below). No gradient on a data mark. The lightest point of a gradient sits behind or beside the focus. Animate a gradient's position, slowly, never its colors, and keep the finish's grain on over a large one, which hides banding.
 
-**Printed ink.** `shade()`'s `'crachis'` sprays each ink as drops, the spatter of 1920s and 1930s French posters such as Jean Carlu's and of today's textured flat illustration, and `'ink'` mixes the same inks smoothly, as ink mixes on paper. Flat color stays the default. Reach for print when the piece's feeling is printed or crafted (a poster, an illustrated scene, a travel or heritage subject, art deco, a hand-made brand, a title card) or when a shape needs depth; leave it out of data marks, interface, and a brief that asks for clean or flat. A spray in a step of the color under it is drawn `blend: 'normal'`, so each drop is that step; multiplied, the drop would be the step times the color, about two steps darker.
+**Printed ink.** `shade()`'s `'crachis'` sprays each ink as drops, the spatter of 1920s and 1930s French posters and of today's textured flat illustration, and `'ink'` mixes the same inks smoothly, as ink mixes on paper. Flat color stays the default. Reach for print when the piece's feeling is printed or crafted (a poster, an illustrated scene, a travel or heritage subject, art deco, a hand-made brand, a title card) or when a shape needs depth; leave it out of data marks, interface, and a brief that asks for clean or flat. A spray in a step of the color under it is drawn `blend: 'normal'`, so each drop is that step; multiplied, the drop would be the step times the color, about two steps darker.
 
-*A ground.* A background gradation is light falling on the beat's one color, over at most three neighboring steps of it, never a second hue: a sky (deeper toward the top, paler toward the bottom, as aerial perspective has it), a spot (lightest behind or beside the focus, deepening toward the edges), or a lift (the color easing into its 20% tint across the frame).
+*A ground.* A background gradation is light falling on the beat's one color, over at most three neighboring steps of it, never a second hue: a sky (deeper toward the top, paler toward the bottom, as aerial perspective has it), a wash (the ground's own darker ink deepening away from the light, `shade()`'s `'ink'`), or a lift (the color easing into its 20% tint across the frame). Not a radial spot: one round hotspot fading evenly every way reads as a lit card, and flattens the frame.
 - **Smooth or sprayed.** Smooth for a clean piece. Sprayed for a printed or crafted one: the ground with its own 15% shade or 25% tint sprayed on, at about 0.7 density, a tint spray that reads as tooth and light. A step two or more apart, or another hue, sprayed across a ground is loud; it is a halo, not a ground.
 - **Text sits where the field is calmest.** Display type can cross a tint spray; small text sits on the flat part, or on a sky whose steps run along its lines. Check contrast at the field's worst point behind it.
 - **A halo** is a lighter step, or the cue, sprayed around one subject or headline and thinning outward; it is small.
 - **A rainbow roll** is the one ground where two hues meet: two or three inks blended across it, overprinted drops making the color between. The inks are neighbors on the color wheel (gold into teal through green, yellow into pink through orange); opposites overprint to brown. Give the blend about a third of the frame, with solid ink on each side.
 
-*An illustration.* Flat shapes, each in one color, take their depth from spray, as in textured flat illustration and on Carlu's sunfish:
+*An illustration.* Flat shapes, each in one color, take their depth from spray, as in textured flat illustration and on those posters:
 - **The shadow side:** the shape's own 30% shade, a `path()` along the edge away from the light with `side` into the shape (one side, never both), cut to the shape, at about 0.6 density with a smooth falloff over a third of the shape's width, so it is a scatter at the edge thinning to nothing; the lit side stays flat. A roof takes it down the slope away from the light, and a wall under eaves takes it along the eave line. A near-white shape (paper, cream) takes its 15% shade instead: at 30% it turns gray.
 - **The lit edge:** on a larger shape, its tint (about 35% toward white), at about 0.45 density along the edge facing the light, and a small glow of the ground's tint can spill off that edge into the sky behind, as haze.
 - **The cast shadow:** a soft pool of the ground's shade under a standing object or a group, an ellipse flattened along the ground line, densest at the middle of the foot and fading on every side, cut at the ground line so none of it lands on the object.
@@ -161,14 +164,14 @@ The shutter gives motion blur in the render, and the grain gives the paper its t
 
 *Both.*
 - **Crachis or ink.** Crachis where the texture is part of the look and the field is still or moves as one; ink where drops would be busy: behind lines of text, on small fields, or as a smooth ground in a cleaner piece.
-- **Type is solid ink, never sprayed.** It meets contrast at the worst point of the field behind it; a halo can spray around letters, as Carlu's does, and the letters stay flat.
-- **One light for the piece**: every sky, spot, shadow side, lit edge and cast shadow falls from the same side.
+- **Type is solid ink, never sprayed.** It meets contrast at the worst point of the field behind it; a halo can spray around letters, as on those posters, and the letters stay flat.
+- **One light for the piece**: every sky, wash, shadow side, lit edge and cast shadow falls from the same side.
 - **The drops hold still** (`fps` 0): a ground's light can drift slowly and a shape can move with its spray, but colors never change and drops never re-seed. One dot size through a piece, 1.6 px by default, larger (2.5 to 3) for a coarse, hand-sprayed poster.
 - **One printed field leads a frame**; the rest are quieter.
 
 ## Texture and imagery
 
-Use Kinetic's own tools for texture: `shade()` for stipple, halftone and grain that varies across the frame, `effect()`, `boil()` for a hand-drawn line, and the finish's grain. Do not fetch stock photographs or textures from the web (looking up facts is another matter, and expected). When the user supplies images or names a source, use those, and credit them where the license asks.
+Use Kinetic's own tools for texture: `shade()` for stipple, halftone and grain that varies across the frame, `effect()`, `boil()` for a hand-drawn line, and the finish's grain. Do not fetch stock photographs or textures from the web (looking up facts is another matter, and expected). When the user supplies images or names a source, use those, and credit them where the license asks. Other outside work (open map data, say) may be fetched once and saved with the piece; credit it on screen unless its license needs none, and never put the user's name, email or other personal details in a request.
 
 ## Sound
 

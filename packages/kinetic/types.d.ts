@@ -45,6 +45,12 @@ export interface KineticStore {
    * 'video' }), and under 'auto' with the preview bar up; 'interactive' otherwise.
    */
   readonly mode: 'interactive' | 'video';
+  /**
+   * The view in force: 'render' while check() or render() runs or a render
+   * captures, 'live' otherwise. An element with data-viewmode="render" shows
+   * only in the render view, one with data-viewmode="live" only in the live view.
+   */
+  readonly viewmode: 'live' | 'render';
   /** The id of the step whose range holds `time`; '' before the first step, past the last one's end, or with none. Both modes. */
   readonly step: string;
   /** That step's index from 0, or -1. */
@@ -308,6 +314,87 @@ export interface DepthOptions {
   perspective?: number;
   /** false leaves out the scale, so a layer set back looks smaller. Default true. */
   fill?: boolean;
+  /**
+   * Draws the layer this many times finer, 1 to 8 (default 1, off): for a layer
+   * the camera magnifies while it is turned (pan, tilt or roll), which Chrome
+   * otherwise draws at its CSS size and stretches. The style gains zoom: k and
+   * moves the layer, frame by frame, so the picture is the same. Needs camera,
+   * and a layer sized 100% of the world, as .layer is. Costs k * k the pixels.
+   */
+  detail?: number;
+  /** The camera's numbers at this time, cameraAt(t, tracks): needed with detail above 1. */
+  camera?: CameraPosition;
+}
+
+/** The camera's numbers at a time, shake included: what cameraAt() gives and depth() takes. */
+export interface CameraPosition {
+  x: number;
+  y: number;
+  z: number;
+  pan: number;
+  tilt: number;
+  roll: number;
+  zoom: number;
+}
+
+/** A camera key's number: any of x, y, z, pan, tilt, roll and zoom, as CameraPosition holds them. */
+export type CameraNumbers = Partial<CameraPosition>;
+
+/** A look move's keys: the eye's and the target's coordinates, then roll and zoom. */
+export type LookKey = 'eye.x' | 'eye.y' | 'eye.z' | 'at.x' | 'at.y' | 'at.z' | 'roll' | 'zoom';
+
+/** Where a look move ends: an eye at `eye` looking at `at`, both world points [x, y, z], z toward the viewer. */
+export interface LookTarget {
+  eye: [number, number, number];
+  at: [number, number, number];
+  roll?: number;
+  zoom?: number;
+}
+
+/**
+ * The first entry of a moves() list: where the camera starts, from t (default
+ * 0). A drift keeps it moving until the first move, then falls away over it.
+ */
+export interface CameraStart {
+  t?: number;
+  to: CameraNumbers | LookTarget;
+  /** px (or degrees) per second: a number is z; an object names its keys. */
+  drift?: number | CameraNumbers;
+}
+
+/**
+ * One move of a moves() list. Moves add: each adds its change times its
+ * progress, so overlapping moves blend and each lands on its `to` at
+ * t + d (plus a key's lag) and holds there.
+ */
+export interface CameraMove {
+  /** The move's start, s; the moves are in order of t. */
+  t: number;
+  /** The move's length, s, above 0. Default 0.8. */
+  d?: number;
+  /** Where the move ends: camera keys (those left out keep their value), a look, or a shot the camera follows for d seconds. */
+  to: CameraNumbers | LookTarget | ((t: number) => CameraNumbers);
+  /** Any ease but a spring, default 'power2.inOut'; 'attack' is fast in, long to settle (full speed by about 27% of the move). */
+  ease?: Ease | 'attack';
+  /** Per key, seconds that key starts after the others, so the path curves. 0 or more. */
+  lag?: Partial<Record<keyof CameraPosition | LookKey, number>>;
+  /** Per key, how far past the mark it goes and comes back, as a share of the move: 0.04 is 4%. */
+  over?: Partial<Record<keyof CameraPosition | LookKey, number>>;
+  /** Degrees on pan, tilt or roll, added and returned to 0 over the move. */
+  kick?: { pan?: number; tilt?: number; roll?: number };
+  /** px on a position key, added and returned to 0 over the move, so the path arcs and ends where it would have. */
+  swing?: Partial<Record<'x' | 'y' | 'z' | 'eye.x' | 'eye.y' | 'eye.z' | 'at.x' | 'at.y' | 'at.z', number>>;
+  /** px (or degrees) per second, rising over the move, held until the next move and falling away over it: a number is z. */
+  drift?: number | CameraNumbers;
+  /** z (or a look's eye) moves at a steady rate of zoom toward a plane: true is z = 0, a number the plane's z. */
+  dolly?: true | number;
+  /** For a function move: the seconds over which the camera joins the function, above 0 and at most d. Default 0.4 or d. */
+  blend?: number;
+}
+
+export interface MovesOptions {
+  /** The eye's distance from the z = 0 plane, px, as camera() takes it. Default 1000. */
+  perspective?: number;
 }
 
 /** handheld: 0.7 Hz, 16 / 11 px, 1.1 deg. rumble: 7 Hz, 5.4 / 7.2 px, 0.36 deg. impact: 11 Hz, 61 / 47 px, 4.3 deg, 0 before t = 0, then times e^(-t / 0.32). */
@@ -603,37 +690,46 @@ export interface RepeatRow {
  * The finishing pass on every rendered frame, after the shutter's average
  * and before the encoder; and live in the page, from config({ finish }),
  * for the vignette, the grain, the dust, the grade's exposure, contrast and
- * saturation and the soften (bloom, aberration and the rest of the grade
+ * saturation and the soften (bloom, diffuse, aberration and the rest of the grade
  * are the file's only). Each field is off unless given; a number is its
- * amount. Deterministic by the frame number. KN-100 for an unknown field
- * or part or a part out of range, and for a browser without WebGL 2.
+ * amount. Any part but the grain's fps may be a Track of numbers in its
+ * range, read at each frame's time, so the finish can change over the
+ * piece; a field whose amount is 0 at every key is off. Deterministic by
+ * the frame number. KN-100 for an unknown field or part or a part out of
+ * range, and for a browser without WebGL 2; KN-120 for a malformed track.
  */
 export interface FinishOptions {
-  /** Amount 0 to 1; size 1 to 8 px (default 1); fps 0 to 240, how many times a second it changes (default 0, still; the frame rate for film grain). */
-  grain?: number | { amount: number; size?: number; fps?: number };
+  /** Amount 0 to 1; size 1 to 8 px (default 1); fps 0 to 240, how many times a second it changes (default 0, still; the frame rate for film grain), a number only. */
+  grain?: FinishPart | { amount: FinishPart; size?: FinishPart; fps?: number };
   /** Amount 0 to 1; radius 0 to 1 and softness 0.05 to 1, of the half-diagonal (defaults 0.5, 0.6). */
-  vignette?: number | { amount: number; radius?: number; softness?: number };
+  vignette?: FinishPart | { amount: FinishPart; radius?: FinishPart; softness?: FinishPart };
   /** Amount 0 to 2; threshold 0 to 1 (default 0.8); radius 1 to 200 px (default 24). */
-  bloom?: number | { amount: number; threshold?: number; radius?: number };
+  bloom?: FinishPart | { amount: FinishPart; threshold?: FinishPart; radius?: FinishPart };
   /** 0 to 8: red and blue sampled toward and away from the centre, 6 px at the corners for each 1. */
-  aberration?: number;
+  aberration?: FinishPart;
   /** 0 to 16: a blur that grows toward the edges, 1.5 px for each 1. */
-  soften?: number;
+  soften?: FinishPart;
+  /** Amount 0 to 1; radius 1 to 200 px (default 16): the whole frame blurred and mixed over it, a soft-focus filter's look. */
+  diffuse?: FinishPart | { amount: FinishPart; radius?: FinishPart };
   /** Amount 0 to 1; size 0.5 to 4 (default 1): sparse specks, new each frame. */
-  dust?: number | { amount: number; size?: number };
+  dust?: FinishPart | { amount: FinishPart; size?: FinishPart };
   /** Each part optional, applied in this order; defaults change nothing. */
-  grade?: { exposure?: number; contrast?: number; saturation?: number; temperature?: number; lift?: number; gamma?: number; gain?: number };
+  grade?: { exposure?: FinishPart; contrast?: FinishPart; saturation?: FinishPart; temperature?: FinishPart; lift?: FinishPart; gamma?: FinishPart; gain?: FinishPart };
 }
 
-/** What config() reports for the finish: each field on, as an object of all its named parts, the form config({ finish }) takes back. */
+/** A part of the finish: a number, or a Track of numbers (no unit) read at each frame's time. */
+export type FinishPart = number | Track;
+
+/** What config() reports for the finish: each field on, as an object of all its named parts (a track as a copy of it), the form config({ finish }) takes back. */
 export type FinishSettings = {
-  grain?: { amount: number; size: number; fps: number };
-  vignette?: { amount: number; radius: number; softness: number };
-  bloom?: { amount: number; threshold: number; radius: number };
-  aberration?: { amount: number };
-  soften?: { amount: number };
-  dust?: { amount: number; size: number };
-  grade?: { exposure: number; contrast: number; saturation: number; temperature: number; lift: number; gamma: number; gain: number };
+  grain?: { amount: FinishPart; size: FinishPart; fps: number };
+  vignette?: { amount: FinishPart; radius: FinishPart; softness: FinishPart };
+  bloom?: { amount: FinishPart; threshold: FinishPart; radius: FinishPart };
+  aberration?: { amount: FinishPart };
+  soften?: { amount: FinishPart };
+  diffuse?: { amount: FinishPart; radius: FinishPart };
+  dust?: { amount: FinishPart; size: FinishPart };
+  grade?: { exposure: FinishPart; contrast: FinishPart; saturation: FinishPart; temperature: FinishPart; lift: FinishPart; gamma: FinishPart; gain: FinishPart };
 };
 
 export interface ScrambleOptions {
@@ -719,6 +815,12 @@ export interface KineticConfig {
   /** The preview bar (play, pause, scrub, frame steps). Also `?preview` in the URL or `data-preview` on the script tag. Never during a render. */
   preview?: boolean;
   /**
+   * In a page inside a frame, the preview bar's Render button first says the
+   * site around it may block the download, with Render anyway and Close, once
+   * a page load. Default true; false renders straight away.
+   */
+  frameNotice?: boolean;
+  /**
    * Whether the standalone clock starts again from 0 at the end. Default
    * true, which holds the last frame 3 s first (none with the preview bar
    * up); `{ hold }` sets those seconds; false holds the last frame
@@ -753,6 +855,12 @@ export interface KineticConfig {
    */
   finish?: FinishOptions | 0 | false | null;
   /**
+   * The encoder's settings for every render() that gives none, the preview
+   * bar's Render included. false or null turns them off. config() reports
+   * the fields set, or false.
+   */
+  encode?: EncodeOptions | false | null;
+  /**
    * 'auto' (the default): video mode with the preview bar up, interactive mode
    * otherwise. 'interactive' or 'video' sets it. The HyperFrames runtime on the page,
    * a render capturing, check() and render() put the page in video mode
@@ -762,8 +870,18 @@ export interface KineticConfig {
   mode?: 'auto' | 'interactive' | 'video';
 }
 
-/** What config() reports: every option, with the loop as { hold } or false and the shutter as { angle, samples } or false. */
-export type KineticSettings = Required<Omit<KineticConfig, 'loop' | 'shutter' | 'finish'>> & { loop: false | { hold: number }; shutter: false | Required<ShutterOptions>; finish: false | FinishSettings };
+/** The encoder's fields, as render() takes them and config({ encode }) keeps them. */
+export interface EncodeOptions {
+  /** An avc1, av01 or vp09 codec string. */
+  codec?: string;
+  /** Bits per second. */
+  bitrate?: number;
+  audioCodec?: 'mp4a.40.2' | 'opus';
+  audioBitrate?: number;
+}
+
+/** What config() reports: every option, with the loop as { hold } or false, the shutter as { angle, samples } or false, and encode as the fields set or false. */
+export type KineticSettings = Required<Omit<KineticConfig, 'loop' | 'shutter' | 'finish' | 'encode'>> & { loop: false | { hold: number }; shutter: false | Required<ShutterOptions>; finish: false | FinishSettings; encode: false | EncodeOptions };
 
 /** A band for level(): 20-250 Hz, 250 Hz-2 kHz, 2-16 kHz, or the loudness (RMS). */
 export type LevelBand = 'bass' | 'mid' | 'treble' | 'all';
@@ -787,7 +905,7 @@ export interface RenderOptions {
   to?: number;
   /** An avc1, av01 or vp09 codec string; 'avc1.640028' by default. */
   codec?: string;
-  /** Bits per second; 8,000,000 by default. */
+  /** Bits per second; 16,000,000 by default. */
   bitrate?: number;
   /** The element to capture: the composition root by default, or a canvas. */
   source?: Element;
@@ -909,6 +1027,8 @@ export interface WildflowerKinetic {
   pause(): void;
   /** Sets options and returns the settings in force; with no argument, only returns them. An unknown option throws KN-100. */
   config(options?: KineticConfig): KineticSettings;
+  /** The view in force, the store's `viewmode`: 'render' while check() or render() runs or a render captures, 'live' otherwise. */
+  viewmode(): 'live' | 'render';
   /**
    * Gives the data-step clip with this id its behaviour (KN-100 for a bad
    * option, KN-120 and KN-121 for a script track). A step is a clip with an
@@ -969,6 +1089,19 @@ export interface WildflowerKinetic {
    * to after from; KN-121 for an unknown ease.
    */
   ramp(t: number, from: number, to: number, ease?: Ease): number;
+  /**
+   * ramp() for a move of `duration` seconds, started so that it arrives at
+   * `at`: the first moment it comes within 3% of its end (arrival()), so a
+   * move timed to a beat lands on it. KN-100 unless at is finite and
+   * duration above 0.
+   */
+  land(t: number, at: number, duration: number, ease?: Ease): number;
+  /**
+   * The seconds from a move's start until it arrives: the first moment its
+   * value comes within 3% of its end, on its way past for an ease that
+   * overshoots. A spring ease arrives at the same time whatever the duration.
+   */
+  arrival(ease: Ease | undefined, duration: number): number;
   /**
    * a + (b - a) * p for two numbers; for two colors, the mix interpolate
    * makes (per channel, or in oklch with `space`), as an rgb() or rgba()
@@ -1032,13 +1165,27 @@ export interface WildflowerKinetic {
    */
   camera(t: number, tracks?: CameraTracks | null, options?: CameraOptions): CameraStyle;
   /**
+   * The camera's numbers at t seconds for these tracks, shake added: the
+   * values camera() draws with, for depth(z, { detail, camera }).
+   */
+  cameraAt(t: number, tracks?: CameraTracks | null, options?: CameraOptions): CameraPosition;
+  /**
+   * A camera built from moves: the first entry is where it starts, each one
+   * after it a move. The result gives the camera's numbers at t, for
+   * camera(t, numbers), cameraAt() and depth(z, { camera }). KN-100 for a
+   * wrong field, key or value, naming the entry; KN-121 for an unknown ease.
+   */
+  moves(list: [CameraStart, ...CameraMove[]], options?: MovesOptions): (t: number) => CameraPosition;
+  /** The camera's numbers for an eye at `eye` looking at `at`, world points [x, y, z], z toward the viewer. */
+  look(eye: [number, number, number], at: [number, number, number], options?: MovesOptions): Pick<CameraPosition, 'x' | 'y' | 'z' | 'pan' | 'tilt'>;
+  /**
    * The style for a layer at depth z px inside the world (negative is
    * farther): translateZ(z px) scale((P - z) / P), so a full-frame layer
    * looks at rest as it would at z = 0. The scale is about the element's
    * own centre, so it holds only a layer centred on the world. KN-100 for a
    * z at or beyond the perspective, or one that is not finite.
    */
-  depth(z: number, options?: DepthOptions): { transform: string };
+  depth(z: number, options?: DepthOptions): { transform: string; zoom?: string };
   /**
    * Camera shake at t seconds (for an impact, the seconds since the hit),
    * from layered noise, the same everywhere for the same t, profile and
@@ -1348,15 +1495,21 @@ export interface WildflowerKinetic {
    * is a marker from an audio clip's data-markers (seconds into its file,
    * through the clip's start, media start and rate), else an element's id,
    * which is when that element ends; 'intro.start' is when it starts.
+   * 'beat 9' is tempo().at(9) and 'frame 170' that frame at the
+   * composition's rate (timeOf() only; data-start does not read them).
    * KN-100 for anything else.
    */
   timeOf(time: string | number): number;
+  /** The time of the frame nearest t, at the composition's frame rate. KN-100 unless t is finite. */
+  onFrame(t: number): number;
   /**
    * The beat grid of the audio clip with that id, or of the one clip with
    * data-tempo: from its data-tempo (beats per minute), data-downbeat (a bar's
    * start, in file seconds) and data-meter (beats to a bar, 4 by default).
    */
   tempo(id?: string): Tempo;
+  /** Solids in 2.5D, drawn as SVG paths: present when kinetic.25d.js is loaded after kinetic.wf.js. */
+  solids?: SolidsFactory;
 
   /**
    * The level of the audio clips' mix (or of one clip, by id) in a band at
@@ -1965,6 +2118,44 @@ export interface BeatFile {
   beats: Beat[];
 }
 
+export type Vec3 = [number, number, number];
+
+/** A shape for a solids stage: from solids.box(), solids.cage() or solids.faces(). */
+export interface SolidShape { readonly faces: ReadonlyArray<{ pts: Vec3[]; n: Vec3 }>; }
+
+export interface SolidsOptions {
+  /** Looks down -z from (0, 0, distance), +y up. focal: px at a distance of 1 (900); roll: degrees (0); near (0.2): faces are clipped there; fade (0): over this distance past near a face thins out; center: default the middle of the <svg>'s viewBox. */
+  camera?: { distance?: number; focal?: number; roll?: number; near?: number; fade?: number; center?: [number, number] };
+  /** tone = floor + gain * (n . dir)^gamma, times the shape's albedo, plus bounce * how far the face turns down, through the ramp (#rrggbb, dark to lit); across: the gradient over the face, [lit side, far side]. */
+  light?: { dir?: Vec3; ramp?: string[]; gamma?: number; floor?: number; gain?: number; bounce?: number; across?: [number, number] };
+  /** A fine edge, opacity base + edge * (1 - |n . toward the eye|)^power; false for none. */
+  rim?: false | { color?: string; width?: number; base?: number; edge?: number; power?: number };
+  /** Soft color where a light at dir reflects into the eye, clipped to the face; bleed spills past its edge, fainter past cap px wide. color makes the gradients; gradient and bleed.gradient name the page's own radialGradient. */
+  glows?: Array<{ dir: Vec3; color?: string; gradient?: string; size?: number; strength?: number; sharp?: number; bleed?: { size?: number; strength?: number; cap?: number; color?: string; gradient?: string } }>;
+}
+
+export interface SolidsStage {
+  add(name: string, shape: SolidShape, options?: { albedo?: number; glow?: number }): SolidsStage;
+  /** rotate: degrees about x, then y, then z; scale: a number or [x, y, z]; opacity 0 to 1. */
+  set(name: string, props: { rotate?: Vec3; scale?: number | Vec3; position?: Vec3; opacity?: number }): SolidsStage;
+  remove(name: string): SolidsStage;
+  /** Culled, clipped, sorted far to near (a tie by place on screen), shaded; the same SVG for the same values whatever was drawn before. */
+  draw(): SolidsStage;
+  /** A point's place in the frame. */
+  project(p: Vec3): [number, number];
+  dispose(): void;
+}
+
+export interface SolidsFactory {
+  (target: SVGElement, options?: SolidsOptions): SolidsStage;
+  /** size: the edge, or [x, y, z]. */
+  box(options: { size: number | Vec3 }): SolidShape;
+  /** A box's twelve edges as square beams `beam` thick. */
+  cage(options: { size: number | Vec3; beam: number }): SolidShape;
+  /** Faces of your own: 3 or more corners each, n the outward normal (from the first three corners when left out). */
+  faces(faces: Array<{ pts: Vec3[]; n?: Vec3 }>): SolidShape;
+}
+
 /** An audio clip's beat grid, from tempo(). */
 export interface Tempo {
   /** Beats per minute, as the clip declares. */
@@ -1977,6 +2168,8 @@ export interface Tempo {
   at(n: number): number;
   /** The beat at composition time t; Math.floor(of(t) / meter) is the bar. */
   of(t: number): number;
+  /** Beat n's time moved to its nearest frame, for a contact on the beat. */
+  frame(n: number): number;
 }
 
 /*

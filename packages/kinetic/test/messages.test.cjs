@@ -197,6 +197,8 @@ const ALLOWED = [
   'seek 30 frames twice and compare them',
   'sound on; click to turn it off',
   'sound off; click to turn it on',
+  'drawing the frame as rendered…',
+  'the paused frame as the render draws it, with the finish and the shutter (off when it plays)',
 ];
 
 describe('the built files', () => {

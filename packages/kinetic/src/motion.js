@@ -10,6 +10,8 @@
  *   spring(t, opts)                 a damped spring, closed form, seconds in
  *   settle(opts)                    the seconds a spring takes to stay within 2%
  *   ramp(t, from, to, ease)         t's progress from `from` to `to`, 0..1
+ *   land(t, at, duration, ease)     ramp() started so the move arrives at `at`
+ *   arrival(ease, duration)         the seconds from a move's start until it arrives
  *   mix(a, b, p, opts)              a number, a color or a text value between a and b
  *   stagger(i, n, opts)             item i of n's delay, by its distance from an origin
  *   sweep(i, n, p, opts)            item i of n's weight under a window that sweeps
@@ -781,6 +783,50 @@ export function ramp(t, from, to, how) {
   return fn.seconds ? fn(p, t - from) : fn(p);
 }
 
+// The seconds from a move's start until it arrives: the first moment its
+// value comes within 3% of its end, so an ease that overshoots arrives on its
+// way past. A spring ease reads seconds and runs on, so its duration does not
+// change when it arrives. Found by stepping, then halving the step between
+// the last sample out and the first one in, and kept per ease and duration,
+// since land() asks on every frame.
+const ARRIVE = 0.03, STEPS = 400;
+const arrivals = new Map();
+export function arrival(how, duration) {
+  if (!(Number.isFinite(duration) && duration > 0)) throw fail(CODES.BAD_CALL, 'arrival(ease, duration)', __DEV__ && 'duration is finite seconds above 0, not ' + show(duration));
+  const fn = how === undefined ? null : easeAt(how, 'arrival(ease, duration)');
+  if (!fn) return duration * (1 - ARRIVE);
+  const key = typeof how === 'string' ? how + ' ' + duration : null;
+  if (key && arrivals.has(key)) return arrivals.get(key);
+  let span = duration, at = (p) => fn(p);
+  if (fn.seconds) {
+    // Within 2% once settled; with no damping, inside its first swing.
+    const s = fn.spring, w0 = Math.sqrt(s.k / s.m), done = settleOf(s);
+    span = Number.isFinite(done) ? done : PI / w0;
+    at = (p) => (springAt(p * span, s) - s.from) / (s.to - s.from || 1);
+  }
+  const out = (p) => Math.abs(1 - at(p)) > ARRIVE;
+  let lo = 0, hi = 1;
+  for (let i = 1; i <= STEPS; i++) if (!out(i / STEPS)) { lo = (i - 1) / STEPS; hi = i / STEPS; break; }
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (out(mid)) lo = mid; else hi = mid; }
+  const sec = hi * span;
+  if (key) {
+    if (arrivals.size > 63) arrivals.clear();
+    arrivals.set(key, sec);
+  }
+  return sec;
+}
+
+// ramp() for a move of `duration` seconds started so that it arrives (see
+// arrival()) at `at`, such as a beat from tempo().at(n): a move timed by
+// where it lands rather than where it starts.
+export function land(t, at, duration, how) {
+  checkTime(t, 'land');
+  if (!Number.isFinite(at)) throw fail(CODES.BAD_CALL, 'land(t, at, duration)', __DEV__ && 'at is the finite seconds the move arrives at, not ' + show(at));
+  if (!(Number.isFinite(duration) && duration > 0)) throw fail(CODES.BAD_CALL, 'land(t, at, duration)', __DEV__ && 'duration is finite seconds above 0, not ' + show(duration));
+  const from = at - arrival(how === undefined ? 'linear' : how, duration);
+  return ramp(t, from, from + duration, how);
+}
+
 // a + (b - a) * p for two numbers. For two colors, in any form interpolate
 // takes, the same mix interpolate makes (per channel, or in oklch with
 // options.space), as an rgb() or rgba() string. For two text values with the
@@ -1407,34 +1453,52 @@ function eyeOf(o, who) {
 // undefined is at rest, and so is every key when tracks is not an object.
 // options.shake, one shake() result or an array of them, adds to x, y and
 // roll. A message names a key's track as camera(t, tracks).pan.
-const CAMERA_TRACKS = 'camera(t, tracks)';
+// The camera's numbers at t: each key's track read at t, at rest where left
+// out, with options.shake added to x, y and roll. `name` is the function a
+// message names: camera or cameraAt.
+function cameraNumbers(t, tracks, o, name) {
+  const who = name + '(t, tracks)';
+  // A moves() camera is a function of time. Given as it is, it read as no
+  // tracks, and the camera stayed at rest without a word.
+  if (typeof tracks == 'function') throw fail(CODES.BAD_CALL, who, __DEV__ && 'tracks is the camera at t; a moves() camera is called for it: pass CAM(t), not CAM');
+  const c = Object.assign({}, CAMERA);
+  for (const k of tracks && typeof tracks == 'object' ? Object.keys(tracks) : []) {
+    if (!own(CAMERA, k)) throw fail(CODES.BAD_CALL, name + '(t, { ' + k + ' })', __DEV__ && "no key '" + k + "'" + (own(INSTEAD, k) ? ' (use ' + INSTEAD[k] + ')' : '') + '; the keys are ' + Object.keys(CAMERA).join(', '));
+    const v = tracks[k];
+    if (v === undefined) continue;
+    if (isTrack(v)) {
+      if (v.unit !== undefined) throw fail(CODES.BAD_TRACK, place(who, k) + '.unit', __DEV__ && 'a camera track has no unit; x, y and z are px, pan, tilt and roll degrees, zoom a factor');
+      checkTrack(v, who, k);
+      if (__DEV__) lint(v, null, place(who, k));
+    }
+    // A text or colour track interpolates to a string, which fails here too.
+    c[k] = isTrack(v) ? interpolateAt(t, v.at, v.to, v, who, k) : v;
+    if (!Number.isFinite(c[k])) throw fail(CODES.BAD_TRACK, place(who, k), __DEV__ && 'a number or a track of numbers, not ' + show(v));
+  }
+  // 0.0001 at least, the smallest the transform writes (fmt) that is not 0.
+  if (!(c.zoom >= 1e-4)) throw fail(CODES.BAD_CALL, who + '.zoom < 0.0001', __DEV__ && 'zoom is 0.0001 or more, not ' + c.zoom + ' at t = ' + t);
+  const sh = o.shake;
+  if (sh != null) {
+    for (const s of Array.isArray(sh) ? sh : [sh]) {
+      if (!(s && Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.roll))) throw fail(CODES.BAD_CALL, name + '(t, tracks, { shake })', __DEV__ &&'shake is a shake() result or an array of them, not ' + show(s));
+      c.x += s.x; c.y += s.y; c.roll += s.roll;
+    }
+  }
+  return c;
+}
+
+// The camera's numbers at t, { x, y, z, pan, tilt, roll, zoom }, shake
+// included: what depth(z, { detail, camera }) takes.
+export function cameraAt(t, tracks, opts) {
+  checkTime(t, 'cameraAt');
+  return cameraNumbers(t, tracks, opts || {}, 'cameraAt');
+}
+
 export function camera(t, tracks, opts) {
   checkTime(t, 'camera');
   const o = opts || {};
   const P = eyeOf(o, 'camera(t, tracks, { perspective })');
-  const c = Object.assign({}, CAMERA);
-  for (const k of tracks && typeof tracks == 'object' ? Object.keys(tracks) : []) {
-    if (!own(CAMERA, k)) throw fail(CODES.BAD_CALL, 'camera(t, { ' + k + ' })', __DEV__ && "no key '" + k + "'" + (own(INSTEAD, k) ? ' (use ' + INSTEAD[k] + ')' : '') + '; the keys are ' + Object.keys(CAMERA).join(', '));
-    const v = tracks[k];
-    if (v === undefined) continue;
-    if (isTrack(v)) {
-      if (v.unit !== undefined) throw fail(CODES.BAD_TRACK, place(CAMERA_TRACKS, k) + '.unit', __DEV__ && 'a camera track has no unit; x, y and z are px, pan, tilt and roll degrees, zoom a factor');
-      checkTrack(v, CAMERA_TRACKS, k);
-      if (__DEV__) lint(v, null, place(CAMERA_TRACKS, k));
-    }
-    // A text or colour track interpolates to a string, which fails here too.
-    c[k] = isTrack(v) ? interpolateAt(t, v.at, v.to, v, CAMERA_TRACKS, k) : v;
-    if (!Number.isFinite(c[k])) throw fail(CODES.BAD_TRACK, place(CAMERA_TRACKS, k), __DEV__ && 'a number or a track of numbers, not ' + show(v));
-  }
-  // 0.0001 at least, the smallest the transform writes (fmt) that is not 0.
-  if (!(c.zoom >= 1e-4)) throw fail(CODES.BAD_CALL, 'camera(t, tracks).zoom < 0.0001', __DEV__ && 'zoom is 0.0001 or more, not ' + c.zoom + ' at t = ' + t);
-  const sh = o.shake;
-  if (sh != null) {
-    for (const s of Array.isArray(sh) ? sh : [sh]) {
-      if (!(s && Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.roll))) throw fail(CODES.BAD_CALL, 'camera(t, tracks, { shake })', __DEV__ &&'shake is a shake() result or an array of them, not ' + show(s));
-      c.x += s.x; c.y += s.y; c.roll += s.roll;
-    }
-  }
+  const c = cameraNumbers(t, tracks, o, 'camera');
   return {
     transform: 'perspective(' + fmt(P) + 'px) scale(' + fmt(c.zoom) + ') translateZ(' + fmt(P) + 'px) rotateZ(' + fmt(-c.roll) + 'deg) rotateX(' + fmt(c.tilt)
       + 'deg) rotateY(' + fmt(c.pan) + 'deg) translateZ(' + fmt(-P) + 'px) translate3d(' + fmt(-c.x) + 'px, ' + fmt(-c.y) + 'px, ' + fmt(c.z) + 'px)',
@@ -1446,11 +1510,39 @@ export function camera(t, tracks, opts) {
 // The style that puts a layer at depth z (negative is farther) inside a
 // camera's world, scaled by (P - z) / P so that a full-frame layer fills the
 // frame while the camera is at rest. fill: false leaves the scale out.
+//
+// options.detail k (above 1) draws the layer k times finer. Under a turned
+// camera (pan, tilt or roll) Chrome draws a layer at its CSS size and
+// stretches the bitmap by the perspective's magnification, so a push in
+// steps its edges; without a turn it draws at the magnified size. CSS zoom
+// lays the layer out k times larger, and the layer is moved, frame by frame,
+// to where each of its points lies on the same line from the eye as before,
+// k / f times as far (f the fill scale): the same picture from k times the
+// pixels, since a turn about the eye keeps those lines. The eye sits at
+// (x, y, P - z) in the world's units for the camera's x, y and z, which
+// options.camera gives (cameraAt()). Zoom multiplies the layer's own
+// lengths by k, so they are written over k, and grows its content from the
+// top-left corner, which -(k - 1) * 50% of the layer's own size brings back.
 export function depth(z, opts) {
   const o = opts || {};
   const P = eyeOf(o, 'depth(z, { perspective })');
   if (!(typeof z === 'number' && z < P && z > -Infinity)) throw fail(CODES.BAD_CALL, 'depth(z)', __DEV__ && 'z is a finite number below the perspective, ' + P + ', not ' + show(z));
-  return { transform: 'translateZ(' + fmt(z) + 'px)' + (o.fill === false ? '' : ' scale(' + fmt((P - z) / P) + ')') };
+  const k = o.detail === undefined ? 1 : o.detail;
+  if (!(typeof k === 'number' && k >= 1 && k <= 8)) throw fail(CODES.BAD_CALL, 'depth(z, { detail })', __DEV__ && 'detail is a number from 1 to 8, not ' + show(o.detail));
+  if (k === 1) return { transform: 'translateZ(' + fmt(z) + 'px)' + (o.fill === false ? '' : ' scale(' + fmt((P - z) / P) + ')') };
+  const cam = o.camera;
+  if (!(cam && Number.isFinite(cam.x) && Number.isFinite(cam.y) && Number.isFinite(cam.z))) throw fail(CODES.BAD_CALL, 'depth(z, { detail, camera })', __DEV__ && 'camera is the camera\'s numbers at this time, cameraAt(t, tracks), not ' + show(cam));
+  const eye = P - cam.z;
+  // A camera that has flown past the layer: left at its depth, behind the
+  // eye, where it is not drawn, as a plain layer is; the same keys as every
+  // other frame.
+  if (!(z < eye)) return { transform: 'translateZ(' + fmt(z / k) + 'px)', zoom: String(k) };
+  const s = k / (o.fill === false ? 1 : (P - z) / P);
+  const shift = fmt(-(k - 1) * 50) + '%';
+  return {
+    transform: 'translate(' + shift + ', ' + shift + ') translate3d(' + fmt(cam.x * (1 - s) / k) + 'px, ' + fmt(cam.y * (1 - s) / k) + 'px, ' + fmt((eye * (1 - s) + s * z) / k) + 'px)',
+    zoom: String(k),
+  };
 }
 
 // Each profile is [hz, x px, y px, roll deg, octaves, decay s], tuned by eye

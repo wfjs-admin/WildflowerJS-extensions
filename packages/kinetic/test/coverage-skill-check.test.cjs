@@ -47,6 +47,12 @@ const LESSON_SCRIPT = "wildflower.store('q', { state: { ok: false } });"
   + " wildflower.kinetic.step('two', { wait: 0.5, until: 'q.ok', script: { 'q.ok': { at: [0, 0.8], set: [false, true] } } });"
   + " wildflower.kinetic.scene('card', { keyframes: { look: { opacity: { at: [0, 0.5], to: [0, 1] } } } });";
 
+const slide = (left, pop) => page('<div data-composition-id="main" data-start="0" data-duration="2" data-fps="10" data-width="320" data-height="180" style="position:relative;width:320px;height:180px;background:#111">'
+  + '<div data-component="mover" data-start="0" data-duration="2" style="position:absolute;inset:0"><i id="slider" data-bind-style="box"></i>'
+  + (pop ? '<b id="pop" data-bind-style="flash"></b>' : '') + '</div></div>',
+  "wildflower.kinetic.scene('mover', { computed: { box() { return { position: 'absolute', top: '70px', width: '40px', height: '40px', background: '#eee', left: (" + left + ") + 'px' }; },"
+  + " flash() { return { position: 'absolute', left: '200px', top: '20px', width: '80px', height: '80px', background: '#fff', display: this.clipFrame === 10 ? 'block' : 'none' }; } } });");
+
 const PNG = (file) => fs.readFileSync(file).subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
 
 const PAGES = {
@@ -54,6 +60,33 @@ const PAGES = {
     + '<p data-start="0" data-duration="0.6" style="position:absolute;left:10px;top:10px;margin:0">Too quick for anyone to read this line</p>'
     + '<p data-start="0" data-duration="4" style="position:absolute;left:10px;top:80px;margin:0">Held <b>with</b> <i>its words</i></p>'
     + '<p data-start="1" data-duration="3" style="position:absolute;left:10px;top:130px;margin:0;opacity:0.5">Faint</p></div>', ''),
+  // The layout pass: a line in the margin, one past the edge, two titles
+  // over each other for 1 s and two for 0.2 s, gray text under 4.5:1 and
+  // the same gray at 50 px over 3:1, white over a ramp to light gray, and a
+  // line in the margin under an opaque card, which is not seen.
+  'layout.html': page('<style>p{position:absolute;margin:0;font:16px sans-serif;color:#111;white-space:nowrap}</style>'
+    + '<div data-composition-id="main" data-start="0" data-duration="3" data-fps="10" data-width="320" data-height="180" style="position:relative;width:320px;height:180px;background:#fff;overflow:hidden">'
+    + '<p style="left:6px;top:20px">In the margin</p>'
+    + '<p style="left:250px;top:20px">Off the edge</p>'
+    + '<p data-start="0" data-duration="1" style="left:40px;top:60px">First title</p>'
+    + '<p data-start="0" data-duration="1" style="left:60px;top:64px">Second title</p>'
+    + '<p data-start="1.5" data-duration="0.2" style="left:200px;top:60px">Brief one</p>'
+    + '<p data-start="1.5" data-duration="0.2" style="left:210px;top:62px">Brief two</p>'
+    + '<p style="left:40px;top:100px;color:#888">Small gray</p>'
+    + '<p style="left:140px;top:90px;color:#888;font-size:50px">Big</p>'
+    + '<p style="left:40px;top:140px;color:#fff;padding:0 4px;background:linear-gradient(90deg,#000,#ddd)">White on a ramp</p>'
+    + '<p style="left:200px;top:140px">Fine text</p>'
+    + '<p style="left:4px;top:160px">Under the card</p><i style="position:absolute;left:0;top:156px;width:150px;height:24px;background:#fff"></i></div>', ''),
+  // A ground that cuts from dark to light at 1 s: one snap in 2 s.
+  'pace.html': page('<div data-composition-id="main" data-start="0" data-duration="2" data-fps="10" data-width="320" data-height="180" style="width:320px;height:180px">'
+    + '<div data-component="ground" data-start="0" data-duration="2" style="position:absolute;inset:0" data-bind-style="fill"></div></div>',
+    "wildflower.kinetic.scene('ground', { computed: { fill() { return { background: this.clipFrame < 10 ? '#111111' : '#eeeeee' }; } } });"),
+  // A light square sliding on a dark ground for 2 s: on, a whole run that
+  // jumps back at the loop; round, a swing that closes; pop, the slide with
+  // a large square shown on frame 10 alone.
+  'seam-bad.html': slide('140 * this.local / 2'),
+  'seam-good.html': slide('140 + 60 * Math.sin(2 * Math.PI * this.local / 2)'),
+  'pop.html': slide('140 * this.local / 2', true),
   'good.html': page(ROOT_OPEN + '<div data-component="card" data-start="0"><h1 data-bind-style="look">Hi</h1></div></div>',
     "wildflower.kinetic.scene('card', { keyframes: { look: { opacity: { at: [0, 0.5], to: [0, 1] } } } });"),
   'random.html': page(ROOT_OPEN + '<div data-component="noisy" data-start="0"><b data-bind="n"></b></div></div>',
@@ -135,7 +168,7 @@ describe('the skill\'s check.cjs', () => {
   });
 
   it('the reading pass lists a block that leaves before it can be read, with its words and times; one held long enough, inline parts and all, and a faint one are not listed; exit 0; --no-reading skips it', () => {
-    const r = check('reading.html');
+    const r = check('reading.html', '--no-layout');
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /^reading: 1 block of text leaves before it can be read/m);
     assert.match(r.out, /^ {2}"Too quick for anyone to read this line" \(8 words\): 0\.6 s from 0\.0 s, needs 3\.5 s$/m);
@@ -143,6 +176,41 @@ describe('the skill\'s check.cjs', () => {
     const off = check('reading.html', '--no-reading');
     assert.equal(off.code, 0, off.out);
     assert.doesNotMatch(off.out, /^reading:/m);
+  });
+
+  it('the layout pass lists text outside the safe area at rest, text cut off, text over text for 0.2 s or more, and text under its contrast floor; text covered by a card and a brief crossing are not listed; exit 0; --no-layout skips it', () => {
+    const r = check('layout.html', '--no-reading');
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^layout: 5 things to look at/m);
+    assert.match(r.out, /^ {2}outside the safe area: "In the margin" 10 px past the 16 px left margin from 0\.0 s for 3\.0 s$/m);
+    assert.match(r.out, /^ {2}cut off: "Off the edge" \d+ px past the frame's right edge from 0\.0 s for 3\.0 s$/m);
+    assert.match(r.out, /^ {2}text over text: "First title" and "Second title", \d+ by \d+ px from 0\.0 s for 1\.0 s$/m);
+    assert.match(r.out, /^ {2}contrast: "Small gray" 3\.5:1 at [\d.]+ s \(16 px\), needs 4\.5:1$/m);
+    const ramp = /^ {2}contrast: "White on a ramp" ([\d.]+):1/m.exec(r.out);
+    assert.ok(ramp && Number(ramp[1]) < 2, 'white over the ramp is measured at its light end: ' + r.out);
+    assert.doesNotMatch(r.out, /Brief|"Big"|Fine text|Under the card/);
+    const off = check('layout.html', '--no-reading', '--no-layout');
+    assert.equal(off.code, 0, off.out);
+    assert.doesNotMatch(off.out, /^layout:/m);
+  });
+
+  it('--pace measures every frame against the dial: a cut from dark to light is one snap in 2 s, the brightness range spans it, and the misses are marked; exit 0', () => {
+    const r = check('pace.html', '--no-reading', '--pace', 'lively');
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^pace \(lively, 2\.0 s\):$/m);
+    assert.match(r.out, /^ {2}frames near still: 95%, target 35 to 60% {2}<< misses$/m);
+    assert.match(r.out, /^ {2}snaps a minute: 30, target 20 to 60$/m);
+    const range = Number((/brightness range: (\d+)/.exec(r.out) || [])[1]);
+    assert.ok(range > 200, r.out);
+    // Two flat grounds: no ramps of light, two tones.
+    assert.match(r.out, /^ {2}smooth ramps \(light and shading\): 0% of a frame, target 15% or more {2}<< misses$/m);
+    assert.match(r.out, /^ {2}tones in use: [12] a frame, target 14 or more {2}<< misses$/m);
+  });
+
+  it('--pace takes calm, lively or bold: exit 2 for anything else', () => {
+    const r = check('pace.html', '--pace', 'loud');
+    assert.equal(r.code, 2, r.out);
+    assert.match(r.out, /--pace takes calm, lively or bold/);
   });
 
   it('an option before the page is read as an option, not as the page', () => {
@@ -261,6 +329,58 @@ describe('the skill\'s check.cjs', () => {
     assert.equal(r.code, 0, r.out);
     assert.deepEqual(fs.readdirSync(path.join(dir, 'frames')).sort(), ['frame-0000-0.000s.png', 'frame-0005-0.500s.png', 'frame-0009-0.900s.png']);
     fs.rmSync(path.join(dir, 'frames'), { recursive: true, force: true });
+  });
+
+  it('--strip tiles the frames --frames saves into strip.png, two by two for four; without --frames, exit 2', () => {
+    const out = path.join(dir, 'strip');
+    const r = check('good.html', '--samples', '2', '--frames', '4', '--strip', '--out', out);
+    assert.equal(r.code, 0, r.out);
+    const file = path.join(out, 'strip.png');
+    assert.ok(PNG(file), r.out);
+    const png = fs.readFileSync(file);
+    // Two tiles across and down; a still of the root can be a pixel taller than 180.
+    assert.equal(png.readUInt32BE(16), 640);
+    assert.ok(Math.abs(png.readUInt32BE(20) - 360) <= 4, String(png.readUInt32BE(20)));
+    assert.ok(r.out.includes('strip: ' + file), r.out);
+    assert.equal(check('good.html', '--strip').code, 2);
+  });
+
+  it('--seam: a slide that jumps back at the loop is a jump, with where; a swing that closes is smooth; nothing fails the run', () => {
+    const bad = check('seam-bad.html', '--no-reading', '--seam');
+    assert.equal(bad.code, 0, bad.out);
+    assert.match(bad.out, /^seam: the last frame to frame 0 changes [\d.]+, the frames either side [\d.]+ and [\d.]+ {2}<< a jump at the loop at x \d+, y \d+, \d+ by \d+$/m);
+    const good = check('seam-good.html', '--no-reading', '--seam');
+    assert.equal(good.code, 0, good.out);
+    assert.match(good.out, /^seam: .*, smooth$/m);
+  });
+
+  it('--jumps finds a frame that pops in and out, both pairs, with where; a smooth slide has none; --isolate names the layer', () => {
+    const r = check('pop.html', '--no-reading', '--jumps', '--isolate', '#pop,#slider,.none');
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^jumps: 2 /m);
+    // The box holds every pixel that changed in the pair: the pop's square and the slide's step.
+    const m = /^ {2}frame 9 \(0\.900 s\) to 10: [\d.]+, usually [\d.]+ at x (\d+), y (\d+), (\d+) by (\d+)$/m.exec(r.out);
+    assert.ok(m, r.out);
+    const [x, y, w, h] = m.slice(1).map(Number);
+    assert.ok(x <= 200 && y <= 20 && x + w >= 280 && y + h >= 100, r.out);
+    assert.match(r.out, /^ {2}frame 10 \(1\.000 s\) to 11: /m);
+    assert.match(r.out, /^isolate: frame (9|10) \(\d\.\d{3} s\) to frame (10|11), a change of [\d.]+, with each hidden in turn:$/m);
+    const gone = (sel) => Number((new RegExp("^  '" + sel + "' \\(1\\): [\\d.]+, (-?\\d+)% of the change gone$", 'm').exec(r.out) || [])[1]);
+    assert.ok(gone('#pop') > 80, r.out);
+    assert.ok(gone('#slider') < 30, r.out);
+    assert.match(r.out, /^ {2}'\.none': matches nothing$/m);
+    const smooth = check('seam-bad.html', '--no-reading', '--jumps');
+    assert.match(smooth.out, /^jumps: none/m);
+  });
+
+  it('--diff prints the change between two frames and where; --isolate with no pair says so; bad values exit 2', () => {
+    const r = check('pop.html', '--no-reading', '--diff', '9,10');
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^diff: frame 9 \(0\.900 s\) to frame 10: [\d.]+ at x \d+, y \d+, \d+ by \d+$/m);
+    const none = check('seam-good.html', '--no-reading', '--isolate', '#slider');
+    assert.match(none.out, /^isolate: no pair to isolate/m);
+    for (const v of ['9', 'a,b', '1,2,3']) assert.equal(check('pop.html', '--diff', v).code, 2, v);
+    assert.equal(check('pop.html', '--isolate', ',').code, 2);
   });
 
   it('a value for --frames that is no list of times and no count: exit 2', () => {

@@ -38,7 +38,7 @@ File `index.html`:
     <title>Launch</title>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js" data-preview></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js" data-preview></script>
     <script defer src="scenes.js"></script>
     <style>
         html, body { margin: 0; background: #efe8db; }
@@ -207,7 +207,7 @@ File `index.html`:
     <title>A quarter turn</title>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js"></script>
     <script defer src="lesson.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -394,7 +394,8 @@ wildflower.component('quiz', {
     subscribe: ['dial', 'kinetic'],
     computed: {
         choices() {
-            const c = this.stores.dial.choice, off = this.stores.kinetic.mode === 'video';   // the video's script answers
+            const c = this.stores.dial.choice;
+            const off = this.stores.kinetic.mode === 'video' || this.stores.dial.right;   // the video's script answers, and the right answer is final
             return [0, 90, 180, 270].map((a) => ({ a, off, label: a + '°', cls: c !== a ? '' : a === 90 ? 'right' : 'wrong' }));
         },
         why() { return WHY[this.stores.dial.choice] || ''; },

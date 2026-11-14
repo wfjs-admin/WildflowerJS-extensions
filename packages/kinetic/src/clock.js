@@ -45,7 +45,7 @@ import { readFinish, reportFinish } from './finish.js';
 
 const DEFAULT_FPS = 30;
 const LOOP_HOLD = 3;          // seconds on the last frame before a loop starts again
-const OPTIONS = ['fps', 'channel', 'autoplay', 'preview', 'loop', 'fit', 'sound', 'shutter', 'finish', 'mode'];
+const OPTIONS = ['fps', 'channel', 'autoplay', 'preview', 'frameNotice', 'loop', 'fit', 'sound', 'shutter', 'finish', 'encode', 'mode'];
 const MODES = ['auto', 'interactive', 'video'];
 
 // A shutter, for render({ shutter }) and config({ shutter }): an angle in
@@ -62,6 +62,33 @@ export function readShutter(v, call) {
   const samples = o.samples === undefined ? 8 : o.samples;
   checkShutter(call + '({ shutter: { ', ' } })', angle, samples, 2, 64);
   return { angle, samples };
+}
+
+// The encoder's settings, checked: render({ codec, bitrate, audioCodec,
+// audioBitrate }) and config({ encode }) take the same fields, and `where`
+// names the one that failed, as render({ bitrate }) or
+// config({ encode: { bitrate } }).
+const AUDIO_CODECS = ['mp4a.40.2', 'opus'];
+export function checkEncoding(o, where) {
+  if (o.codec !== undefined && !(typeof o.codec === 'string' && /^(avc1|av01|vp09)\./.test(o.codec))) throw fail(CODES.BAD_CALL, where('codec'), __DEV__ && "an avc1, av01 or vp09 codec string, such as 'avc1.640028'");
+  if (o.bitrate !== undefined && !(typeof o.bitrate === 'number' && Number.isFinite(o.bitrate) && o.bitrate > 0)) throw fail(CODES.BAD_CALL, where('bitrate'), __DEV__ && 'bitrate is bits per second, a number above 0 such as 16e6, not ' + show(o.bitrate));
+  if (o.audioCodec !== undefined && !AUDIO_CODECS.includes(o.audioCodec)) throw fail(CODES.BAD_CALL, where('audioCodec'), __DEV__ && "audioCodec is 'mp4a.40.2' (AAC-LC, the default) or 'opus', not " + show(o.audioCodec));
+  if (o.audioBitrate !== undefined && !(typeof o.audioBitrate === 'number' && Number.isFinite(o.audioBitrate) && o.audioBitrate > 0)) throw fail(CODES.BAD_CALL, where('audioBitrate'), __DEV__ && 'audioBitrate is bits per second, a number above 0 such as 192000, not ' + show(o.audioBitrate));
+}
+
+// config({ encode }): the fields given, checked, or null for false, null or
+// none.
+const ENCODE = ['codec', 'bitrate', 'audioCodec', 'audioBitrate'];
+function readEncode(v) {
+  if (v == null || v === false) return null;
+  if (typeof v != 'object' || Array.isArray(v)) throw fail(CODES.BAD_CALL, 'config({ encode })', __DEV__ && 'encode is { codec, bitrate, audioCodec, audioBitrate }, any of them, or false or null, not ' + show(v));
+  const out = {};
+  for (const k in v) {
+    if (!ENCODE.includes(k)) throw fail(CODES.BAD_CALL, 'config({ encode: { ' + k + ' } })', __DEV__ && "'" + k + "' is not a field of encode; the fields are codec, bitrate, audioCodec and audioBitrate");
+    if (v[k] !== undefined) out[k] = v[k];
+  }
+  checkEncoding(out, (k) => 'config({ encode: { ' + k + ' } })');
+  return out;
 }
 
 // The time of the last frame before t: (t * fps - 1) / fps when t is on a
@@ -107,7 +134,8 @@ export function createClock(wf) {
   const w = self;
   defineRenderConfig(w);
   // loop: false, or the seconds a loop holds its last frame.
-  const settings = { fps: null, channel: 'event', autoplay: true, preview: null, loop: LOOP_HOLD, fit: null, sound: true, audio: null, shutter: null, finish: null, mode: 'auto', lesson: null };
+  // frameNotice: the bar's note before a render in a frame (preview.js).
+  const settings = { fps: null, channel: 'event', autoplay: true, preview: null, frameNotice: true, loop: LOOP_HOLD, fit: null, sound: true, audio: null, shutter: null, finish: null, encode: null, mode: 'auto', lesson: null };
   const beforeHooks = [];     // (time) => void, before the store write (guard.js)
   const writeHooks = [];      // (time) => void, inside the store write's batch (lesson.js: the steps and the scripts)
   const holdHooks = [];       // (time) => void, once the seek onto a play({ to }) hold has settled (lesson.js)
@@ -134,12 +162,12 @@ export function createClock(wf) {
   // (audio.js), so a computed that calls level() or spectrum() runs again
   // when they do. `shutter` is the angle of the render with a shutter that
   // is running (render.js), 0 otherwise, so a computed that calls smear()
-  // runs again when one starts and ends. `mode` and the step fields are
-  // lesson.js's.
+  // runs again when one starts and ends. `mode`, `viewmode` and the step
+  // fields are lesson.js's.
   const store = wf.store(STORE_NAME, {
     state: {
       time: 0, frame: 0, fps: DEFAULT_FPS, duration: 0, playing: false, levels: 0, shutter: 0,
-      mode: 'interactive', step: '', stepIndex: -1, stepCount: 0, stepStart: 0, stepLength: 0, waiting: false, canAdvance: true,
+      mode: 'interactive', viewmode: 'live', step: '', stepIndex: -1, stepCount: 0, stepStart: 0, stepLength: 0, waiting: false, canAdvance: true,
     },
   });
 
@@ -510,7 +538,7 @@ export function createClock(wf) {
   // Every option is checked, and the timeline's root found, before any is
   // applied, so a call that throws leaves the settings as they were.
   function config(opts) {
-    if (opts === undefined) return { fps: store.fps, channel: settings.channel, autoplay: settings.autoplay, preview: previewing(), loop: settings.loop === false ? false : { hold: settings.loop }, fit: settings.fit ? settings.fit.get() : false, sound: settings.sound, shutter: settings.shutter ? Object.assign({}, settings.shutter) : false, finish: settings.finish ? reportFinish(settings.finish) : false, mode: settings.mode };
+    if (opts === undefined) return { fps: store.fps, channel: settings.channel, autoplay: settings.autoplay, preview: previewing(), frameNotice: settings.frameNotice, loop: settings.loop === false ? false : { hold: settings.loop }, fit: settings.fit ? settings.fit.get() : false, sound: settings.sound, shutter: settings.shutter ? Object.assign({}, settings.shutter) : false, finish: settings.finish ? reportFinish(settings.finish) : false, encode: settings.encode ? Object.assign({}, settings.encode) : false, mode: settings.mode };
     if (!opts || typeof opts !== 'object') throw fail(CODES.BAD_CALL, 'config(options)', __DEV__ && 'options is an object');
     for (const k of Object.keys(opts)) {
       if (!OPTIONS.includes(k)) throw fail(CODES.BAD_CALL, 'config({ ' + k + ' })', __DEV__ && "'" + k + "' is not an option; the options are " + OPTIONS.join(', '));
@@ -521,14 +549,17 @@ export function createClock(wf) {
     const loop = opts.loop === undefined ? settings.loop : readLoop(opts.loop);
     const shutter = opts.shutter !== undefined ? readShutter(opts.shutter, 'config') : settings.shutter;
     const finish = opts.finish !== undefined ? readFinish(opts.finish, 'config') : settings.finish;
+    const encode = opts.encode !== undefined ? readEncode(opts.encode) : settings.encode;
     const timeline = opts.channel === 'timeline' && !duckTimeline ? timelineId() : null;
     settings.shutter = shutter;
     settings.finish = finish;
+    settings.encode = encode;
     if (opts.finish !== undefined && settings.finishLive) settings.finishLive.sync(finish);
     if (opts.fps !== undefined) settings.fps = opts.fps;
     if (opts.channel !== undefined) settings.channel = opts.channel;
     if (timeline) registerTimeline(timeline);
     if (opts.autoplay !== undefined) settings.autoplay = !!opts.autoplay;
+    if (opts.frameNotice !== undefined) settings.frameNotice = !!opts.frameNotice;
     settings.loop = loop;
     if (opts.sound !== undefined) { settings.sound = !!opts.sound; if (settings.audio) settings.audio.sync(); }
     if (opts.preview !== undefined && settings.preview) settings.preview.set(opts.preview);
@@ -559,6 +590,17 @@ export function createClock(wf) {
       } else if (hasRuntime() && !root.hasAttribute('data-no-timeline') && !duckTimeline) {
         warn(CODES.NO_TIMELINE, 'the HyperFrames runtime is on the page, and the composition root has no data-no-timeline and no registered timeline, so the renderer may wait for a timeline that never comes',
           "Add data-no-timeline to the root, or choose wildflower.kinetic.config({ channel: 'timeline' }).");
+      }
+      // Kinetic drives one composition. A second root beside the first is
+      // left half attached (its scenes are seeked, but it gets no size and
+      // no data-kinetic-ready, so a hide-until-ready rule hides it for
+      // good). One nested inside the first is the first's own.
+      const other = root && Array.from(document.querySelectorAll('[data-composition-id]'))
+        .find((el) => el !== root && !root.contains(el));
+      if (other) {
+        warn(CODES.SECOND_ROOT, 'the page has a second composition root, data-composition-id="' + other.getAttribute('data-composition-id') +
+          '", beside "' + root.getAttribute('data-composition-id') + '"; Kinetic drives the first alone, so the second gets no size and is never marked ready',
+          'Give each composition a page of its own and show it in an iframe, or nest the second inside the first.');
       }
     }
     if (settings.fit) settings.fit.sync();
@@ -672,10 +714,12 @@ export function createClock(wf) {
     // The audio layer (audio.js), which config({ sound }) drives.
     useAudio(a) { settings.audio = a; },
     soundOn: () => settings.sound,
-    // config({ shutter }) and config({ finish }), what render() uses when
-    // given none.
+    frameNotice: () => settings.frameNotice,
+    // config({ shutter }), config({ finish }) and config({ encode }), what
+    // render() uses when given none.
     shutter: () => settings.shutter,
     finish: () => settings.finish,
+    encode: () => settings.encode,
     // render()'s fps on the store, with the frame for time t at that fps in
     // the same change: the runtime's player sends no hf-seek for a seek to
     // the time it is already at, so no seek may follow to work the frame out.

@@ -544,8 +544,15 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     const r = await wf.kinetic.render({ download: false, bitrate: 6e6, from: 0, to: 0.5 });
     const { img } = await frameAt(r.blob, 0.32);
     const file = boxes(img.data, img.width);
+    // Chrome 157 alone places a copied canvas's drawing at the border box's
+    // corner, not the content box's (see CONTENT_BOX_PAINT in render.js), so
+    // there the bordered canvas is in the file a border's width up and left:
+    // 60,90,139,159 against the page's 70,90,148,168. 156 and 158 are right.
+    // Its presence is still checked; its place is not.
+    const chrome157 = /Chrome\/157\./.test(navigator.userAgent);
     for (const id of Object.keys(colours)) {
       expect(file[id], id + ' is in the file').toBeTruthy();
+      if (id === 'pad' && chrome157) continue;
       const off = file[id].map((v, k) => Math.abs(v - live[id][k]));
       expect(Math.max(...off), id + ': file ' + file[id] + ', page ' + live[id]).toBeLessThanOrEqual(3);
     }
@@ -855,6 +862,17 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(Math.abs(stats(both, 0, 0, 160, 90).mean - 64), 'with the shutter').toBeLessThan(8);
   });
 
+  it('the finish: a track changes the pass over the piece, read at each frame\'s time; a bloom faded out leaves the black beside a square black', async () => {
+    const { wf } = await load();
+    const dim = { grade: { exposure: { at: [0, 0.4], to: [0, -1] } } };
+    expect(Math.abs(stats(await finished(wf, grey, dim, 0.05), 0, 0, 160, 90).mean - 128), 'exposure 0 at the first frame').toBeLessThan(8);
+    expect(Math.abs(stats(await finished(wf, grey, dim, 0.45), 0, 0, 160, 90).mean - 64), 'exposure -1 at the last').toBeLessThan(8);
+    const square = (ctx) => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 160, 90); ctx.fillStyle = '#fff'; ctx.fillRect(70, 35, 20, 20); };
+    const fading = { bloom: { amount: { at: [0, 0.3], to: [1, 0] }, threshold: 0.5, radius: { at: [0, 0.3], to: [24, 12] } } };
+    expect(stats(await finished(wf, square, fading, 0.05), 96, 40, 6, 10).mean, 'bloom on at the first frame').toBeGreaterThan(12);
+    expect(stats(await finished(wf, square, fading, 0.45), 96, 40, 6, 10).mean, 'bloom gone at the last').toBeLessThan(6);
+  });
+
   it('the finish: grain spreads a flat frame about its level, holds still by default, differs from frame to frame at its fps, and is the same on every render', async () => {
     const { wf } = await load();
     const mean = (a, b) => { let d = 0; for (let i = 0; i < a.data.length; i += 4) d += Math.abs(a.data[i] - b.data[i]); return d / (a.data.length / 4); };
@@ -880,6 +898,14 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(stats(plain, 96, 40, 6, 10).mean, 'no bloom: black beside the square').toBeLessThan(6);
     expect(stats(lit, 96, 40, 6, 10).mean, 'bloom: light beside the square').toBeGreaterThan(12);
     expect(stats(lit, 78, 42, 4, 6).mean, 'bloom: the square stays white').toBeGreaterThan(240);
+    // The diffusion mixes a blur of the whole frame over it: light spreads
+    // beside the square, and unlike the bloom the square itself softens.
+    const soft = await finished(wf, square, { diffuse: { amount: 0.5, radius: 24 } });
+    expect(stats(soft, 96, 40, 6, 10).mean, 'diffuse: light beside the square').toBeGreaterThan(12);
+    expect(stats(soft, 78, 42, 4, 6).mean, 'diffuse: the square softens').toBeLessThan(230);
+    // Both at once: each chain has its own targets.
+    const both = await finished(wf, square, { bloom: { amount: 1, threshold: 0.5, radius: 24 }, diffuse: { amount: 0.5, radius: 24 } });
+    expect(stats(both, 96, 40, 6, 10).mean, 'bloom and diffuse: more light beside than diffuse alone').toBeGreaterThan(stats(soft, 96, 40, 6, 10).mean + 4);
     const corner = (ctx) => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 160, 90); ctx.fillStyle = '#fff'; ctx.fillRect(124, 62, 26, 22); };
     const sharp = await finished(wf, corner, null);
     const fringed = await finished(wf, corner, { aberration: 1 });
@@ -960,6 +986,41 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
       expect(kn(await captureWarnings(() => finished(wf, grey, { grain: 0.2 }))).length).toBe(0);
     } finally {
       for (const f of fx) f.dispose();
+    }
+  });
+
+  it("render.still(t), the bar's As Rendered: the frame at t through the shutter and the finish, as a canvas; the page and the clock as they were", async () => {
+    const { wf } = await load();
+    const name = uniqueName('scene');
+    // A white square on black, moving 400 px a second.
+    wf.kinetic.scene(name, { computed: { box() { return { position: 'absolute', top: '35px', width: '20px', height: '20px', background: '#fff', left: (20 + 400 * this.local) + 'px' }; } } });
+    const host = await mount(`<div data-composition-id="${uniqueName('rs')}" data-start="0" data-duration="0.5" data-width="160" data-height="90" data-fps="10" style="width:160px;height:90px;position:relative;overflow:hidden;background:#000"><div data-component="${name}" style="position:absolute;inset:0"><div data-bind-style="box"></div></div></div>`);
+    cleanup.push(host);
+    const root = host.querySelector('[data-composition-id]');
+    wf.kinetic.seek(0.2);
+    const read = (c) => c.getContext('2d').getImageData(0, 0, c.width, c.height);
+    try {
+      // Plain: the square at 100 to 120, black beside it.
+      const plain = await wf.kinetic.render.still(0.2);
+      expect([plain.width, plain.height]).toEqual([160, 90]);
+      expect(stats(read(plain), 104, 40, 10, 10).mean, 'the square').toBeGreaterThan(240);
+      expect(stats(read(plain), 126, 40, 6, 10).mean, 'black beside it').toBeLessThan(6);
+      // The bloom lights the black beside it, as in the file.
+      wf.kinetic.config({ finish: { bloom: { amount: 1, threshold: 0.5, radius: 24 } } });
+      const lit = await wf.kinetic.render.still(0.2);
+      expect(stats(read(lit), 126, 40, 6, 10).mean, 'bloom beside it').toBeGreaterThan(12);
+      // The shutter streaks it over the 20 px it moves in half a frame.
+      wf.kinetic.config({ finish: null, shutter: 180 });
+      const blurred = await wf.kinetic.render.still(0.2);
+      expect(stats(read(blurred), 124, 40, 10, 10).mean, 'the streak past its edge').toBeGreaterThan(40);
+      // The page as it was.
+      expect(root.parentElement).toBe(host);
+      expect(document.querySelector('[data-kinetic-render]')).toBeNull();
+      expect(root.hasAttribute('drawable')).toBe(false);
+      expect(wf.getStore('kinetic').time).toBe(0.2);
+      expect(wf.getStore('kinetic').shutter).toBe(0);
+    } finally {
+      wf.kinetic.config({ finish: null, shutter: 0 });
     }
   });
 

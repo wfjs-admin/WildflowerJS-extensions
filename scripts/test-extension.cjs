@@ -116,14 +116,39 @@ function testPackage(pkgName) {
         console.log(`== node: ${files.join(', ')}`);
         const run = spawnSync('node', ['--test', ...files], { cwd: ROOT, encoding: 'utf8' });
         const plain = stripAnsi((run.stdout || '') + (run.stderr || ''));
-        const pass = (plain.match(/# pass (\d+)/) || [])[1];
-        const fail = (plain.match(/# fail (\d+)/) || [])[1];
+        // The summary in either of node --test's reporters: TAP's "# pass 58"
+        // or the spec reporter's "ℹ pass 58".
+        const pass = (plain.match(/(?:#|ℹ) pass (\d+)/) || [])[1];
+        const fail = (plain.match(/(?:#|ℹ) fail (\d+)/) || [])[1];
         const summary = pass !== undefined ? `${pass} passed${fail && fail !== '0' ? ', ' + fail + ' failed' : ''}` : '(no summary)';
         const ok = run.status === 0;
         results.push({ label: 'node', ok, note: summary });
         console.log(`   ${ok ? 'PASS' : 'FAIL'}  ${summary}`);
         if (!ok) {
-            const fails = plain.split('\n').filter(l => /^not ok|Error|expected/.test(l.trim())).slice(0, 12);
+            // A failed test's line in either reporter ("not ok", or "✖"), and
+            // what it says. A passing test whose title holds "Error" is not one.
+            const fails = plain.split('\n').filter(l => /^not ok|^✖|^\s*(Error|AssertionError)|expected|actual/.test(l.trim()) && !/^✔/.test(l.trim())).slice(0, 20);
+            for (const l of fails) console.log('     ' + l.trim());
+            if (run.status === null) console.log('     the run was stopped: ' + (run.error ? run.error.message : 'signal ' + run.signal));
+        }
+    }
+
+    // The package's render suite, once: vitest.render.config.js, which runs
+    // in an installed Chrome (the headless shell has no WebCodecs). Nothing
+    // ran it before, so a failure there went unseen. On a machine with no
+    // installed Chrome the leg says it was skipped; it does not fail.
+    const renderConfig = path.join('packages', pkgName, 'vitest.render.config.js');
+    if (fs.existsSync(path.join(ROOT, renderConfig))) {
+        console.log(`== render: ${renderConfig}`);
+        const run = spawnSync('npx', ['vitest', 'run', '--config', renderConfig], { cwd: ROOT, encoding: 'utf8' });
+        const plain = stripAnsi((run.stdout || '') + (run.stderr || ''));
+        const noChrome = /distribution 'chrome' is not found|Executable doesn't exist/i.test(plain);
+        const summary = noChrome ? 'skipped: no installed Chrome' : (plain.match(/Tests\s+[^\n]+/) || ['(no summary)'])[0].trim();
+        const ok = noChrome || run.status === 0;
+        results.push({ label: 'render', ok, note: summary });
+        console.log(`   ${ok ? (noChrome ? 'SKIP' : 'PASS') : 'FAIL'}  ${summary}`);
+        if (!ok) {
+            const fails = plain.split('\n').filter(l => /[×✗]|FAIL|AssertionError|Error:/.test(l)).slice(0, 12);
             for (const l of fails) console.log('     ' + l.trim());
         }
     }
@@ -133,23 +158,26 @@ function testPackage(pkgName) {
     // reported, not failed. The bytes are compressed here, with the quality
     // build-rollup.cjs uses for its .br files, because build-extension.cjs
     // (the extensions repo's build) writes no .br beside the file.
-    const prod = (manifest.outputs || []).find((o) => o.minify);
-    if (prod) {
+    // Every production file the manifest lists, each against its own budget:
+    // the package's name, or the output's `budget` key for a second file.
+    for (const prod of (manifest.outputs || []).filter((o) => o.minify)) {
         const min = path.join(pkgDir, prod.file);
         const budgets = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension-budgets.json'), 'utf8'));
-        const budget = budgets[pkgName] && budgets[pkgName].br;
+        const key = prod.budget || pkgName;
+        const budget = budgets[key] && budgets[key].br;
         const brSize = () => zlib.brotliCompressSync(fs.readFileSync(min), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }).length;
+        const label = prod.budget ? 'size ' + key : 'size';
         if (!fs.existsSync(min)) {
-            results.push({ label: 'size', ok: false, note: `missing ${path.relative(ROOT, min)}; build it first` });
-            console.log(`== size: MISSING ${path.relative(ROOT, min)}`);
+            results.push({ label, ok: false, note: `missing ${path.relative(ROOT, min)}; build it first` });
+            console.log(`== ${label}: MISSING ${path.relative(ROOT, min)}`);
         } else if (!budget) {
-            console.log(`== size: ${brSize()} B brotli, no budget in extension-budgets.json`);
+            console.log(`== ${label}: ${brSize()} B brotli, no budget in extension-budgets.json`);
         } else {
             const size = brSize();
             const ok = size <= budget;
             const note = `${size} B brotli, budget ${budget} B` + (ok ? '' : ` (${size - budget} B over: raise its budget in extension-budgets.json with since and why, in the same change)`);
-            results.push({ label: 'size', ok, note });
-            console.log(`== size: ${ok ? 'PASS' : 'FAIL'}  ${note}`);
+            results.push({ label, ok, note });
+            console.log(`== ${label}: ${ok ? 'PASS' : 'FAIL'}  ${note}`);
             if (ok && budget - size > 200) console.log(`   ${budget - size} B under budget; the new floor is ${size}`);
         }
     }

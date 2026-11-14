@@ -120,11 +120,7 @@ its one thing instead of labeling it, chosen in the plan before any layout.
   rather than leaving for a new one.
 - **Still the message first.** An idea that makes the frame harder to read,
   or needs explaining, is the wrong idea: try another, or fall back to the
-  plain chart done well. (Ordinary Folk's School of Motion manifesto: one
-  subject in a large field, each scene turning into the next; Buck's IBM
-  watsonx film: one circle that multiplies is the brand idea; Pentagram's
-  Light/Years and Müller-Brockmann's *der Film*: the words themselves as the
-  image.)
+  plain chart done well.
 
 ## Composition
 
@@ -134,49 +130,45 @@ its one thing instead of labeling it, chosen in the plan before any layout.
   hierarchy. Headings inside a run of text take a heavier weight, not a new
   size. The rule counts the piece's own type (titles, captions, labels);
   text inside something the piece shows, an app's screen or a document, is
-  the subject and keeps its own sizes. (Vignelli, *The Vignelli Canon*,
-  p. 82; the Unigrid; posters by Müller-Brockmann and Hofmann, measured.)
+  the subject and keeps its own sizes. (Posters, measured.)
 - **Empty space in blocks.** Gather what is left empty into one or two
   large blocks, never scattered gaps. A frame of text keeps at least a third
   of its area bare, and a card that carries one idea at least two thirds; a
-  chart may fill its own area, with the text kept clear of it. (Measured
-  posters, 24 to 50% of a frame's dimension in one block; studio text frames
-  half to 80% bare; DIA's word cards over 98%.)
+  chart may fill its own area, with the text kept clear of it. (Measured posters, 24 to 50% of a frame's dimension in one block; studio text frames half to 80% bare; studio word cards over 98%.)
 - **One family.** One typeface family on a frame, hierarchy by size, weight
   and position. Two exceptions, each its own role: a quotation may be set in
   the house serif where `style.md` allows one, and code or a technical label
   in monospace. Numbers that change stay in the family with tabular figures
-  (`font-variant-numeric: tabular-nums`), so they hold their width. (Vignelli;
-  the Unigrid; Psycho and DIA's Squarespace film.)
+  (`font-variant-numeric: tabular-nums`), so they hold their width.
 - **Few left edges, each used twice.** Three or fewer x positions where
   text starts, each shared by at least two elements, the display element
   aside. Small text shares an edge with the large text it belongs to, and a
-  label hangs from the word it qualifies. (Müller-Brockmann's *der Film*;
-  Hofmann; Buck's IBM watsonx film, measured.)
+  label hangs from the word it qualifies. (Posters and a studio film, measured.)
 - **A grid from the type, and a fixed scaffold.** Positions and gaps are
   multiples of one unit made from the body's line height. What repeats
   across the piece (a title, a label, a band) sits at the same place in
-  every frame; only the content changes. (Vignelli's Unigrid; Studio Dumbar's
-  Amsterdam Sinfonietta; Marber.)
+  every frame; only the content changes.
 - **Mass off center, balanced.** The visual mass sits at least about 11% of
   the frame from its center, with the small text on the other side to
   balance it. A single centered title frame is the exception. (Six posters,
   measured.)
 - **Display words scaled to the frame.** On a title frame the display line
-  spans most of the safe area's width, not a default size. (*der Film*;
-  Hofmann's Rothko Chillida.)
+  spans most of the safe area's width, not a default size.
 - **Group by space.** The gap between groups is at least twice the gap
-  between lines. (Hofmann's Gubler Zurkinden; the Unigrid.)
+  between lines.
 - **One system of angles.** Everything is level, or everything near a
-  rotated element shares its angle. (Müller-Brockmann's Musica Viva.)
+  rotated element shares its angle.
+- **One grid at a time.** When one scene's divisions (panels, lines, a
+  cross) meet the next scene's, the first leaves before the second arrives,
+  or the two share their positions. Two grids that nearly align read as a
+  mistake.
 - **Short lines.** A line of reading text is about 35 to 40 characters, at
   most two lines of about 42 on screen at once; split longer text across
-  holds. (Ruder; Bringhurst; Netflix.)
+  holds. (Netflix.)
 - **Let the words be the image** when an idea in them can be: their length,
-  overlap or scale carrying the point before a picture is added. (*der
-  Film*; Pentagram's Light/Years.)
+  overlap or scale carrying the point before a picture is added.
 - **Type where the image is not.** Over a picture, text overlaps no part of
-  the subject and keeps its contrast. (Ferro; `style.md`.)
+  the subject and keeps its contrast. (`style.md`.)
 
 ## Color and value
 
@@ -184,12 +176,11 @@ its one thing instead of labeling it, chosen in the plan before any layout.
   60 to 90% of the frame, and it may be a full color, changing from beat to
   beat (`style.md`, "Color"); the accent that carries meaning stands apart
   from it and is small, under 1% of the frame as a mark and well under 10%
-  as a shape. (Measured posters;
-  Buck's watsonx; Vignelli: color "as a signifier, or as an identifier".)
+  as a shape. (Measured posters.)
 - **Layers by value, not hue.** In grayscale, the element meant to be in
-  front differs most from the ground. (Albers, *Interaction of Color*.)
-- **Judge color as rendered**, against its real neighbours in a still, not
-  from the stylesheet. (Albers.)
+  front differs most from the ground.
+- **Judge color as rendered**, against its real neighbors in a still, not
+  from the stylesheet.
 - **Contrast for video.** Text 4.5:1 against what is behind it, display type
   of 48 px and up 3:1; the masters' lower ratios on paper are no license on
   a screen. (WCAG 2.2.)
@@ -202,7 +193,7 @@ its one thing instead of labeling it, chosen in the plan before any layout.
   Subtitle Guidelines; Karamitroglou 1998). The check script's reading pass
   lists every block that falls short.
 - **The target.** A calm piece holds about twice the floor, and a headline
-  card at least 3 s, as finished studio work does (Buck, Illo, measured).
+  card at least 3 s, as finished studio work does (studio films, measured).
   A chart the viewer must take in holds longer than its words alone. One
   text state holds at most about 7 s, except the end card and a chart
   (Netflix); the cap wins over the target, and a line too long to read in
@@ -224,10 +215,9 @@ its one thing instead of labeling it, chosen in the plan before any layout.
 - **Move briefly, then hold.** An entrance takes under about 1 s and is
   followed by a hold at least three times as long. In a piece that carries
   text, the picture is near still for at least half the running time; a
-  piece with no text, or with a voice carrying it, may drift. (Illo and Buck,
-  measured; Ordinary Folk's School of Motion manifesto, measured.)
+  piece with no text, or with a voice carrying it, may drift. (Studio films, measured.)
 - **Calm, then a burst.** The rhythm alternates calm passages with short
-  bursts, never constant energy. (Ordinary Folk, measured.)
+  bursts, never constant energy. (A studio film, measured.)
 - **No flashing**: nothing flashes more than three times in a second.
   (WCAG 2.3.1.)
 
@@ -236,20 +226,17 @@ its one thing instead of labeling it, chosen in the plan before any layout.
 - **Every transition says something.** Write down what each one means, in a
   sentence: "this becomes that", "we go inside", "the year turns". A
   transition with no such sentence is decoration; a transformation of one
-  scene into the next says more than a cut. (Buck; Headspace; Ordinary Folk.)
+  scene into the next says more than a cut.
 - **One path for each element.** An element leaves along the direction it
-  came in, or stays; it does not wander. (Saul Bass, *Psycho*.)
+  came in, or stays; it does not wander.
 - **Mass settles.** A slight overshoot, then rest; the last frame of every
   move is still. Squash and stretch belongs to a brief that asks for it.
-  (Thomas and Johnston's principles; Mat Voyce.)
 - **Orient first.** The opening seconds establish the subject and where we
-  are, before any detail. (The *Game of Thrones* titles, as their makers
-  describe them.)
+  are, before any detail.
 - **Show only what the piece explains.** No move reveals an unfinished edge
   or an object the piece never names.
 - **Close where you opened**, and hold the end card at least 3 s: the last
-  content frame relates visibly to the first. (Microsoft Azure explainer and
-  Ordinary Folk, measured; Oddfellows' Figma film.)
+  content frame relates visibly to the first. (Studio films, measured.)
 
 ## Judging a frame
 

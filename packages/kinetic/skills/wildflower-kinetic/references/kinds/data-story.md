@@ -16,28 +16,26 @@ report's findings. Read with `../craft.md`.
 **What the chart says**
 - **The title states the finding** as a sentence with a verb ("Rides doubled
   from January to July"), not the topic ("Rides by month"): a viewer who
-  reads only the title knows the point. (Bylinskii and Borkin 2015; Knaflic,
-  *Storytelling with Data*.)
+  reads only the title knows the point. (Bylinskii and Borkin 2015.)
 - **The piece ends on its finding.** Once the chart is whole, the last scene
   states the one takeaway with its number and holds it, so the viewer leaves
   with the figure, not with the last thing drawn. Every mark is back in its
   own color by then; nothing stays in a set-aside tint.
 - **One chart answers one question.** A second question gets a second frame,
-  shown after. (Small multiples; the Reuters graphics desk's sequences.)
+  shown after. (Small multiples.)
 - **The chart fits the relationship the sentence states**: change over time,
   ranking, part of a whole, size, difference, distribution, correlation,
   flow, or place. Columns for size start at zero; a map only when the
-  geography is the point. (FT Visual Vocabulary.)
+  geography is the point.
 - **The comparison that matters is made by position or length**, the most
   accurately read, with the two things compared side by side; never by area
   or angle. (Cleveland and McGill 1986.)
 - **Line charts are wider than tall**, the main run of the line near 45°.
-  (Tufte, after Cleveland.)
+  (After Cleveland.)
 - **A mark's size changes in proportion to its number** (a lie factor of 1):
   bars from zero, a circle's area and never its radius, and no perspective,
   depth or 3D on a data mark. 3D is for a subject, never to tilt a chart. A
-  round cap is fine while the bar's length still runs to its value. (Tufte,
-  *The Visual Display of Quantitative Information*.)
+  round cap is fine while the bar's length still runs to its value.
 - **No second y-axis.** Two measures on different scales are two charts,
   stacked on one shared time axis. (Small multiples.)
 - **Chart only what a sentence cannot say.** A single number is a big
@@ -62,40 +60,34 @@ report's findings. Read with `../craft.md`.
   on paper a warm gray, and on a colored ground a tint of that ground
   (`style.md`, "Context in tints"). At most seven
   colors in any frame; a sequential scale runs light to dark, never a
-  rainbow. (Lisa Charlotte Muth and Datawrapper; Simon Scarr's Iraq
-  graphic.)
+  rainbow.
 - **Labels on the data**, beside the line or on the bar, with no legend
   unless the color scale is continuous. Words that name a series in the
-  title are set in that series' color. (Datawrapper; The Pudding.)
+  title are set in that series' color.
 - **The key number is written** as digits on or beside its mark, never left
-  to be read off an axis. (Bylinskii and Borkin; Scarr.)
+  to be read off an axis. (Bylinskii and Borkin.)
 - **One reference mark** for the threshold or event the message turns on,
-  labeled at the mark, and few annotations besides. (The Wall Street
-  Journal's measles chart; Ed Hawkins's climate spiral.)
+  labeled at the mark, and few annotations besides.
 - **An unfamiliar scale**, such as a log or an index, is explained on the
-  chart where it first appears. (John Burn-Murdoch.)
+  chart where it first appears.
 - **Ink that carries nothing goes; imagery that carries the subject stays.**
-  (Tufte; Bateman et al. 2010.)
+  (Bateman et al. 2010.)
 - **The data-ink pass**, on each chart's key frame before motion, element
   by element: gridlines (none, or a few light horizontal ones at major
   steps), the chart's box and its top and right axis lines (gone), ticks
   that repeat gridlines (gone), shadows, gradients and depth on data marks
   (gone), a legend (direct labels instead), color on anything that encodes
   nothing (gone). Mark each keep, remove or simplify, and make the one
-  change that most helps the reading first. (Tufte's data-ink ratio; the
-  MLJAR data-ink audit.)
+  change that most helps the reading first.
 
 **Time**
 - **The empty stage first.** A data scene opens on its axes, labels and
   reference lines, with no data, held long enough to read them. The data
   then plays briskly, and the finished chart holds at least as long as the
-  empty one; in Hawkins's spiral, 4 s empty, then 5 s finished. (Ed Hawkins,
-  measured.)
+  empty one; in a measured climate chart, 4 s empty, then 5 s finished.
 - **Animate only when the movement is the message**: growth, a race, a
-  before and after. Otherwise show the finished chart. (Burn-Murdoch; Archie
-  Tse, The New York Times.)
+  before and after. Otherwise show the finished chart.
 - **A number the viewer must take in holds**: once it has landed, the
   reading floor plus a second at least (`../craft.md`, "Time").
 - **Data per row**: when one page renders once per row, the imagery answers
-  the data (bar lengths, positions), not only the digits. (Giant Ant for
-  Strava; Illo.)
+  the data (bar lengths, positions), not only the digits.

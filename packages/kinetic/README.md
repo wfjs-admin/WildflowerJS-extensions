@@ -251,8 +251,10 @@ composition's DOM needs
 [HTML-in-Canvas](https://developer.chrome.com/blog/html-in-canvas-origin-trial)
 enabled (KN-201 otherwise), until Chrome 157 a setting: paste
 `chrome://flags/#canvas-draw-element` into the address bar, set the entry to
-Enabled and restart Chrome. WebCodecs needs a secure context, https or
-localhost (KN-200). Media from another origin needs CORS (KN-204).
+Enabled and restart Chrome. In Chrome 157 alone, a `<canvas>` in the
+composition that has a border or padding is drawn that much up and left in
+the file; Chrome 158 draws it where the page does. WebCodecs needs a secure
+context, https or localhost (KN-200). Media from another origin needs CORS (KN-204).
 `animatedImage()` needs `ImageDecoder`, which Safari lacks at the time of
 writing.
 

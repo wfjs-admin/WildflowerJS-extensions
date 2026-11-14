@@ -22,6 +22,7 @@ const build = process.env.EXT_BUILD || 'dev'
 const channel = process.env.WILDFLOWER_BROWSER_CHANNEL
 if (build !== 'dev' && build !== 'min') throw new Error(`EXT_BUILD must be dev or min (got ${build})`)
 const wfFile = build === 'min' ? '/packages/kinetic/dist/kinetic.wf.min.js' : '/packages/kinetic/dist/kinetic.wf.js'
+const solidsFile = build === 'min' ? '/packages/kinetic/dist/kinetic.25d.min.js' : '/packages/kinetic/dist/kinetic.25d.js'
 const core = process.env.WF_CORE || '/www/js/dist/wildflower.full.dev.js'
 
 const browser = process.env.WILDFLOWER_BROWSER || 'chromium'
@@ -36,6 +37,7 @@ export default defineConfig({
   define: {
     __KINETIC_EXT_BUILD__: JSON.stringify(build),
     __KINETIC_EXT_FILE__: JSON.stringify(wfFile),
+    __KINETIC_SOLIDS_FILE__: JSON.stringify(solidsFile),
     __KINETIC_EXT_CORE__: JSON.stringify(core),
   },
   test: {
@@ -48,7 +50,7 @@ export default defineConfig({
     include: ['packages/kinetic/test/**/*.test.js'],
     // render() needs the installed Chrome (WebCodecs, HTML in canvas):
     // vitest.render.config.js runs those.
-    exclude: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js'],
+    exclude: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js', 'packages/kinetic/test/still-end.test.js'],
     testTimeout: 30000,
     // On CI (two cores) the files run one at a time: the live-playback tests
     // time a playing <video> against the clock, and with every file's tab

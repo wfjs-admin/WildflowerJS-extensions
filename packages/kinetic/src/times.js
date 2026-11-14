@@ -19,13 +19,18 @@
  * grammar: a number, a name, or a name plus or minus seconds. A name is a
  * marker, else an element's id, which is when that element ends, as in
  * data-start; "voice.start" is when it starts, as data-start reads it.
+ * timeOf() alone also reads 'beat 9', tempo().at(9), and 'frame 170', that
+ * frame at the composition's rate; data-start does not, since HyperFrames
+ * reads data-start too.
  *
  * tempo(id) is the beat grid of the audio clip with that id, or with no id of
- * the one clip that has data-tempo: { bpm, beat, meter, at(n), of(t) }, with
- * beat the length of a beat in composition seconds, at(n) the composition
- * time of beat n (0 is the downbeat; fractions and negatives allowed) and
- * of(t) the beat at composition time t, so Math.floor(of(t) / meter) is the
- * bar.
+ * the one clip that has data-tempo: { bpm, beat, meter, at(n), of(t),
+ * frame(n) }, with beat the length of a beat in composition seconds, at(n)
+ * the composition time of beat n (0 is the downbeat; fractions and negatives
+ * allowed), of(t) the beat at composition time t, so Math.floor(of(t) /
+ * meter) is the bar, and frame(n) beat n's time moved to its nearest frame.
+ *
+ * onFrame(t) is the time of the frame nearest t.
  *
  * Both read the page on every call, so a clip's attributes or timing can
  * change between calls. KN-100 on every build for an expression that is not
@@ -33,9 +38,9 @@
  * attribute in the where.
  */
 
-import { CODES, fail, show } from './diagnostics.js';
+import { CODES, fail, show, checkTime } from './diagnostics.js';
 import { parseLiteral, literalProblem } from './literal.js';
-import { compositionRoot, parseStart, referenceOf, resolveTiming, mediaStartOf, rateOf, num } from './timing.js';
+import { compositionRoot, parseStart, referenceOf, resolveTiming, mediaStartOf, rateOf, num, frameRate } from './timing.js';
 
 const CLIPS = 'audio[data-start], video[data-start][data-has-audio="true"]';
 const parsed = new Map();    // a data-markers text -> its object, or false when it is no object of numbers
@@ -70,11 +75,17 @@ function markersOf(el) {
   return m;
 }
 
+// 'beat 9' or 'frame 170' in timeOf(): a beat of tempo() (fractions and
+// negatives as at() takes them) or a frame at the composition's rate.
+const MUSICAL = /^(beat|frame)\s+(-?(?:\d+(?:\.\d+)?|\.\d+))$/;
+
 export function timeOf(expr) {
   const at = 'timeOf(time)';
+  const m = typeof expr === 'string' ? MUSICAL.exec(expr.trim()) : null;
+  if (m) return Math.max(0, m[1] === 'beat' ? tempo().at(Number(m[2])) : Number(m[2]) / ownFps());
   // A number that is not finite is no time, though parseStart reads 'NaN' as a name.
   const e = typeof expr === 'string' || Number.isFinite(expr) ? parseStart(expr) : null;
-  if (!e) throw fail(CODES.BAD_CALL, at, __DEV__ && 'a time is a number of seconds, a name, or a name plus or minus seconds, as data-start takes, not ' + show(expr));
+  if (!e) throw fail(CODES.BAD_CALL, at, __DEV__ && "a time is a number of seconds, a name, or a name plus or minus seconds, as data-start takes, or 'beat 9' or 'frame 170', not " + show(expr));
   // Never before 0, where data-start clamps too.
   if (e.kind === 'absolute') return Math.max(0, e.value);
   const named = [];
@@ -110,5 +121,34 @@ export function tempo(id) {
   if (down == null) throw fail(CODES.BAD_CALL, where(el, 'data-downbeat'), __DEV__ && 'data-downbeat is the seconds into the file where a bar starts, needed with data-tempo');
   if (!(Number.isInteger(meter) && meter > 0)) throw fail(CODES.BAD_CALL, where(el, 'data-meter'), __DEV__ && 'data-meter is a whole number of beats to a bar, not ' + show(el.getAttribute('data-meter')));
   const beat = 60 / bpm / rateOf(el), zero = onClock(el, down);
-  return { bpm, beat, meter, at: (n) => zero + n * beat, of: (t) => (t - zero) / beat };
+  const at = (n) => zero + n * beat;
+  return { bpm, beat, meter, at, of: (t) => (t - zero) / beat, frame: (n) => onFrame(at(n)) };
+}
+
+// The composition's frame rate: the root's, as the clock resolves it, with
+// the clock's own (handed over by wf.js) when the root has none.
+let clockFps = () => 30;
+let setFps = () => 0;
+export function useFps(f, setting) { clockFps = f; if (setting) setFps = setting; }
+function fps() {
+  const root = compositionRoot(document);
+  return root ? frameRate(root, clockFps()) : clockFps();
+}
+// The rate 'frame N' counts in: the composition's own, which is the root's
+// data-fps, else config({ fps }), else 30. Never a render's: a render at
+// another rate samples the piece more finely and leaves its frames where
+// they are (the clock's store holds the render's rate while one runs, so
+// frame 15 of a 30 fps piece read as 0.25 s during render({ fps: 60 })).
+function ownFps() {
+  const root = compositionRoot(document);
+  const own = root ? Number(root.getAttribute('data-fps')) : 0;
+  return (own > 0 && own) || setFps() || 30;
+}
+
+// The time of the frame nearest t, for a contact or a clip's edge that must
+// fall on a frame, as a beat at 115 BPM (15.65 frames at 30) does not.
+export function onFrame(t) {
+  checkTime(t, 'onFrame', true);
+  const f = fps();
+  return Math.round(t * f) / f;
 }

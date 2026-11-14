@@ -27,8 +27,10 @@
  *                                                `follow` on a scene eases
  *                                                toward a store path by a
  *                                                spring (follow.js)
- *   wildflower.kinetic.config({ fps, channel, autoplay, preview, loop, fit, sound, shutter, mode })
+ *   wildflower.kinetic.config({ fps, channel, autoplay, preview, frameNotice, loop, fit, sound, shutter, mode })
  *                                                preview: the bar (preview.js);
+ *                                                frameNotice: its note before a
+ *                                                render in a frame;
  *                                                fit: the stage fitted to the
  *                                                window (fit.js); sound: the
  *                                                audio clips in the preview
@@ -41,10 +43,12 @@
  *                                                with the clock and waited
  *                                                for at readiness (footage.js)
  *   wildflower.kinetic.compat                    { hyperframes: the tested runtime }
- *   wildflower.kinetic.ease / interpolate / styleAt / spring / settle / ramp / mix /
+ *   wildflower.kinetic.ease / interpolate / styleAt / spring / settle / ramp / land / arrival / mix /
  *                      stagger / posterize / loop / hold / focus / random /
- *                      noise / noise2 / noise3 / camera / depth / shake / wiggle
+ *                      noise / noise2 / noise3 / camera / cameraAt / depth / shake / wiggle
  *                                                motion as pure functions (motion.js)
+ *   wildflower.kinetic.moves / look              a camera built from moves, and one that
+ *                                                looks at a point (moves.js)
  *   wildflower.kinetic.trails                    ghosts, a ribbon or dots behind a mover (trails.js)
  *   wildflower.kinetic.smear                     copies of an element styled inside
  *                                                the frame's shutter, for motion
@@ -89,6 +93,7 @@
  *   wildflower.kinetic.split / typewriter / scramble / format   text (text.js)
  *   wildflower.kinetic.textMetrics               a line measured, and fitted to a width (metrics.js)
  *   wildflower.kinetic.ticks / rank / captions / moment / srt / beat     data (data.js)
+ *   wildflower.kinetic.timeOf / tempo / onFrame  named, musical and frame times (times.js)
  *
  * The clock is the store `kinetic`: time, frame, fps, duration, playing,
  * levels, shutter, and interactive mode's mode, step, stepIndex, stepCount,
@@ -134,16 +139,17 @@ import { createLettering } from './lettering.js';
 import { createFinishLive } from './finish.js';
 import { createLottie } from './lottie.js';
 import { createImages } from './images.js';
-import { ease, interpolate, styleAt, spring, settle, ramp, mix, stagger, sweep, repeat, posterize, loop, hold, focus, random, noise, noise2, noise3, camera, depth, shake, wiggle, createSmear } from './motion.js';
+import { ease, interpolate, styleAt, spring, settle, ramp, land, arrival, mix, stagger, sweep, repeat, posterize, loop, hold, focus, random, noise, noise2, noise3, camera, cameraAt, depth, shake, wiggle, createSmear } from './motion.js';
 import { matchPaths, shape, trimPath, pathLength } from './paths.js';
 import { trails } from './trails.js';
 import { distribute, falloff } from './fields.js';
 import { split, typewriter, scramble, format } from './text.js';
 import { textMetrics, fontsMeasured, trackFonts } from './metrics.js';
 import { ticks, rank, captions, moment, srt, beat } from './data.js';
-import { timeOf, tempo } from './times.js';
+import { timeOf, tempo, onFrame, useFps } from './times.js';
+import { moves, look } from './moves.js';
 
-const VERSION = '0.1.2';
+const VERSION = '0.2.0';
 
 // Read while this script is the current one: a later call sees null.
 const PREVIEW_REQUESTED = previewRequested();
@@ -229,12 +235,13 @@ function install(wf) {
     play: lesson.play,
     pause: clock.pause,
     config: clock.config,
+    viewmode: () => clock.store.viewmode,
     step: lesson.step,
     next: lesson.next,
     back: lesson.back,
     go: lesson.go,
-    ease, interpolate, styleAt, spring, settle, ramp, mix, stagger, sweep, repeat, posterize, loop, hold,
-    focus, random, noise, noise2, noise3, camera, depth, shake, wiggle,
+    ease, interpolate, styleAt, spring, settle, ramp, land, arrival, mix, stagger, sweep, repeat, posterize, loop, hold,
+    focus, random, noise, noise2, noise3, camera, cameraAt, depth, shake, wiggle, moves, look,
     smear: createSmear(clock.store),
     trails,
     transition,
@@ -242,8 +249,9 @@ function install(wf) {
     distribute, falloff,
     split, typewriter, scramble, format, textMetrics,
     ticks, rank, captions, moment, srt, beat,
-    timeOf, tempo,
+    timeOf, tempo, onFrame,
   };
+  useFps(() => clock.store.fps, clock.fpsSetting);
   preview = createPreview(wf, api, clock, PREVIEW_REQUESTED, audio);
   // Under ?embed inside a frame, the parent drives the clock by postMessage.
   createEmbed(clock, api);

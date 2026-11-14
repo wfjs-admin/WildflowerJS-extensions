@@ -33,10 +33,10 @@ const ROOT = '<div id="stage" data-composition-id="fit" data-no-timeline data-st
 // A page in an iframe `width` pixels wide. Its first script records the
 // console and the order of two things: the wrapper arriving and the root
 // being marked ready. `runtime` puts the stand-in before or after Kinetic.
-async function page({ width = 320, preview = false, runtime = null, capture = false, css = '', head = '', before = '', after = '', tall = true } = {}) {
+async function page({ width = 320, height = 400, preview = false, runtime = null, capture = false, css = '', head = '', before = '', after = '', tall = true } = {}) {
   await load();
   const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;left:0;top:0;width:' + width + 'px;height:400px;border:0;opacity:0;pointer-events:none';
+  frame.style.cssText = 'position:fixed;left:0;top:0;width:' + width + 'px;height:' + height + 'px;border:0;opacity:0;pointer-events:none';
   frame.srcdoc = '<!doctype html><html' + head + '><head><style>'
     + 'body { margin: 7px; } #stage { position: relative; width: 640px; height: 360px; overflow: hidden; }'
     + ' #wash { position: absolute; inset: 0; } .tall { height: 2000px; }' + css + '</style>'
@@ -241,6 +241,36 @@ describe(`the stage's size from data-width and data-height (${BUILD} extension, 
     expect([root.offsetWidth, root.offsetHeight]).toEqual([640, 360]);
     expect(root.style.transform).toBe('scale(0.5)');
     expect(rect(root)).toEqual([320, 180]);
+  });
+
+  it('in a top-level window a stage taller than the window fits it by height, above the preview bar', async () => {
+    // A popup is a top-level window. The stage, 400 by 4000, is taller than any.
+    await load();
+    const html = '<!doctype html><html><head><style>body { margin: 0; }</style></head><body>'
+      + '<div id="stage" data-composition-id="tall" data-no-timeline data-start="0" data-duration="2" data-fps="10" data-width="400" data-height="4000"></div>'
+      + '<script src="' + new URL(CORE, location.href) + '"><\/script><script src="' + new URL(WF_FILE, location.href) + '" data-preview><\/script>'
+      + '<script>wildflower.kinetic.config({ autoplay: false });<\/script></body></html>';
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    const w = window.open(url, '_blank');
+    expect(w, 'the popup opened').toBeTruthy();
+    try {
+      for (let i = 0; i < 200 && !w.document.querySelector('[data-kinetic-preview]'); i++) await tick(20);
+      await tick(50);
+      expect(w.top).toBe(w);
+      const bar = w.document.querySelector('[data-kinetic-preview]');
+      expect(bar).toBeTruthy();
+      const r = w.document.getElementById('stage').getBoundingClientRect();
+      expect(Math.abs(r.height - (w.innerHeight - bar.offsetHeight)), r.height + ' in ' + w.innerHeight).toBeLessThan(1.5);
+      expect(r.bottom).toBeLessThanOrEqual(bar.getBoundingClientRect().top + 0.5);
+    } finally {
+      w.close();
+      URL.revokeObjectURL(url);
+    }
+  });
+
+  it('in a frame the page around it sizes it: the width decides, and a frame shorter than the stage does not shrink it', async () => {
+    const { root } = await page({ css: NO_SIZE + ' body { margin: 0; }', width: 640, height: 180, tall: false, after: '<script>wildflower.kinetic.config({ fit: true });<\/script>' });
+    expect(rect(root)).toEqual([640, 360]);
   });
 
   it('the pause mark stays over the center of the fitted root when the window, or only its container, is resized', async () => {

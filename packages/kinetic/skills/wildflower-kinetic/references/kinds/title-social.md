@@ -20,17 +20,15 @@ A short piece: a title sequence, an opener, a clip for a feed. Read with
   from 16:9.
 
 - **The words plainly first.** Type is set clean and readable before it is
-  treated as material (bent, broken, repeated); in DIA's Söhne film, about
-  1.2 s of the clean state comes first. (DIA, measured.)
+  treated as material (bent, broken, repeated); in a measured studio film,
+  about 1.2 s of the clean state comes first.
 - **One word alone is the strongest card**: a word or a short line in a
-  mostly empty frame. DIA's Squarespace cards leave over 98% of the frame
-  empty. (DIA, measured.)
+  mostly empty frame. A studio's word cards leave over 98% of the frame
+  empty. (Measured.)
 - **Legibility given up must be the meaning.** In the default style no
   reading text is distorted, cropped, overlapped or textured past the
-  contrast floor; that belongs to a brief that asks for it. (Kyle Cooper's
-  *Se7en* titles.)
+  contrast floor; that belongs to a brief that asks for it.
 - **One typeface carries it**, with weight and size doing the work a second
-  face would. (Saul Bass, *Psycho*; DIA.)
+  face would.
 - **Two values first, color as a signal.** Ink on the ground carries the
-  reading; color marks a change of place, time or subject. (Bass; Spielberg's
-  *Catch Me If You Can* titles by Kuntzel and Deygas.)
+  reading; color marks a change of place, time or subject.

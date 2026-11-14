@@ -21,6 +21,10 @@ the error-codes page. To finish the page, swap the two script lines for the
   also needs `data-no-timeline` on the root (KN-111). Kinetic gives the root
   its `data-width` and `data-height` where the CSS leaves the size at auto,
   so the CSS does not repeat them; a size the CSS sets stays.
+- One composition root a page. Kinetic drives the first; a second beside it
+  gets no size and is never marked ready (KN-155 in development). Several
+  pieces on one page each get a page of their own, shown in an iframe; a
+  root nested inside the first is the first's own.
 - Hold the stage until Kinetic marks it ready, or the first frame shows
   every clip at once, with Kinetic's cloak:
   `[data-composition-id]:not([data-kinetic-ready]) { visibility: hidden; }`.
@@ -193,7 +197,17 @@ down because the model does not supply them on its own.
 - With music, cuts and the main entrances land on the beat: `tempo().at(n)`
   from the audio clip's `data-tempo`, `data-downbeat`, and `data-meter` for
   steady music, or a beat file's `beats[].time`, the moments `beat()`
-  pulses on, for music whose tempo drifts.
+  pulses on, for music whose tempo drifts. A move is heard where it lands,
+  not where it starts, so time it by its landing: `land(t, tempo().at(n),
+  duration, ease)` starts it early enough to arrive on the beat, and
+  `arrival(ease, duration)` gives the lead for keyframes. A contact, such
+  as a strike or a landing, is its own accent and sits on the beat itself,
+  on a whole frame: `tempo().frame(n)` (patterns.md, "Cutting to a track").
+- With a move on every beat, each beat ends on a pose of its own. A
+  symmetrical shape looks unmoved after a turn of its symmetry (a disc's
+  half turn, a square's quarter turn), so two beats can end alike though the
+  move between them showed. Scrub the end of each beat and change the angle,
+  distance or tilt where two match.
 - A little anticipation before a big move: a few frames the other way,
   small, as a key before the move's first key.
 
@@ -625,3 +639,6 @@ frames came before it, which a render needs (see "Every frame the same").
   as the last particle set them. For hundreds, write
   `style` in one static pool from `seek(local)` and use no filters
   ("Bokeh particles with no filter").
+- A dashed or dotted circle takes a whole number of dashes: set the gap
+  from the radius, `gap = 2πr / n − dash`, on every frame the radius
+  changes. Otherwise, where the pattern wraps, one gap comes out short.

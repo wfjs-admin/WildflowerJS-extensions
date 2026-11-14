@@ -80,6 +80,26 @@ describe(`named and musical time (${BUILD} extension, ${CORE_TIER} core)`, () =>
     expect([h.beat, h.meter, h.at(0), h.at(2)]).toEqual([0.25, 3, 2.5, 3]);
   });
 
+  it("frames and beats: onFrame() at the root's rate, tempo().frame(n), and 'beat 9' and 'frame 170' in timeOf()", async () => {
+    const { wf, host } = await comp(`<audio id="music" src="${SONG}" data-start="0" data-tempo="115" data-downbeat="0.035"></audio>`);
+    const { onFrame, tempo, timeOf } = wf.kinetic;
+    expect(onFrame(1.01)).toBe(1);
+    expect(onFrame(1.02)).toBe(31 / 30);
+    const g = tempo();
+    // A beat at 115 BPM is 15.65 frames at 30; frame() moves it to the nearest one.
+    expect(g.frame(9)).toBe(Math.round(g.at(9) * 30) / 30);
+    expect(g.frame(9)).not.toBe(g.at(9));
+    expect(timeOf('beat 9')).toBe(g.at(9));
+    expect(timeOf(' beat 2.5 ')).toBe(g.at(2.5));
+    expect(timeOf('beat -1')).toBe(0);
+    expect(timeOf('frame 170')).toBe(170 / 30);
+    host.querySelector('[data-composition-id]').setAttribute('data-fps', '24');
+    expect(timeOf('frame 48')).toBe(2);
+    expect(onFrame(1.03)).toBe(25 / 24);
+    expectKN(() => onFrame(Infinity), 'KN-100', 'onFrame(t)');
+    expectKN(() => timeOf('beat nine'), 'KN-100', 'timeOf(time)', /'beat 9' or 'frame 170'/);
+  });
+
   it('KN-100: an expression that is not one, a name that is neither, bad markers; tempo() with none or two clips, an unknown id, or a bad attribute', async () => {
     const { wf, host } = await comp(`<audio id="a" src="${SONG}" data-start="0" data-markers='{"drop": 1}'></audio><audio id="b" src="${SONG}" data-start="0" data-tempo="90" data-downbeat="0"></audio>`);
     const { timeOf, tempo } = wf.kinetic;

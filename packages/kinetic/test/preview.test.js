@@ -149,7 +149,8 @@ describe(`preview bar frame steps (${BUILD} extension, ${CORE_TIER} core)`, () =
 // edge cannot be reached at all. On a narrow window the bar wraps onto a
 // second row instead; with room it stays one row.
 describe(`preview bar layout (${BUILD} extension, ${CORE_TIER} core)`, () => {
-  const controls = (bar) => Array.from(bar.children);
+  // The frame notice is a row of its own under the controls (tested below).
+  const controls = (bar) => Array.from(bar.children).filter((el) => !el.hasAttribute('data-kinetic-frame-notice'));
 
   it('keeps every control inside a 390 px window by wrapping', async () => {
     const { w, bar } = await framed('', 390);
@@ -349,6 +350,86 @@ describe(`preview bar Check button (${BUILD} extension, ${CORE_TIER} core)`, () 
     expect(readout()).toContain('x.mp4');
   });
 
+  it('a finished render says so until the next thing done on the bar, with no timer taking it down', async () => {
+    const { wf, bar, readout } = await barOver('pv11');
+    const held = holdTimers();
+    stub(wf.kinetic, 'render', async () => ({ name: 'x.mp4', frames: 63, ms: 41200 }));
+    const render = bar.querySelector('[data-action="render"]');
+    const check = bar.querySelector('[data-action="check"]');
+    render.click();
+    await tick(10);
+    expect(readout()).toBe('render complete: x.mp4, 63 frames in 41.2 s');
+    expect(held.filter((t) => t.ms === 4000), 'no timer takes the message down').toEqual([]);
+    expect(render.disabled).toBe(false);
+    expect(check.disabled).toBe(false);
+    // A frame step is the next thing done: the readout is the clock again.
+    bar.querySelector('[data-action="forward"]').click();
+    await tick(10);
+    expect(readout()).toMatch(/ \/ 6\.00 s {3}frame /);
+  });
+
+  it('As Rendered: only with a finish or a shutter; lays the frame from render.still() over the root, draws each step, coalesces steps made while it draws, and play turns it off', async () => {
+    const { wf, readout } = await barOver('pv12');
+    expect(bars()[0].querySelector('[data-action="asRendered"]'), 'no finish, no shutter: no button').toBeNull();
+    wf.kinetic.config({ preview: false });
+    wf.kinetic.config({ shutter: 180 });
+    restores.push(() => wf.kinetic.config({ shutter: 0 }));
+    wf.kinetic.config({ preview: true });
+    await tick(10);
+    const bar = bars()[0], button = bar.querySelector('[data-action="asRendered"]');
+    expect(button.textContent).toBe('As Rendered');
+    const root = document.querySelector('[data-composition-id="pv12"]');
+    const asked = [];
+    let release = null;
+    stub(wf.kinetic.render, 'still', (t) => {
+      asked.push(t);
+      const c = document.createElement('canvas'); c.width = 4; c.height = 4;
+      return release === null ? Promise.resolve(c) : new Promise((r) => { release = () => r(c); });
+    });
+    wf.kinetic.seek(1);
+    button.click();
+    await tick(10);
+    expect(asked).toEqual([1]);
+    expect(root.querySelectorAll('[data-kinetic-as-rendered]').length).toBe(1);
+    expect(button.style.background).not.toBe('rgb(42, 46, 58)');
+    // A step draws the new frame, in place of the old.
+    bar.querySelector('[data-action="forward"]').click();
+    await tick(10);
+    expect(asked[1]).toBeCloseTo(31 / 30, 9);
+    expect(root.querySelectorAll('[data-kinetic-as-rendered]').length).toBe(1);
+    // Three steps while one draws: that one, then one more for the last.
+    release = () => {};
+    for (let i = 0; i < 3; i++) bar.querySelector('[data-action="forward"]').click();
+    await tick(10);
+    expect(readout()).toBe('drawing the frame as rendered…');
+    release();
+    await tick(10);
+    release();
+    await tick(10);
+    expect(asked.length).toBe(4);
+    expect(asked[3]).toBeCloseTo(34 / 30, 9);
+    expect(root.querySelectorAll('[data-kinetic-as-rendered]').length).toBe(1);
+    // Play turns it off and takes the frame away.
+    bar.querySelector('[data-action="toggle"]').click();
+    await tick(10);
+    expect(root.querySelector('[data-kinetic-as-rendered]')).toBeNull();
+    expect(button.style.background).toBe('rgb(42, 46, 58)');
+    wf.kinetic.pause();
+  });
+
+  it('As Rendered names KN-201 on the bar when Chrome cannot draw the page, and turns off', async () => {
+    const { wf } = await load();
+    wf.kinetic.config({ finish: { bloom: 0.5 } });
+    restores.push(() => wf.kinetic.config({ finish: null }));
+    const { readout } = await barOver('pv13');
+    stub(wf.kinetic.render, 'still', () => Promise.reject(Object.assign(new Error('[KN-201] no drawElementImage'), { code: 'KN-201' })));
+    stub(console, 'error', () => {});
+    bars()[0].querySelector('[data-action="asRendered"]').click();
+    await tick(10);
+    expect(readout()).toBe('as rendered failed (KN-201): Chrome needs HTML-in-Canvas enabled');
+    expect(document.querySelector('[data-kinetic-as-rendered]')).toBeNull();
+  });
+
   it('does not run while a render is running, and a render does not start while it checks', async () => {
     const { wf, bar } = await barOver('pv9');
     const held = holdTimers();
@@ -370,9 +451,7 @@ describe(`preview bar Check button (${BUILD} extension, ${CORE_TIER} core)`, () 
 
     finishRender({ name: 'x.mp4', frames: 1, ms: 1 });
     await tick(10);
-    held.find((t) => t.ms === 4000).fn();     // the render's message expires
-    await tick(10);
-    expect(check.disabled).toBe(false);
+    expect(check.disabled).toBe(false);       // the finished render's message stays, and blocks nothing
 
     check.click();
     await tick(10);
@@ -385,5 +464,75 @@ describe(`preview bar Check button (${BUILD} extension, ${CORE_TIER} core)`, () 
     finishCheck({ ok: true, frames: 1, samples: 1 });
     await tick(10);
     expect(render.disabled).toBe(false);
+  });
+});
+
+// A page inside another site's frame may have its download blocked, which
+// the page learns only after the render. Each test is a page of its own in a
+// frame, since the notice shows once a page load.
+describe(`preview bar frame notice (${BUILD} extension, ${CORE_TIER} core)`, () => {
+  const TEXT = 'This page is running inside another site, which may block the download. To be sure, open the file in Chrome directly.';
+  async function framedRender(after = '', width) {
+    const { w, bar } = await framed(after, width);
+    let renders = 0;
+    w.wildflower.kinetic.render = async () => { renders++; return { name: 'x.mp4', frames: 1, ms: 1 }; };
+    const notice = bar.querySelector('[data-kinetic-frame-notice]');
+    return {
+      w, bar, notice,
+      renders: () => renders,
+      shown: () => w.getComputedStyle(notice).display !== 'none',
+      click: async (sel) => { bar.querySelector(sel).click(); await tick(20); },
+    };
+  }
+
+  it('Render in a frame shows the notice and starts no render; Close takes it down, and the next Render renders', async () => {
+    const f = await framedRender();
+    expect(f.w.self !== f.w.top, 'the page is in a frame').toBe(true);
+    expect(f.w.wildflower.kinetic.config().frameNotice).toBe(true);
+    expect(f.shown()).toBe(false);
+    await f.click('[data-action="render"]');
+    expect(f.shown()).toBe(true);
+    expect(f.notice.textContent).toContain(TEXT);
+    expect(f.renders()).toBe(0);
+    await f.click('[data-action="closeNotice"]');
+    expect(f.shown()).toBe(false);
+    expect(f.renders(), 'Close starts no render').toBe(0);
+    await f.click('[data-action="render"]');
+    expect(f.shown(), 'once a page load').toBe(false);
+    expect(f.renders()).toBe(1);
+  });
+
+  it('Render anyway takes the notice down and renders', async () => {
+    const f = await framedRender();
+    await f.click('[data-action="render"]');
+    expect(f.shown()).toBe(true);
+    await f.click('[data-action="renderAnyway"]');
+    expect(f.shown()).toBe(false);
+    expect(f.renders()).toBe(1);
+    expect(f.bar.querySelector('span').textContent).toContain('x.mp4');
+    await f.click('[data-action="render"]');
+    expect(f.renders()).toBe(2);
+    expect(f.shown()).toBe(false);
+  });
+
+  it('the notice and its buttons stay inside a 390 px window', async () => {
+    const f = await framedRender('', 390);
+    await f.click('[data-action="render"]');
+    expect(f.shown()).toBe(true);
+    const width = f.w.innerWidth, height = f.w.innerHeight;
+    for (const el of [f.notice, ...f.notice.children]) {
+      const r = el.getBoundingClientRect();
+      expect(r.left, el.outerHTML.slice(0, 60)).toBeGreaterThanOrEqual(0);
+      expect(r.right, el.outerHTML.slice(0, 60)).toBeLessThanOrEqual(width + 0.5);
+      expect(r.bottom, el.outerHTML.slice(0, 60)).toBeLessThanOrEqual(height + 0.5);
+    }
+  });
+
+  it('config({ frameNotice: false }) renders straight away in a frame, and reads back', async () => {
+    const f = await framedRender('<script>wildflower.kinetic.config({ frameNotice: false });<\/script>');
+    expect(f.w.wildflower.kinetic.config().frameNotice).toBe(false);
+    await f.click('[data-action="render"]');
+    expect(f.shown()).toBe(false);
+    expect(f.renders()).toBe(1);
   });
 });

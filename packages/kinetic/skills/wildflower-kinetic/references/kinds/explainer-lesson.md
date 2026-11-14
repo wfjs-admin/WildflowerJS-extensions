@@ -23,12 +23,11 @@ lesson the learner steps through. Read with `../craft.md`, and for a lesson
   (`style.md`, "The flow").
 - **The point reads with no input.** Nothing the message needs is hidden
   behind a control, a hover or a later step; the frame says it before the
-  learner touches anything. (Archie Tse, The New York Times.)
+  learner touches anything.
 - **Orient first.** The first step shows what the subject is and where we
-  are, before any detail. (The *Game of Thrones* titles' makers.)
+  are, before any detail.
 - **Rest outweighs motion.** An explainer that carries text is near still
-  for at least half its running time (`../craft.md`, "Time"). (Buck's
-  Microsoft Azure explainer, measured: 62%.)
+  for at least half its running time (`../craft.md`, "Time"). (A studio explainer, measured: 62%.)
 - **Moving text past 5 s can be paused**: the lesson band's Play and Pause
   covers it. (WCAG 2.2.2.)
 - **The model drives the motion.** Anything that behaves by a rule (a

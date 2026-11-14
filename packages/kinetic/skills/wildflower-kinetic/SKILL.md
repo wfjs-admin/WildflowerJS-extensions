@@ -55,7 +55,7 @@ scenes.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.1/dist/kinetic.wf.js" data-preview></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js" data-preview></script>
 <script defer src="scenes.js"></script>
 <style>[data-composition-id]:not([data-kinetic-ready]) { visibility: hidden; }</style>
 
@@ -151,7 +151,10 @@ the principles every piece follows, before step 1.
    composition's size and frame rate. Confirm the plan before writing the
    page. When the brief gives no style, or only part of one, read
    `references/style.md` along with the rules and take the rest of the look
-   from it.
+   from it. A showreel, a brand film, a sting or a title at the lively or
+   bold end of the expression dial reads `references/directions.md` instead
+   and takes its look and motion from one direction there, named in the
+   plan.
 2. Design each scene's key frame as a still that stands on its own: the
    frame a viewer sees once everything is in, which must say the scene's one
    thing with nothing moving. Build the page with the scenes at their key
@@ -208,6 +211,27 @@ the principles every piece follows, before step 1.
    holds about twice as long (`references/craft.md`, "Time"). The list does
    not fail the run. `--no-reading` skips it.
 
+   It also lists, under `layout:`, text outside the safe area while at
+   rest, text cut off at the frame's edge, text over other text, and text
+   under its contrast floor (4.5:1, 3:1 at 48 px and up), measured against
+   what is actually behind it. Fix each, unless it's on purpose (a grayed
+   hint, a phone mockup that bleeds off the frame). The list does not fail
+   the run. `--no-layout` skips it.
+
+   For a lively or bold piece, add `--pace lively` or `--pace bold`: it
+   measures how much of the piece is still, how often it snaps, its longest
+   hold and its range of brightness against the dial in
+   `references/directions.md`, and marks each miss. Fix each miss, or say in
+   the plan why it is right, before rendering.
+
+   For a loop, add `--seam`: it compares the last frame with frame 0 and
+   marks a jump there, with where it is. `--jumps` finds every pair of
+   frames that changes far more than the frames around it (a pop, or a cut).
+   To find which layer pops, add `--isolate '#bleed,#rims'`: it hides each
+   selector in turn over the worst pair (or the pair `--diff 16,17` names)
+   and prints how much of the change each one takes away. `--strip` with
+   `--frames` tiles the frames into one numbered `strip.png`.
+
    For a lesson, add `--lesson`: it enters each step in interactive mode
    with `go()`, waits for its hold (the last frame before the step's wait,
    so 0.467 s for a wait of 0.5 at 30 fps) and saves a still of it, and reports
@@ -242,7 +266,9 @@ the principles every piece follows, before step 1.
 ## Rules that matter most
 
 - When the brief says nothing about the look, follow `references/style.md`,
-  the default style; anything the user asks for wins over it.
+  the default style; anything the user asks for wins over it. A lively or
+  bold piece (a showreel, a sting, an opener) follows one direction from
+  `references/directions.md` in its place.
 - Every frame is a function of the time. Nothing in a scene reads
   `Date.now()`, `performance.now()` or `Math.random()`, starts a timer, a
   `fetch()` or a `requestAnimationFrame()`, or uses a CSS transition.

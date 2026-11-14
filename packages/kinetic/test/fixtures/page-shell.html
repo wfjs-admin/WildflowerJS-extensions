@@ -1,0 +1,7 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head><body>
+<!-- A page on this origin whose address can carry a search (?embed), for
+     tests that read the page's DOM: its markup, scripts included, is the
+     hash, written into the body as it is parsed. -->
+<script>document.write(decodeURIComponent(location.hash.slice(1)));</script>
+</body></html>

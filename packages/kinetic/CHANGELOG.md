@@ -4,7 +4,116 @@ Notable changes to Kinetic (`@wildflowerjs/kinetic`). The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-13
+
+### Added
+
+- The finish can change over a piece: any part but the grain's `fps` can be
+  a track `{ at, to, ease }`, read at each frame's time, and a track alone
+  is a field's amount. The page's overlays follow it on every seek.
+- The finish's `diffuse` field, `{ amount, radius }` (radius 16 px by
+  default): the whole frame blurred and mixed over it, the look of a
+  soft-focus filter. Like the bloom and the aberration, it is in the
+  rendered file only.
+- `moves(list)` builds a camera from a list of moves, each with an ease,
+  lag, overshoot, kick, swing, drift or steady-rate dolly. Moves add, so
+  they blend and each lands exactly. `look(eye, at)` points the camera at a
+  point, and a move can end on one.
+- `cameraAt(t, tracks, options)` gives the camera's numbers at t,
+  `{ x, y, z, pan, tilt, roll, zoom }`, with any shake added.
+- `depth(z, { detail, camera })` draws a layer 1 to 8 times finer, for a
+  layer the camera magnifies while it is turned, which Chrome otherwise
+  draws at its CSS size and stretches. `camera` takes the numbers from
+  `cameraAt()`, and the style gains `zoom`. A detail outside 1 to 8, or one
+  without the camera, is KN-100.
+- `land(t, at, duration, ease)`: `ramp()` started early enough that the
+  move arrives, within 3% of its end, at `at`, such as a beat.
+  `arrival(ease, duration)` gives the seconds from a move's start until it
+  arrives; for a spring ease it is the same at any duration.
+- `timeOf('beat 9')` is `tempo().at(9)`, and `timeOf('frame 170')` is that
+  frame at the composition's rate; `data-start` does not read either form.
+  `tempo().frame(n)` gives beat n's time on its nearest frame, and
+  `onFrame(t)` the time of the frame nearest t.
+- `kinetic.25d.js`, a second file loaded after `kinetic.wf.js`, adds
+  `solids(target, options)`: boxes, cages and faces of your own in 3D,
+  drawn into an SVG element as paths, culled, clipped at a near plane,
+  sorted far to near and shaded by one light through a ramp of colors,
+  with a rim and glows. The same values draw the same SVG whatever was
+  drawn before. Loaded without `kinetic.wf.js`, it prints KN-100 and does
+  nothing.
+- `config({ encode: { codec, bitrate, audioCodec, audioBitrate } })` sets
+  the encoder for every `render()` that does not give its own, the preview
+  bar's Render button included. A wrong field or value is KN-100.
+- `data-viewmode="render"` shows an element in the video alone, and
+  `data-viewmode="live"` only while the page plays. `viewmode()` and the
+  store's `viewmode` are `'render'` while `check()` or `render()` runs or a
+  render captures, and `'live'` otherwise.
+- On a piece with a finish or a shutter, the preview bar's As Rendered
+  button pauses and lays the frame over the stage as the render draws it,
+  with the shutter and the finish. A frame step or a scrub draws the new
+  frame, and playing, a render or a check turns it off. It needs what
+  Render needs.
+- In a page inside another site's frame, which may block the render's
+  download, the preview bar's Render button first says so, with Render
+  anyway and Close. `config({ frameNotice: false })` turns it off.
+- Development builds warn when a page has a second composition root beside
+  the first (KN-155). Kinetic drives the first alone.
+- The skill's `check.cjs` lists, under `layout:`, text outside the safe
+  area at rest, text cut off at the frame's edge, text over other text,
+  and text under its contrast floor, measured against what is behind it.
+  `--no-layout` skips it.
+- The skill's `check.cjs` takes `--pace calm`, `lively` or `bold`, which
+  measures the share of frames near still, the snaps a minute, the longest
+  stretch near still, the range of brightness, the share in smooth ramps
+  and the tones in use against the expression dial, and marks each miss.
+- The skill's `check.cjs` takes `--seam`, the change from the last frame to
+  frame 0, `--jumps`, every pair of frames that changes far more than the
+  frames around it, `--diff a,b`, the change between two frames, and
+  `--isolate`, which hides each selector in turn over that pair and prints
+  how much of the change it takes away. `--strip` tiles the frames
+  `--frames` saves into one numbered `strip.png`.
+- The skill's `check.cjs` takes `--view render`, `live` or `both`, the view
+  the whole check runs in.
+- The guide: expression directions for lively and bold pieces, with the
+  dial's targets, the laws a reel follows and two directions, Flat Field
+  and Flythrough; patterns for cutting to a track and for solids in 2.5D;
+  rules for moves timed by where they land, a move on every beat, and a
+  whole number of dashes on a circle; and the Plus Jakarta Sans and Lora
+  pairing.
+
+### Fixed
+
+- An `embed` page with sound keeps Kinetic's speaker button, the only
+  sound control an embed has.
+- Under `embed`, an element the page adds beside the composition after it
+  loads is hidden too.
+- With the fit on, a root the CSS sizes as a share of its container is
+  scaled by its laid-out width, and fills the space as one sized in pixels
+  does.
+- The guide's lesson questions turn their choices off once the right
+  answer is picked. A wrong pick after it showed its text while the
+  explanation played and turned Next off.
+
+### Changed
+
+- `render()`'s default video bitrate is 16 Mbps, up from 8 Mbps, which keeps
+  the detail of grain, glows and soft gradients.
+- The preview bar's Render button renders with `config({ shutter, finish,
+  encode })`, and once done reads "render complete", with the file's name,
+  its frames and the time it took, until the next thing done on the bar.
+- With the preview bar or `config({ fit: true })`, the stage also fits the
+  height of the window above the bar, so a portrait stage shows whole. In a
+  frame, the page around it sizes the stage as before.
+- `camera()` given a function for its tracks throws KN-100. A `moves()`
+  camera is called for its numbers, as `camera(t, CAM(t))`.
+- `config()` reports `frameNotice` and `encode` with the other settings.
+- The skill's `check.cjs` checks the render view by default, with
+  `data-viewmode="render"` elements shown and `data-viewmode="live"` ones
+  hidden; `--view live` checks the page as it plays.
+- The guide sends a showreel, a brand film, a sting or a title at the
+  lively or bold end of the dial to one of its directions in place of the
+  default style.
+- The guide's script tags load `@wildflowerjs/kinetic@0.2`.
 
 ## [0.1.2] - 2026-11-01
 

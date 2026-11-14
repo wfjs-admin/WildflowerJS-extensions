@@ -1,6 +1,8 @@
 /**
  * The preview bar: play, pause, a scrubber, frame steps, a readout, the count
- * of KN lines printed since load, and a Render button (render.js; Cancel
+ * of KN lines printed since load, an As Rendered button on a piece with a
+ * finish or a shutter (the paused frame from render.still() laid over the
+ * root), and a Render button (render.js; Cancel
  * while the render runs, aborting the render's signal) and a Check
  * button (check.js) in a plain tab, so a scene file previews with two script
  * tags and no CLI, and renders to an MP4 with no renderer. A WildflowerJS
@@ -30,6 +32,7 @@
 import { STORE_NAME } from './names.js';
 import { countLines, printError } from './diagnostics.js';
 import { isolated } from './fit.js';
+import { compositionRoot } from './timing.js';
 
 const COMPONENT = 'kinetic-preview';
 // Set once the bar's component is registered. wf.getComponent() returns
@@ -54,16 +57,43 @@ export function createPreview(wf, api, clock, requested, audio) {
   let verdictTimer = 0;
   // The running render's AbortController, which the bar's Cancel aborts.
   let cancel = null;
+  // As Rendered: the frame from render.still() laid over the root, and the
+  // root's position when it had to be made relative to hold it.
+  let still = null, moved = null;
+  // A frame drawing for it, and a step made meanwhile, drawn after. The
+  // still seeks the clock and puts it back, so a step or scrub made while it
+  // draws keeps its time in `target`, gone to once the frame is drawn.
+  // `drawnAt` is the time of the frame drawing or up.
+  let drawing = false, again = false, target = null, drawnAt = -1;
+  // The frame notice was answered, Render anyway or Close: it shows once a
+  // page load.
+  let noticed = false;
+
+  function clearStill() {
+    if (still) { still.remove(); still = null; }
+    if (moved) { moved.style.position = ''; moved = null; }
+  }
+  function showStill(canvas) {
+    clearStill();
+    const root = compositionRoot(document);
+    if (!root) return;
+    const W = Number(root.getAttribute('data-width')) || canvas.width, H = Number(root.getAttribute('data-height')) || canvas.height;
+    canvas.setAttribute('data-kinetic-as-rendered', '');
+    canvas.style.cssText = 'position:absolute;left:0;top:0;width:' + W + 'px;height:' + H + 'px;z-index:2147483646;pointer-events:none';
+    if (getComputedStyle(root).position === 'static') { root.style.position = 'relative'; moved = root; }
+    root.appendChild(canvas);
+    still = canvas;
+  }
 
   // One frame either way, on the frame grid: from the frame nearest the
-  // clock to the one before or after it, between 0 and the end.
-  function stepFrame(n) {
-    api.pause();
+  // clock (or the step still to be gone to) to the one before or after it,
+  // between 0 and the end.
+  function stepTo(n) {
     const { fps, duration } = clock.store;
     const rate = fps || 30;
-    let t = (Math.round(clock.now() * rate) + n) / rate;
+    let t = (Math.round((target !== null ? target : clock.now()) * rate) + n) / rate;
     if (duration > 0 && t > duration) t = duration;
-    api.seek(Math.max(0, t));
+    return Math.max(0, t);
   }
 
   function mount() {
@@ -77,11 +107,13 @@ export function createPreview(wf, api, clock, requested, audio) {
         // The object form: the array form only waits for the store, and
         // onStoreUpdate, which moves the scrubber, would never run.
         subscribe: { [STORE_NAME]: ['time', 'playing'] },
-        state: Object.assign({ pos: 0, rendering: '', running: false, verdict: '', checking: false }, __DEV__ ? { warnings: 0 } : null),
+        state: Object.assign({ pos: 0, rendering: '', running: false, verdict: '', checking: false, done: '', asOn: false, stilling: '', notice: false, drawing: false }, __DEV__ ? { warnings: 0 } : null),
         computed: Object.assign({
           readout() {
+            if (this.stilling) return this.stilling;
             if (this.rendering) return this.rendering;
             if (this.verdict) return this.verdict;
+            if (this.done) return this.done;
             const s = this.stores[STORE_NAME];
             return s.time.toFixed(2) + ' / ' + s.duration.toFixed(2) + ' s   frame ' + s.frame;
           },
@@ -94,30 +126,95 @@ export function createPreview(wf, api, clock, requested, audio) {
           // The Render button is Cancel while a render runs, and is off
           // while a check runs or a render's result is up.
           renderLabel() { return this.running ? 'Cancel' : 'Render'; },
-          renderOff() { return this.running ? false : !!this.rendering || this.checking; },
+          // Both are off while As Rendered draws a frame too.
+          renderOff() { return this.running ? false : !!this.rendering || this.checking || this.drawing; },
+          checkOff() { return this.busy || this.drawing; },
+          noticeStyle() { return { display: this.notice ? 'flex' : 'none' }; },
+          asStyle() { return { background: this.asOn ? '#4a5a8a' : '#2a2e3a' }; },
         }, __DEV__ ? {
           warningText() { return this.warnings + (this.warnings === 1 ? ' warning' : ' warnings'); },
           warningColor() { return this.warnings ? ALERT : QUIET; },
         } : null),
-        // Play is a gesture, so it also lets the sound start.
-        toggle() { if (this.stores[STORE_NAME].playing) api.pause(); else { audio.unlock(); api.play(); } },
-        back() { stepFrame(-1); },
-        forward() { stepFrame(1); },
-        scrub() { api.pause(); api.seek(Number(this.pos) || 0); },
+        // Play is a gesture, so it also lets the sound start. Playing ends As Rendered.
+        toggle() { this.done = ''; if (this.stores[STORE_NAME].playing) api.pause(); else { this.asOff(); audio.unlock(); api.play(); } },
+        back() { this.goTo(stepTo(-1)); },
+        forward() { this.goTo(stepTo(1)); },
+        scrub() { this.goTo(Number(this.pos) || 0); },
+        // A seek, or while a frame draws the time kept for after it. With
+        // As Rendered on, the seek's store update draws the new frame.
+        goTo(t) {
+          this.done = '';
+          if (drawing) { target = t; again = true; return; }
+          api.pause();
+          api.seek(t);
+        },
+        // As Rendered: the paused frame through render()'s own seeks, shutter
+        // and finish, laid over the stage, so the bloom, the aberration and
+        // the motion blur show as the file has them. Each step or scrub draws
+        // the new frame; a step made while one draws is drawn after it. Play,
+        // a render and a check turn it off.
+        asRendered() {
+          if (this.running || this.checking) return;
+          if (this.asOn) { this.asOff(); return; }
+          this.done = '';
+          api.pause();
+          this.asOn = true;
+          this.redraw();
+        },
+        asOff() { this.asOn = false; this.stilling = ''; clearStill(); },
+        async redraw() {
+          if (!this.asOn) return;
+          if (drawing) { again = true; return; }
+          drawing = this.drawing = true;
+          do {
+            again = false;
+            if (target !== null) { api.pause(); api.seek(target); target = null; }
+            this.stilling = 'drawing the frame as rendered…';
+            clearStill();
+            try {
+              const canvas = await api.render.still(drawnAt = clock.now());
+              // Not for a bar taken down meanwhile.
+              if (this.asOn && !again && bar) showStill(canvas);
+              this.stilling = '';
+            } catch (e) {
+              printError(e);
+              const code = e && e.code;
+              this.asOff();
+              this.stilling = 'as rendered failed' + (code === 'KN-201' ? ' (KN-201): Chrome needs HTML-in-Canvas enabled' : code ? ' (' + code + ')' : '');
+              setTimeout(() => { if (!this.asOn) this.stilling = ''; }, 10000);
+              break;
+            }
+          } while (again && this.asOn);
+          drawing = this.drawing = false;
+          // A step kept while a draw that was turned off finished.
+          if (target !== null) { api.seek(target); target = null; }
+        },
         // An MP4 of the whole composition, downloaded when it is done. The
         // readout shows the progress, then the result or the error's code.
         // While it runs the button is Cancel, which aborts the render's
         // signal; the page comes back as after a render.
         async render() {
           if (this.running) { if (cancel) cancel.abort(); return; }
-          if (this.rendering || this.checking) return;
+          if (this.rendering || this.checking || drawing) return;
+          // A page inside another site's frame may have its download
+          // blocked, which shows only once the render is done. The bar says
+          // so before it starts, once a page load; config({ frameNotice:
+          // false }) turns it off for a site whose frames allow downloads.
+          if (!noticed && clock.frameNotice() && framed()) { this.notice = true; return; }
+          this.notice = false;
+          this.done = '';
+          this.asOff();
           api.pause();
           this.rendering = 'rendering...';
           this.running = true;
           const own = cancel = new AbortController();
           try {
             const r = await api.render({ signal: own.signal, onProgress: (i, n) => { this.rendering = 'rendering ' + i + ' / ' + n; } });
-            this.rendering = r.name + ', ' + r.frames + ' frames in ' + (r.ms / 1000).toFixed(1) + ' s';
+            // A long render often ends with nobody watching, and the clock
+            // goes back to where it was, so the bar says it finished until
+            // the next thing done on it.
+            this.rendering = '';
+            this.done = 'render complete: ' + r.name + ', ' + r.frames + ' frames in ' + (r.ms / 1000).toFixed(1) + ' s';
           } catch (e) {
             // The two things a render most often lacks are named on the bar
             // itself; the message is on the console (in production, the code,
@@ -133,13 +230,17 @@ export function createPreview(wf, api, clock, requested, audio) {
           }
           if (cancel === own) cancel = null;
           this.running = false;
-          setTimeout(() => { this.rendering = ''; }, this.rendering.startsWith('render failed') ? 10000 : 4000);
+          if (this.rendering) setTimeout(() => { this.rendering = ''; }, this.rendering.startsWith('render failed') ? 10000 : 4000);
         },
+        renderAnyway() { noticed = true; this.notice = false; return this.render(); },
+        closeNotice() { noticed = true; this.notice = false; },
         // check({ samples: 30 }): the readout says "checking…" while it runs,
         // then the verdict for ten seconds: the frame and property of the
         // first frame that differed, and the report's reason when it has one.
         async check() {
-          if (this.rendering || this.checking) return;
+          if (this.rendering || this.checking || drawing) return;
+          this.done = '';
+          this.asOff();
           api.pause();
           this.checking = true;
           this.verdict = 'checking…';
@@ -157,7 +258,16 @@ export function createPreview(wf, api, clock, requested, audio) {
           clearTimeout(verdictTimer);
           verdictTimer = setTimeout(() => { this.verdict = ''; }, 10000);
         },
-        onStoreUpdate() { this.pos = this.stores[STORE_NAME].time; },
+        // Played from anywhere, the frame laid over the stage is out of date;
+        // sought from anywhere (the bar, page code, a lesson, an embed host),
+        // the frame it lands on is drawn.
+        onStoreUpdate() {
+          const s = this.stores[STORE_NAME];
+          this.pos = s.time;
+          if (!this.asOn) return;
+          if (s.playing) this.asOff();
+          else if (!drawing && Math.abs(s.time - drawnAt) > 1e-6) this.redraw();
+        },
       }, __DEV__ ? {
         // The number is written from a microtask, since a line can print in
         // the middle of a seek the framework is still flushing.
@@ -182,8 +292,16 @@ export function createPreview(wf, api, clock, requested, audio) {
       + (__DEV__
         ? '<button type="button" style="' + COUNT_STYLE + ';cursor:pointer" data-kinetic-warnings data-action="remind" data-bind="warningText" data-bind-style="{ color: warningColor }" title="KN lines printed since the page loaded; click for where to read them">0 warnings</button>'
         : '<span style="' + COUNT_STYLE + '" data-kinetic-warnings title="the production build prints no KN warnings; load the development build to see them">production build, no diagnostics</span>')
+      // As Rendered only for a piece the file finishes differently: a finish or a shutter.
+      + (clock.finish() || clock.shutter() ? '<button type="button" style="' + BUTTON_STYLE + '" data-action="asRendered" data-bind-style="asStyle" data-bind-attr="{ disabled: busy }" title="the paused frame as the render draws it, with the finish and the shutter (off when it plays)">As Rendered</button>' : '')
       + '<button type="button" style="' + BUTTON_STYLE + '" data-action="render" data-bind="renderLabel" data-bind-attr="{ disabled: renderOff }" title="an MP4 of the composition, with WebCodecs">Render</button>'
-      + '<button type="button" style="' + BUTTON_STYLE + '" data-action="check" data-bind-attr="{ disabled: busy }" title="seek 30 frames twice and compare them">Check</button>';
+      + '<button type="button" style="' + BUTTON_STYLE + '" data-action="check" data-bind-attr="{ disabled: checkOff }" title="seek 30 frames twice and compare them">Check</button>'
+      // The frame notice, on a row of its own under the controls.
+      + '<div data-kinetic-frame-notice data-bind-style="noticeStyle" style="display:none;flex:1 0 100%;flex-wrap:wrap;align-items:center;gap:6px 8px;color:' + ALERT + '">'
+      + '<span>This page is running inside another site, which may block the download. To be sure, open the file in Chrome directly.</span>'
+      + '<button type="button" style="' + BUTTON_STYLE + '" data-action="renderAnyway">Render anyway</button>'
+      + '<button type="button" style="' + BUTTON_STYLE + '" data-action="closeNotice">Close</button>'
+      + '</div>';
     document.body.appendChild(bar);
     wf.scan(bar);
     sound();
@@ -214,6 +332,8 @@ export function createPreview(wf, api, clock, requested, audio) {
 
   function unmount() {
     if (!bar) return;
+    // The frame laid over the stage goes with the bar.
+    clearStill();
     bar.remove();
     bar = null;
   }
@@ -230,6 +350,12 @@ export function createPreview(wf, api, clock, requested, audio) {
     element: () => bar,
     sound,
   };
+}
+
+// Whether the page runs inside a frame. A frame that hides its parent
+// throws on the read, and is a frame too.
+function framed() {
+  try { return self !== self.top; } catch (_) { return true; }
 }
 
 // Whether the page asked for the bar before any config() call. Not keyed
