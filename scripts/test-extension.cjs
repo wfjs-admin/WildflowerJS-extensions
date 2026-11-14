@@ -67,6 +67,23 @@ const coreDir = opt('--core-dir') || path.join('www', 'js', 'dist');
 const coreFile = (tier, build) => (tier === 'core' ? `wildflower.${build}.js` : `wildflower.${tier}.${build}.js`);
 const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, ''); // eslint-disable-line no-control-regex
 
+// What a failed vitest leg says about each failure: the test's FAIL line in
+// the report's failed-tests section and the lines under it (the error, the
+// expected and received values, the place in the file), so a failure that
+// only another machine shows can be read from its log.
+function failureDetail(plain, cap = 160) {
+    const lines = plain.split('\n');
+    const out = [];
+    for (let i = 0; i < lines.length && out.length < cap; i++) {
+        if (!/^\s*FAIL\s/.test(lines[i])) continue;
+        for (let j = i; j < Math.min(lines.length, i + 28) && out.length < cap; j++) {
+            if (j > i && /^\s*FAIL\s|^⎯+/.test(lines[j])) break;
+            if (lines[j].trim()) out.push(lines[j].replace(/\s+$/, ''));
+        }
+    }
+    return out;
+}
+
 function testPackage(pkgName) {
     const pkgDir = path.join(ROOT, 'packages', pkgName);
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
@@ -102,8 +119,9 @@ function testPackage(pkgName) {
             results.push({ label, ok, note: summary });
             console.log(`   ${ok ? 'PASS' : 'FAIL'}  ${summary}`);
             if (!ok) {
-                const fails = plain.split('\n').filter(l => /[×✗]|FAIL|AssertionError|Error:/.test(l)).slice(0, 12);
+                const fails = plain.split('\n').filter(l => /[×✗]/.test(l)).slice(0, 20);
                 for (const l of fails) console.log('     ' + l.trim());
+                for (const l of failureDetail(plain)) console.log('     ' + l);
             }
         }
     }
@@ -129,18 +147,28 @@ function testPackage(pkgName) {
             // what it says. A passing test whose title holds "Error" is not one.
             const fails = plain.split('\n').filter(l => /^not ok|^✖|^\s*(Error|AssertionError)|expected|actual/.test(l.trim()) && !/^✔/.test(l.trim())).slice(0, 20);
             for (const l of fails) console.log('     ' + l.trim());
+            // The spec reporter's closing section, each failed test with its error in full.
+            const all = plain.split('\n');
+            const at = all.findIndex(l => /failing tests:/.test(l));
+            if (at >= 0) for (const l of all.slice(at, at + 120)) if (l.trim()) console.log('     ' + l.replace(/\s+$/, ''));
             if (run.status === null) console.log('     the run was stopped: ' + (run.error ? run.error.message : 'signal ' + run.signal));
         }
     }
 
     // The package's render suite, once: vitest.render.config.js, which runs
-    // in an installed Chrome (the headless shell has no WebCodecs). Nothing
-    // ran it before, so a failure there went unseen. On a machine with no
-    // installed Chrome the leg says it was skipped; it does not fail.
+    // in an installed Chrome (the headless shell has no WebCodecs), against
+    // the full tier's development build from the same core directory as the
+    // legs above. On a machine with no installed Chrome the leg says it was
+    // skipped; it does not fail.
     const renderConfig = path.join('packages', pkgName, 'vitest.render.config.js');
     if (fs.existsSync(path.join(ROOT, renderConfig))) {
-        console.log(`== render: ${renderConfig}`);
-        const run = spawnSync('npx', ['vitest', 'run', '--config', renderConfig], { cwd: ROOT, encoding: 'utf8' });
+        const renderCore = path.join(coreDir, coreFile('full', 'dev'));
+        console.log(`== render: ${renderConfig}, core ${renderCore}`);
+        const run = spawnSync('npx', ['vitest', 'run', '--config', renderConfig], {
+            cwd: ROOT,
+            env: { ...process.env, EXT_BUILD: 'dev', WF_CORE: '/' + renderCore.split(path.sep).join('/') },
+            encoding: 'utf8',
+        });
         const plain = stripAnsi((run.stdout || '') + (run.stderr || ''));
         const noChrome = /distribution 'chrome' is not found|Executable doesn't exist/i.test(plain);
         const summary = noChrome ? 'skipped: no installed Chrome' : (plain.match(/Tests\s+[^\n]+/) || ['(no summary)'])[0].trim();
@@ -148,8 +176,9 @@ function testPackage(pkgName) {
         results.push({ label: 'render', ok, note: summary });
         console.log(`   ${ok ? (noChrome ? 'SKIP' : 'PASS') : 'FAIL'}  ${summary}`);
         if (!ok) {
-            const fails = plain.split('\n').filter(l => /[×✗]|FAIL|AssertionError|Error:/.test(l)).slice(0, 12);
+            const fails = plain.split('\n').filter(l => /[×✗]/.test(l)).slice(0, 20);
             for (const l of fails) console.log('     ' + l.trim());
+            for (const l of failureDetail(plain)) console.log('     ' + l);
         }
     }
 

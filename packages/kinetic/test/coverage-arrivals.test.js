@@ -8,7 +8,7 @@
  * settle out of order.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { load, mount, tick, dispatchSeek, uniqueName, BUILD, CORE_TIER } from './helpers.js';
+import { load, mount, tick, dispatchSeek, uniqueName, coreOlderThan, BUILD, CORE_TIER } from './helpers.js';
 
 const cleanup = [];
 const scenesToDrop = [];
@@ -100,7 +100,7 @@ describe(`scene arrivals (${BUILD} extension, ${CORE_TIER} core)`, () => {
   // shows the host's timing.
   it('a binding inside a scene nested in a row of another scene reads the nested scene, not the host', async ({ skip }) => {
     const { wf } = await load();
-    if (wf.features && wf.features.lists === false) skip();
+    if ((wf.features && wf.features.lists === false) || coreOlderThan(wf, '1.5.6')) skip();
     const { el, hold } = await rowScenes(wf, 'inside the row', 'ar1b');
     hold.first = false;
     await dispatchSeek(1.5).done;
@@ -129,7 +129,7 @@ describe(`scene arrivals (${BUILD} extension, ${CORE_TIER} core)`, () => {
   // detached element.
   it('a scene on the element of a data-list row the list removes is seeked no more', async ({ skip }) => {
     const { wf } = await load();
-    if (wf.features && wf.features.lists === false) skip();
+    if ((wf.features && wf.features.lists === false) || coreOlderThan(wf, '1.5.6')) skip();
     const { el, calls, hold } = await rowScenes(wf, 'on the row element', 'ar1s');
     hold.first = false;
     await dispatchSeek(1.5).done;

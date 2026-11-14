@@ -255,6 +255,16 @@ export async function siteHas(file) {
   } catch (_) { return false; }
 }
 
+// Whether the framework under test is older than `version` ('1.5.6'), for a
+// test of behavior that a framework release changed: the suite runs against
+// the lowest framework version the package supports as well as the latest.
+export function coreOlderThan(wf, version) {
+  const parts = (v) => String(v).split('.').map(Number);
+  const have = parts(wf.version), want = parts(version);
+  for (let i = 0; i < 3; i++) if ((have[i] || 0) !== (want[i] || 0)) return (have[i] || 0) < (want[i] || 0);
+  return false;
+}
+
 // The sine lesson demo (www/demos/kinetic-sine/) as its own page in a frame,
 // with the framework tier and the Kinetic build under test in place of the
 // site's files. `head` goes before the page's own scripts and `tail` at the

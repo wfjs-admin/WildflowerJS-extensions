@@ -6,13 +6,14 @@
  * render suite (vitest.render.config.js).
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { load, sinePage, BUILD, CORE_TIER } from './helpers.js';
+import { load, sinePage, siteHas, SITE_SINE_SCRIPT, BUILD, CORE_TIER } from './helpers.js';
 
+const HAS_SINE = await siteHas(SITE_SINE_SCRIPT);
 const cleanup = [];
 afterEach(() => { for (const el of cleanup.splice(0)) el.remove(); });
 const canRender = () => typeof VideoEncoder === 'function' && typeof CanvasRenderingContext2D.prototype.drawElementImage === 'function';
 
-describe(`the sine lesson, rendered (${BUILD} extension, ${CORE_TIER} core)`, () => {
+describe.skipIf(!HAS_SINE)(`the sine lesson, rendered (${BUILD} extension, ${CORE_TIER} core)`, () => {
   it("render() plays the steps straight through in video mode with the scripts, undoes a slider dragged before a frame is captured, and gives the learner's values back", async ({ skip }) => {
     const { wf } = await load();
     if (!canRender() || (wf.features && wf.features.lists === false)) skip();
