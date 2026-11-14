@@ -12,7 +12,7 @@
  * KN-180 or KN-181 before the page is touched.
  */
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import { load, loadScript, mount, uniqueName, framedPage, expectKN, LOTTIE_FILE, BUILD, CORE_TIER } from './helpers.js';
+import { load, loadScript, mount, uniqueName, framedPage, expectKN, seekVideo, LOTTIE_FILE, BUILD, CORE_TIER } from './helpers.js';
 
 const FIX = '/packages/kinetic/test/fixtures/';
 const cleanup = [];
@@ -38,8 +38,7 @@ async function frameAt(blob, at) {
   document.body.appendChild(v);
   try {
     await new Promise((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('video failed to load')); });
-    v.currentTime = at;
-    await new Promise((res) => { v.onseeked = () => res(); });
+    await seekVideo(v, at);
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     const g = c.getContext('2d', { willReadFrequently: true });

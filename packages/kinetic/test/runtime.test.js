@@ -16,7 +16,7 @@
  * before Kinetic loads here, so this page's grid is 1/30 s.
  */
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import { loadScript, tick, framedPage, sinePage, expectKN, CORE, WF_FILE, RUNTIME_FILE, BUILD, CORE_TIER, SITE_SINE_SCRIPT, siteHas } from './helpers.js';
+import { loadScript, tick, framedPage, sinePage, expectKN, seekVideo, CORE, WF_FILE, RUNTIME_FILE, BUILD, CORE_TIER, SITE_SINE_SCRIPT, siteHas } from './helpers.js';
 
 const HAS_SINE = await siteHas(SITE_SINE_SCRIPT);
 
@@ -144,11 +144,8 @@ async function runtimePage(body, script) {
   return w;
 }
 
-// The frame of a rendered file at `at` seconds, as ImageData. `seeked` can
-// fire before the frame at the new time is ready to draw, and the canvas
-// then gets the file's first frame or nothing, so the draw waits for the
-// element to present a frame: with `fps`, the frame `at` falls in; without,
-// the first one presented after the seek. Two seconds is the most it waits.
+// The frame of a rendered file at `at` seconds, as ImageData; `fps` is the
+// file's, for the wait on the frame (seekVideo).
 async function frameAt(blob, at, fps) {
   const url = URL.createObjectURL(blob);
   const v = document.createElement('video');
@@ -156,18 +153,7 @@ async function frameAt(blob, at, fps) {
   document.body.appendChild(v);
   try {
     await new Promise((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('video failed to load')); });
-    const want = fps ? Math.floor(at * fps + 1e-6) / fps : null;
-    const shown = typeof v.requestVideoFrameCallback !== 'function' ? Promise.resolve() : new Promise((res) => {
-      const give = setTimeout(res, 2000);
-      const heard = (now, meta) => {
-        if (want === null || Math.abs(meta.mediaTime - want) < 1e-3) { clearTimeout(give); res(); }
-        else v.requestVideoFrameCallback(heard);
-      };
-      v.requestVideoFrameCallback(heard);
-    });
-    v.currentTime = at;
-    await new Promise((res) => { v.onseeked = () => res(); });
-    await shown;
+    await seekVideo(v, at, fps);
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);

@@ -255,6 +255,39 @@ export async function siteHas(file) {
   } catch (_) { return false; }
 }
 
+// Seeks a <video> to `at` seconds and resolves once the frame there can be
+// drawn. `seeked` can fire before the new frame is presented, and a canvas
+// then gets the frame from before the seek, or nothing, so this also waits
+// for the element to present a frame: with `fps`, the frame `at` falls in;
+// without, the first one presented once the seek is set. A new element can
+// present the file's first frame before the seek's, so without `fps` a
+// first frame is taken only when no other follows it within 150 ms. Two
+// seconds is the most it waits in all.
+export async function seekVideo(v, at, fps) {
+  const want = fps ? Math.floor(at * fps + 1e-6) / fps : null;
+  const shown = typeof v.requestVideoFrameCallback !== 'function' ? Promise.resolve() : new Promise((res) => {
+    let first = 0;
+    const done = () => { clearTimeout(give); clearTimeout(first); res(); };
+    const give = setTimeout(done, 2000);
+    const heard = (now, meta) => {
+      clearTimeout(first);
+      if (want !== null ? Math.abs(meta.mediaTime - want) < 1e-3 : meta.mediaTime > 1e-4) return done();
+      if (want === null) first = setTimeout(done, 150);
+      v.requestVideoFrameCallback(heard);
+    };
+    v.requestVideoFrameCallback(heard);
+  });
+  v.currentTime = at;
+  await new Promise((res) => { v.onseeked = () => res(); });
+  await shown;
+}
+
+// Whether the browser can encode AAC. Chrome encodes it through the operating
+// system, on macOS and Windows; on Linux it has no AAC encoder, and render()
+// writes Opus.
+export const HAS_AAC = typeof AudioEncoder === 'function'
+  && (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }).catch(() => ({}))).supported === true;
+
 // Whether the framework under test is older than `version` ('1.5.6'), for a
 // test of behavior that a framework release changed: the suite runs against
 // the lowest framework version the package supports as well as the latest.

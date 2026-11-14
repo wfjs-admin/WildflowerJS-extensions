@@ -9,7 +9,7 @@
  * Opus when the browser has no AAC encoder (KN-202).
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { load, mount, uniqueName, captureWarnings, wavUrl, expectKN, BUILD, CORE_TIER } from './helpers.js';
+import { load, mount, uniqueName, captureWarnings, wavUrl, expectKN, seekVideo, BUILD, CORE_TIER } from './helpers.js';
 
 const cleanup = [];
 const restores = [];
@@ -133,8 +133,7 @@ async function redAt(blob, at) {
   document.body.appendChild(v);
   try {
     await new Promise((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('video failed')); });
-    v.currentTime = at;
-    await new Promise((res) => { v.onseeked = () => res(); });
+    await seekVideo(v, at);
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);

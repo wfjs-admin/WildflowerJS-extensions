@@ -17,7 +17,7 @@
  * per frame at 180 degrees and two blended at 360.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { load, mount, tick, wavUrl, FOOTAGE, shownFrame, footageFrame, framedPage, expectKN, BUILD, CORE_TIER } from './helpers.js';
+import { load, mount, tick, wavUrl, FOOTAGE, shownFrame, footageFrame, framedPage, expectKN, seekVideo, HAS_AAC, BUILD, CORE_TIER } from './helpers.js';
 
 const cleanup = [];
 afterEach(async () => {
@@ -52,8 +52,7 @@ async function framesOf(blob, n, fps = 30, read = shownFrame) {
     await new Promise((res, rej) => { v.onloadeddata = () => res(); v.onerror = () => rej(new Error('the render did not load: ' + (v.error && v.error.message))); });
     const out = [];
     for (let i = 0; i < n; i++) {
-      v.currentTime = (i + 0.5) / fps;
-      await new Promise((res) => { v.onseeked = () => res(); });
+      await seekVideo(v, (i + 0.5) / fps, fps);
       out.push(read(v));
     }
     return out;
@@ -98,7 +97,8 @@ describe(`render() with footage (${BUILD} extension, ${CORE_TIER} core)`, () => 
     expect(page.result).toBe('resolved');
     const r = await render(page.kinetic);
     expect(r.frames).toBe(60);
-    expect(r.audioCodec).toBe('mp4a.40.2');
+    // AAC where the browser can encode it, and Opus where it cannot.
+    expect(r.audioCodec).toBe(HAS_AAC ? 'mp4a.40.2' : 'opus');
     const got = await framesOf(r.blob, 60);
     expect(wrongFrames(got, (i) => (i < 30 ? i : footageFrame(i / 30, { start: 1, fps: 24 })))).toEqual([]);
     // a's beep at 0 s; its beep at 1 s is past its window.

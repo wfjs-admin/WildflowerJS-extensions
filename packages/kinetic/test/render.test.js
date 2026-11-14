@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { page } from 'vitest/browser';
-import { load, mount, tick, dispatchSeek, uniqueName, expectKN, captureWarnings, framedPage, FOOTAGE, CORE, WF_FILE, BUILD, CORE_TIER } from './helpers.js';
+import { load, mount, tick, dispatchSeek, uniqueName, expectKN, captureWarnings, framedPage, seekVideo, FOOTAGE, CORE, WF_FILE, BUILD, CORE_TIER } from './helpers.js';
 
 const cleanup = [];
 afterEach(async () => {
@@ -29,8 +29,7 @@ async function frameAt(blob, at) {
   document.body.appendChild(v);
   try {
     await new Promise((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('video failed to load: ' + (v.error && v.error.message))); });
-    v.currentTime = at;
-    await new Promise((res) => { v.onseeked = () => res(); });
+    await seekVideo(v, at);
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);
@@ -259,8 +258,7 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     try {
       await new Promise((res) => { v.onloadeddata = res; });
       for (const [k, t] of [0.2, 0.8].entries()) {
-        v.currentTime = t + 0.05;
-        await new Promise((res) => { v.onseeked = res; });
+        await seekVideo(v, t + 0.05);
         expect(Math.abs(inkOf(v) - live[k]), 'at ' + t + ' s').toBeLessThan(0.08);
       }
     } finally { v.remove(); URL.revokeObjectURL(url); fx.dispose(); }
@@ -306,8 +304,7 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     document.body.appendChild(v);
     try {
       await new Promise((res) => { v.onloadeddata = res; });
-      v.currentTime = 0.25;
-      await new Promise((res) => { v.onseeked = res; });
+      await seekVideo(v, 0.25);
       const m = measure(v);
       expect(m.sharp).toBeGreaterThan(150);
       expect(m.blurred).toBeLessThan(m.sharp / 3);
@@ -330,7 +327,8 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
       reds.push(v.px[0]);
     }
     const expected = reds.map((_, i) => 25 * i);
-    const offBy = reds.map((v, i) => Math.round((v - expected[i]) / 25));
+    // (|| 0: a red a little under its frame's rounds to -0, which is not 0 to toEqual.)
+    const offBy = reds.map((v, i) => Math.round((v - expected[i]) / 25) || 0);
     expect(offBy, 'red per frame: ' + reds.join(',')).toEqual(new Array(10).fill(0));
   });
 
@@ -366,7 +364,7 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(r.frames).toBe(10);
     const reds = [];
     for (let i = 0; i < 10; i++) reds.push((await probeVideo(r.blob, i / 10 + 0.02, 120, 60)).px[0]);
-    const offBy = reds.map((v, i) => Math.round((v - 25 * i) / 25));
+    const offBy = reds.map((v, i) => Math.round((v - 25 * i) / 25) || 0);
     expect(offBy, 'red per frame: ' + reds.join(',')).toEqual(new Array(10).fill(0));
     const square = await probeVideo(r.blob, 0.52, 20, 15);
     expect(near(square.px, [255, 255, 255]), 'the square over the canvas ' + square.px.join(',')).toBe(true);
