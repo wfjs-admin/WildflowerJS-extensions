@@ -160,17 +160,18 @@ describe(`render.batch() (${BUILD} extension, ${CORE_TIER} core)`, () => {
       w.postMessage({ type: 'kinetic-batch-failed', code: 'KN-999', where: 'fake', message: 'fake', lines: [] }, '*');
     };
     const seen = [];
-    const err = await w.wildflower.kinetic.render.batch([{ label: 'one' }, { label: 'two' }], {
+    const err = await w.wildflower.kinetic.render.batch([{ label: 'one', share: 2 }, { label: 'two' }], {
       save: false,
       onRow: (i) => { seen.push(i.phase + ' ' + i.index); if (i.phase === 'loading') setTimeout(fake, 0); },
     }).then(() => null, (e) => e);
     expect(err).toBeTruthy();
-    // This browser cannot render (the render suite renders); the first row's
-    // render fails, and the batch stops there.
-    expect(['KN-200', 'KN-201']).toContain(err.code);
-    expect(err.message.startsWith('[' + err.code + '] render.batch(): row 1, render()')).toBe(true);
+    // The first row's share is out of its range, so its page fails readiness
+    // in a browser that can render and in one that cannot, and the batch
+    // stops there.
+    expect(err.code).toBe('KN-130');
+    expect(err.message.startsWith("[KN-130] render.batch(): row 1, scene 'card' input 'share'")).toBe(true);
     expect(err.index).toBe(0);
-    expect(err.row).toEqual({ label: 'one' });
+    expect(err.row).toEqual({ label: 'one', share: 2 });
     expect(err.results).toEqual([]);
     expect(Array.isArray(err.lines)).toBe(true);
     expect(seen).toEqual(['loading 0']);
