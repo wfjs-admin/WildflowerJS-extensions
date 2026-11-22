@@ -611,6 +611,12 @@ export function createScenes(wf, clock, follows) {
       return Array.from(out);
     },
     onFailure(fn) { onFailure = fn; },
+    // Whether a scene defined on the page declares inputs (the preview
+    // bar's Render batch).
+    hasInputs() {
+      for (const s of scenes.values()) if (s.inputs) return true;
+      return false;
+    },
     // [scene, path] for each follow target of a live scene on the page.
     followTargets() {
       const out = [];

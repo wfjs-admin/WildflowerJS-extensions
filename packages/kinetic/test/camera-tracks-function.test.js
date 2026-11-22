@@ -1,9 +1,8 @@
 /**
  * camera() and cameraAt() take the camera's numbers: a tracks object, or what
  * a moves() camera returns when it is called, CAM(t). Given the moves()
- * function itself they treated it as no tracks at all and returned a camera
- * at rest, with no message: the picture simply never moved. It is KN-100
- * now, saying to call it.
+ * function itself, they throw KN-100 and say to call it: read as tracks, the
+ * function would give a camera at rest and a picture that never moves.
  */
 import { describe, it, expect } from 'vitest';
 import { load, expectKN, BUILD, CORE_TIER } from './helpers.js';

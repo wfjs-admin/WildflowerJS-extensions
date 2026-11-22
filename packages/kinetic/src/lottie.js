@@ -48,8 +48,8 @@
  * which Kinetic's listeners are left in place, since lottie-web calls them
  * from the live list and drops the list just after), and when the scene
  * it was given is removed. With the HyperFrames
- * runtime on the page, which finds and seeks lottie-web animations itself
- * (probed with the pinned runtime), Kinetic does not seek it, so two clocks
+ * runtime on the page, which finds and seeks lottie-web animations itself,
+ * Kinetic does not seek it, so two clocks
  * do not fight over it; readiness still waits for it to load.
  *
  * KN-100 on every build for a bad call: an animation without goToAndStop()

@@ -3,7 +3,7 @@
  * stipple, halftone or dither in each mark's ink. The pixels are read from
  * the layer's canvas through a 2D copy: each mark's shape and falloff, the
  * data form of the marks, colour and opacity, the boil, the three freezes,
- * the kinds, effect()'s new stipple options (grade, speck, color), check()
+ * the kinds, effect()'s stipple options (grade, speck, color), check()
  * on a scene with a layer, and the KN-100 cases.
  */
 import { describe, it, expect, afterEach } from 'vitest';
@@ -209,7 +209,7 @@ describe(`shade() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(read(canvas).hash()).toBe(a);
     const err = (fn) => { try { fn(); } catch (e) { return e; } return null; };
     expectKN(err(() => wf.kinetic.effect(document.createElement('canvas'), { source: src, kind: 'dither', fps: 2 })), 'KN-100', 'effect(canvas, { fps })', /^fps is for the kinds with a seed/);
-    // The old name for fps is no option: KN-100 as any parameter the kind does not take.
+    // boil is no option: KN-100 as any parameter the kind does not take.
     expectKN(err(() => fx.set({ boil: 2 })), 'KN-100', 'set({ boil })', /^'boil' is not a parameter of stipple/);
     expectKN(err(() => wf.kinetic.effect(document.createElement('canvas'), { source: src, kind: 'boil', boil: 2 })), 'KN-100', 'effect(canvas, { boil })', /^'boil' is not a parameter of boil/);
     expectKN(err(() => fx.set({ delay: -1 })), 'KN-100', 'set({ delay })', /^delay is seconds, 0 or more/);
@@ -668,7 +668,7 @@ describe(`shade() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expectKN(err(() => k.shade(canvas, { marks: 'band' })), 'KN-100', 'shade(canvas, { marks })', /, not "band"$/);
     expectKN(err(() => k.shade(canvas, { kind: 'stipple' }, none)), 'KN-100', 'shade(canvas, options, marks)', /^the marks go in the options: \{ …, marks: \(m, t\) => … \}$/);
     expectKN(err(() => k.shade(canvas, { kind: 'stipple', marks: none }, none)), 'KN-100', 'shade(canvas, options, marks)', /^the marks go in the options/);
-    // tone and boil, the old names for density and fps, are no options: effect() rejects them as any parameter the kind does not take.
+    // tone and boil are no options: effect() rejects them as any parameter the kind does not take.
     expectKN(err(() => k.shade(canvas, { tone: 0.2, marks: none })), 'KN-100', 'effect(canvas, { tone })', /^'tone' is not a parameter of stipple/);
     expectKN(err(() => k.shade(canvas, { boil: 2, marks: none })), 'KN-100', 'effect(canvas, { boil })', /^'boil' is not a parameter of stipple/);
     expectKN(err(() => k.shade(canvas, { mask: { square: 4 }, marks: none })), 'KN-100', 'shade(canvas, { mask })', /^a shape is \{ circle/);

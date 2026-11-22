@@ -2,15 +2,15 @@
 
 Dial: lively. Read with `../directions.md`, whose laws hold here.
 
-The frame is a field of flat color, and shapes are the actors: a disc, an
+The frame is a field of flat color, and shapes play every part: a disc, an
 arch, a petal, a wave, a star, a hill cropped by the frame's edge. Each scene
-is one composition of a few large shapes on one ground, and each scene ends
-by one of its shapes growing, opening or flooding until its color is the
-next scene's ground. Nothing is drawn as a person; the color and the shapes
-carry the feeling. Measured from an illustrated showreel, with its
-characters left out: the most saturated of the reels measured, a shot of about
-2.5 s (4 beats at 96 a minute), about 20 scene changes a minute, and half its
-frames near still.
+is one composition of a few large shapes on one ground (the background
+color), and each scene ends with one of its shapes growing, opening or
+flooding until its color is the next scene's ground. Nothing is drawn as a
+person; the color and the shapes carry the feeling. The numbers come from
+an illustrated showreel, leaving out its characters: the most saturated of
+the reels measured, a shot of about 2.5 s (4 beats at 96 a minute), about
+20 scene changes a minute, and half its frames near still.
 
 ## Contents
 
@@ -28,10 +28,10 @@ frames near still.
 
 ## When to choose it
 
-A brand film, a studio or product reel without footage, an opener, a
-campaign, a cause: subjects with a feeling to carry more than a thing to
-show. It needs nothing but the subject's words, which makes it the direction
-for a brief with no material. It is wrong for an interface, a product that
+Choose it for a brand film, a studio or product reel without footage, an
+opener, a campaign or a cause: subjects with a feeling to get across more
+than a thing to show. It needs nothing but the subject's words, so it is the
+direction for a brief with no material. It is wrong for an interface, a product that
 must be seen, or data that must be read exactly (`kinds/data-story.md`).
 
 ## Palette and ground
@@ -43,15 +43,15 @@ must be seen, or data that must be read exactly (`kinds/data-story.md`).
   them role for role.
 - **Order the grounds by value**, so light and dark alternate: a pale
   ground, a mid one, the deep ground, a pale one. The deep ground comes at
-  least once a piece, as its night.
+  least once a piece, as its night scene.
 - **Three colors a scene**: the ground, the hero shape in a color that
   stands apart from it in lightness, and tints of the ground's own hue for
   everything else (`style.md`, "Context in tints, not gray").
 - **The hero shape's color is the next scene's ground** wherever the scene
   ends in a flood (Transitions, below). Plan the ground order and the hero
   colors together.
-- Shapes in the middle are fills, never outlined, and fills meet fills. Lines
-  belong to the back layer's structure.
+- Shapes in the middle layer are fills, never outlined, and fills meet fills
+  with no line between. Lines are only for the back layer's structure.
 
 ## Shapes
 
@@ -70,11 +70,11 @@ must be seen, or data that must be read exactly (`kinds/data-story.md`).
 
 ## Layers and light
 
-"Flat" is the color, not the frame: every shot of this direction is three
-planes under one light. Measured on the four reels and on this direction's
-first, unlayered test pieces: 22 to 31% of a reel's frame is in smooth
-ramps of light and shading and it uses 15 to 24 tones; the flat pieces used
-3% and 4 to 7. One layered shot built to these rules read 16% and 17.
+Only the color is flat. Every shot of this direction is three
+planes under one light. In the four reels measured, 22 to 31% of the frame
+is in smooth ramps of light and shading, with 15 to 24 tones; a frame with
+no layers or light has about 3% and 4 to 7 tones. A layered shot built to
+these rules measures about 16% and 17 tones.
 
 - **The back layer is structure.** One or two kinds for the whole piece,
   chosen with the idea: a grid, rings around the hero (some dashed or
@@ -87,36 +87,34 @@ ramps of light and shading and it uses 15 to 24 tones; the flat pieces used
   30% shade, and a soft cast shadow in the ground's shade under what stands
   on something. Large shapes behind the hero (hills, half-discs) take a
   vertical ramp of their own color, lighter toward the light.
-- **The front layer is rare, and is the scene, nearer.** Most shots have
-  none. Where a scene is made of many things that could come near (a field
-  of leaves, a night of stars), one or two of them may pass in front,
-  larger and out of focus, keeping their own shape and color, moving with
-  the camera and faster than the back, never over a word being read. No set
-  of small accents scattered across shots (they read as cake sprinkles), and
-  no soft disc roving across the frame (it reads as a lens effect laid over
-  the work): a test piece with both in every shot was judged distracting on
-  sight, and better without them.
+- **The front layer is rare, and shows the scene's own things, nearer.**
+  Most shots have none. Where a scene is made of many things that could
+  come near (a field of leaves, a night of stars), one or two of them may
+  pass in front, larger and out of focus, keeping their own shape and color,
+  moving with the camera and faster than the back, never over a word being
+  read. Do not scatter a set of small accents across shots (they read as
+  cake sprinkles), and do not move a soft disc across the frame (it reads
+  as a lens effect laid over the work); both distract.
 - **The ground takes its light as ink**, never as a radial gradient: a
   radial spot reads as a lit card, one round hotspot fading evenly every
-  way, and flattens the frame (a test piece's spots were judged flat on
-  sight). The ground is a canvas under the scene with a `shade()` layer of
+  way, and makes the frame look flat. The ground is a canvas under the scene with a `shade()` layer of
   kind `'ink'` (`api.md`, "Shading, light, grain and blur"): two bands of
   one darker ink of the ground's own color multiplied over it, denser away
   from the light, so the field deepens the way a second pass of ink does,
   and two inks overprint (yellow under an orange ink goes warm, never gray).
   Paper takes a warm ink (the paper mixed 14% toward orange); a cool ink on
   paper reads as dirty gray.
-- **Travel, not creep.** On the pace check this direction's still share
-  reads high, since its large flat fields change few pixels as they move: up
-  to 65% is a pass for it when every shot's layers travel, and no number
-  below that is worth a front layer to reach. The camera and the back layer travel about 5% of
-  the frame's width a second, any front element about twice that; the type holds
-  its place. Measured on a layered test shot: a 120 px push over 5 s read
-  99% still; 500 px over 5 s, with the grid sliding 120 px a second, read
-  55%.
+- **Move far enough to be seen.** On the pace check this direction's still
+  share reads high, since its large flat fields change few pixels as they
+  move: up to 65% passes when every shot's layers move, and do not add a
+  front layer only to bring the number down. The camera and the back layer
+  move about 5% of the frame's width a second, any front element about twice
+  that; the type holds its place. In a layered shot, a 120 px push over 5 s
+  reads 99% still; 500 px over 5 s, with the grid sliding 120 px a second,
+  reads 55%.
 
 The ground's ink, on a canvas that is the scene's first layer over its flat
-ground color, from the tested piece:
+ground color:
 
 ```html
 <div id="night" class="layer" data-component="night" data-start="…" data-duration="…" style="background: #2D4C9C">
@@ -126,19 +124,25 @@ ground color, from the tested piece:
 ```
 
 ```javascript
-scene('night', {
-    init() {
-        shade(this.element.querySelector('canvas'), { scene: this, kind: 'ink', marks: (m) => {
-            // denser toward the bottom and the right, away from a light at the top left
-            m.band({ from: [0, 1080], to: [1920, 1080], width: 1000, side: 'left', ink: '#1F2440', amount: 0.6, falloff: 'smooth' })
-             .band({ from: [1920, 1080], to: [1920, 0], width: 1500, side: 'left', ink: '#1F2440', amount: 0.4, falloff: 'smooth' });
-        } });
-    },
+wildflower.kinetic.layers.scene('night', {
+    layers: [{
+        id: 'ink', kind: 'html', src: 'canvas',
+        look: {
+            shade: {
+                kind: 'ink',
+                // denser toward the bottom and the right, away from a light at the top left
+                marks: [
+                    { band: { from: [0, 1080], to: [1920, 1080], width: 1000, side: 'left' }, ink: '#1F2440', amount: 0.6, falloff: 'smooth' },
+                    { band: { from: [1920, 1080], to: [1920, 0], width: 1500, side: 'left' }, ink: '#1F2440', amount: 0.4, falloff: 'smooth' },
+                ],
+            },
+        },
+    }],
 });
 ```
 
-Each ink layer is a WebGL context: one per scene is well inside what a page
-holds. In a browser with no GPU (a headless check on a server) each seek
+Each ink layer is a WebGL context, and one per scene is well within a
+page's limit. In a browser with no GPU each seek
 draws them in software, and a check of every frame takes many minutes; in a
 desktop browser and in a render with a GPU they cost little.
 
@@ -153,15 +157,15 @@ shade, its edge softened, never a radial gradient:
         <stop offset="0" stop-color="#FBE48E"/><stop offset="0.5" stop-color="#F3CF3E"/><stop offset="1" stop-color="#C99A22"/>
     </linearGradient>
 </defs>
-<g data-bind-attr="{ transform: back }" stroke="#3A58A4" stroke-width="3" fill="none">…the grid…</g>
+<g class="back" stroke="#3A58A4" stroke-width="3" fill="none">…the grid, moved by its layer…</g>
 <ellipse cx="1330" cy="830" rx="300" ry="40" fill="#233B79" opacity="0.6"/>
 <circle cx="1300" cy="470" r="250" fill="url(#sun)"/>
 ```
 
 A grid that slides forever is a transform from the time, wrapped at its
 spacing: `back() { return 'translate(' + ((this.local * 120) % 200 - 200) +
-' 0)'; }` for lines 200 px apart. Print, `shade()`'s spray, can stand in for
-the smooth gradients in a piece whose feeling is printed (`style.md`,
+' 0)'; }` for lines 200 px apart. In a piece whose feeling is printed,
+`shade()`'s spray can replace the smooth gradients (`style.md`,
 "Printed ink"), with the same one light.
 
 ## Type
@@ -186,8 +190,8 @@ the smooth gradients in a piece whose feeling is printed (`style.md`,
 - **A field arrives as a wave**: its small shapes grow in with `stagger()`
   from the center or from one edge, 0.04 to 0.08 s apart, the whole field in
   under 0.8 s.
-- **Holds are alive**: the layers travel (Layers and light, above), and one
-  or two things keep a loop through a hold, a ring turning, a star swelling
+- **Something moves through every hold**: the layers move (Layers and
+  light, above), and one or two things loop through a hold, a ring turning, a star swelling
   ±3%, a wave sliding, on `sine.inOut` with a period of 2 to 4 s (a track of
   two keyframes half a period apart, `extrapolate: 'mirror'`, so it swings
   forward and back for as long as the scene holds).
@@ -201,22 +205,22 @@ the smooth gradients in a piece whose feeling is printed (`style.md`,
 
 Every scene change is one of these, and a piece uses at least four of
 them: never the same one twice in a row, none more than three times
-(`../directions.md`, "Vary the change"). A test piece whose ten changes were
-eight growing discs read as one effect repeated; the same piece with a
-rising sea, a hard wipe, a leaf and an arch each flooding in their own
-shape, a push and two swaps under blur read as ten different moments.
+(`../directions.md`, "Vary the change"). Ten changes of which eight are
+growing discs read as one effect repeated; a rising sea, a hard wipe, a leaf
+and an arch each flooding in its own shape, a push and two swaps under blur
+read as ten different moments.
 
 **A rise.** The ground of the next scene comes up from the bottom edge as
 the outgoing scene's own horizon (a wave, a hill line, a row of roofs),
 across the whole width, on `power3.in`, and covers the frame before the cut.
-The sea rising to become a yellow sky is the measured test piece's one:
-a wave path 40 px deep and 1500 px tall, translated up from 1140 to -120 px
-over 0.55 s while it slides sideways.
+For a sea rising to become a yellow sky at 1920 by 1080: a wave path 40 px
+deep and 1500 px tall, translated up from 1140 to -120 px over 0.55 s while
+it slides sideways.
 
 **A flood.** The outgoing scene's hero grows in its own shape (an arch as an
-arch, a leaf as a leaf; a disc only where the disc is the motif) until it covers the frame, and
-its color is the incoming scene's ground, so the change of clip, on the frame
-the flood completes, cannot be seen. The hero is a `shape()` placed by its
+arch, a leaf as a leaf; a disc only where the disc is the motif) until it
+covers the frame. Its color is the incoming scene's ground, so the change of
+clip, on the frame the flood completes, cannot be seen. The hero is a `shape()` placed by its
 own `<g>`, last in the scene's SVG so it covers everything, and its path
 moves between two shapes with the same commands, from `matchPaths()`. At full
 size the shape must reach past the frame's farthest corner from its center
@@ -229,7 +233,7 @@ hero's size; a sun, a moon or a dot is a disc of two arcs.
 <div id="meadow" class="layer" data-component="meadow" data-start="0" data-duration="5">
     <svg class="layer" viewBox="0 0 1920 1080" width="1920" height="1080">
         <!-- the scene's hills, field and words come first -->
-        <g transform="translate(1310 420)"><path class="sun" data-bind-attr="{ d: sun }"></path></g>
+        <g transform="translate(1310 420)"><path class="sun"></path></g>
     </svg>
 </div>
 <div class="layer night" data-component="night" data-start="meadow" data-duration="5">…</div>
@@ -242,7 +246,7 @@ hero's size; a sun, a moon or a dot is a disc of two arcs.
 ```
 
 ```javascript
-const { scene, matchPaths } = wildflower.kinetic;
+const { matchPaths } = wildflower.kinetic;
 
 // A disc of radius r centered on its <g>, as two arcs.
 const disc = (r) => 'M 0 ' + -r + ' A ' + r + ' ' + r + ' 0 1 1 0 ' + r + ' A ' + r + ' ' + r + ' 0 1 1 0 ' + -r + ' Z';
@@ -251,10 +255,8 @@ const disc = (r) => 'M 0 ' + -r + ' A ' + r + ' ' + r + ' 0 1 1 0 ' + r + ' A ' 
 // corner from (1310, 420) is 1467 px away.
 const [SUN, FIELD] = matchPaths([disc(120), disc(1700)]);
 
-scene('meadow', {
-    keyframes: {
-        sun: { at: [4.4, 4.9], to: [SUN, FIELD], ease: 'power3.in' },
-    },
+wildflower.kinetic.layers.scene('meadow', {
+    layers: [{ id: 'sun', kind: 'svg', src: '.sun', content: { d: { at: [4.4, 4.9], to: [SUN, FIELD], ease: 'power3.in' } } }],
 });
 ```
 
@@ -262,8 +264,8 @@ The flood takes the last 0.5 to 0.7 s of the shot on an `.in` ease, so it
 accelerates into the cut, and the incoming scene's first move settles out
 of it on `.out`. It completes at least 3 frames before the clip ends and
 holds the full cover to the cut: a frame caught mid-growth just before the
-cut shows the old scene's corner and gives the cut away. Save frames on the
-last few frames of the clip (`--frames`) and look at each. The incoming
+cut shows a corner of the old scene, and the cut can be seen. Save the last
+few frames of the clip (`check({ frames: [...] })`) and look at each. The incoming
 clip starts on the frame the outgoing one ends (`data-start="meadow"`),
 both edges on whole frames (`rules.md`, KN-114).
 
@@ -280,30 +282,27 @@ const [WINDOW, ALL] = matchPaths([
     'path("' + shape('sector', { radius: 1560, to: 360, cx: 1310, cy: 420 }) + '")',
 ]);
 
-scene('inside', {
-    keyframes: {
-        view: { clipPath: { at: [0, 0.6], to: [WINDOW, ALL], ease: 'power3.out' } },
-    },
+wildflower.kinetic.layers.scene('inside', {
+    layers: [{ id: 'view', kind: 'html', src: '.view', look: { style: { clipPath: { at: [0, 0.6], to: [WINDOW, ALL], ease: 'power3.out' } } } }],
 });
 ```
 
 The clip starts 0.6 s before the outgoing one ends (`data-start="meadow -
 0.6"`), with no `data-clip-transition`, and the clip path goes on a layer
-inside it (`class="layer" data-bind-style="view"`), never on the clip's own
-tag.
+inside it (`class="layer view"`), never on the clip's own tag.
 
 **A change of shape.** The hero becomes the next scene's hero in place, by
 `matchPaths()` (`patterns.md`, "A shape that becomes another"), while the
 ground changes behind it by a flood from another shape: a sun becomes an eye's
-iris, a petal becomes a flame. The best transition the direction has, when
-the two shapes share a meaning.
+iris, a petal becomes a flame. Use it whenever the two shapes share a
+meaning; it is the direction's best transition.
 
 **An assembly.** Many small shapes (squares, discs, half-discs, stars, each
 in a palette color) gather from scattered places into a ring, a letter or
 the mark, staggered from one end, turning as they come; then the gathered
 form turns fast and is swapped under blur for the solid shape it makes, in
-one color (`../directions.md`, "Swap under blur"). The strongest opening the
-direction has, and a good close: the pieces of the piece become the mark.
+one color (`../directions.md`, "Swap under blur"). It is the direction's
+strongest opening, and a good close, where the small shapes become the mark.
 (A measured showreel opens this way: a star, a ring of about thirty shapes
 in 2 s, the ring blurred into a "0", the year's other digits landing around
 it.)
@@ -311,7 +310,7 @@ it.)
 **A split frame.** For the piece's busiest moment, the frame splits into two
 or three panels, each its own ground and composition, and the panels change
 on alternate beats, never together; then one panel's shape floods across
-all of them and the frame is whole again. Hold it to one passage of 2 to 4
+all of them and the frame is whole again. Keep it to one passage of 2 to 4
 bars.
 
 **The fallbacks**: `iris` and `wipe` from the clip attributes, at most one
@@ -330,17 +329,17 @@ with the sentence for each of its changes.
 wildflower.kinetic.config({ shutter: 180, finish: { grain: 0.1 } });
 ```
 
-Still grain gives the flat color its tooth. No bloom, aberration or vignette.
+Still grain gives the flat color a paper texture. No bloom, aberration or vignette.
 
 ## Never in this direction
 
-- Characters, faces, hands, animals or any figure drawn by the model. A
-  figure belongs to a piece whose user supplies the artwork, as layered SVG
-  Kinetic can move.
+- Characters, faces, hands, animals or any other figure you draw yourself.
+  A figure belongs only in a piece whose user supplies the artwork, as
+  layered SVG Kinetic can move.
 - An outline on the hero or the shapes it acts with, a glow around a shape,
   3D, photographs or footage.
 - A gradient between two hues. Light and shading within one color's own
-  steps is required, not merely allowed.
+  steps is required.
 - A hero alone on a flat ground with nothing behind or in front of it.
 - A second typeface for display, or text over a pattern field.
 - A plain cut to a new ground.

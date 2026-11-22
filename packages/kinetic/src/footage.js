@@ -18,11 +18,11 @@
  * in its file, with t held inside the clip's window and the result at most
  * the file's length, so past the end of the file the last frame holds. The
  * frame it shows is the source frame on screen 1 ms after that time. A seek
- * to the exact time showed the frame before it for a third of frames in
- * Chrome, which reads a time down to the microsecond, and WebM stores each
- * frame's time in whole milliseconds: 10 µs on was exact for MP4 and missed
- * a third of the frames of 30 fps WebM, 0.5 ms on missed 4 of 60 frames of
- * 24 fps WebM in Chrome 154, and 1 ms on was exact for every file tried. The
+ * to the exact time shows the frame before it for a third of frames in
+ * Chrome, which reads a time down to the microsecond, while WebM stores each
+ * frame's time in whole milliseconds: 10 µs on is exact for MP4 and misses
+ * a third of the frames of 30 fps WebM, 0.5 ms on misses 4 of 60 frames of
+ * 24 fps WebM in Chrome 154, and 1 ms on is exact for MP4 and WebM alike. The
  * seek goes 2 µs past that millisecond as well, so a frame that starts
  * exactly 1 ms after the time (29.97 fps footage at a whole second) is the
  * one taken.
@@ -129,7 +129,7 @@ export function createFootage(clock, clips) {
   // and a `seeked` that arrives while the element is still seeking belongs
   // to an earlier seek. Under load Chrome can fire `seeked` before the new
   // frame is presented, so a drawImage of the clip still gets the frame from
-  // before the seek (seen on CI: frame 105 after a seek back to 0); every
+  // before the seek (frame 105 after a seek back to 0, say); every
   // seek waits for the element to present a frame, which Chrome does after
   // each seek, one within the frame already shown included.
   // For a seek onto the end of the file, Chrome can also fire

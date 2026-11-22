@@ -50,7 +50,8 @@ function css(style) {
   return o;
 }
 
-// The table of Part B at p = 0, 0.5 and 1, written out: [in, out] for each.
+// The styles of every kind and direction at p = 0, 0.5 and 1, written out:
+// [in, out] for each.
 const SLIDE = {
   'from-right':  ['100% 0%', '50% 0%', '-50% 0%', '-100% 0%'],
   'from-left':   ['-100% 0%', '-50% 0%', '50% 0%', '100% 0%'],

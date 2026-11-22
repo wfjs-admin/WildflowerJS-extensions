@@ -172,8 +172,34 @@ describe(`readiness with queries (${BUILD} extension, ${CORE_TIER} core)`, () =>
     expect(host.querySelector('b').textContent).toBe('2');
   });
 
-  // The HyperFrames CLI renders with the page's clock frozen at 0 (probed
-  // with v0.8.140: Date.now() and performance.now() both return 0), so a
+  // The clock's first seek comes before the rows, and a seek to the same time
+  // does not run the scene again, so the record draws when its rows land.
+  it('layers.scene() with queries: frame 0 is drawn from the rows once ready() resolves', async ({ skip }) => {
+    const { wf } = await load();
+    if (!wf.features || wf.features.query === false) skip();
+    const qn = uniqueName('q');
+    let release;
+    wf.query(qn, { from: () => new Promise((r) => { release = () => r([{ id: 1 }, { id: 2 }, { id: 3 }]); }) });
+    const name = uniqueName('scene');
+    wf.kinetic.layers.scene(name, {
+      queries: [qn],
+      layers: [
+        { id: 'count', kind: 'html', src: '.count', content: { text: { call: 'count', args: [{ from: qn + '.rows' }] } } },
+        { id: 'card', kind: 'html', src: '.card', look: { opacity: { at: [0, 1], to: [0.25, 1] } } },
+      ],
+    }, { fns: { count: (rows) => String(rows.length) } });
+    const host = await mount(`<div data-composition-id="rd5b" data-start="0" data-duration="2" data-width="100" data-height="100"><div data-component="${name}" data-start="0" data-duration="2"><b class="count"></b><i class="card"></i></div></div>`);
+    cleanup.push(host);
+    const p = wf.kinetic.ready();
+    expect(await state(p, 150)).toBe('pending');
+    release();
+    expect(await state(p, 2000)).toBe('resolved');
+    expect(host.querySelector('.count').textContent).toBe('3');
+    expect(host.querySelector('.card').style.opacity).toBe('0.25');
+  });
+
+  // The HyperFrames CLI renders with the page's clock frozen at 0 (in
+  // v0.8.140, Date.now() and performance.now() both return 0), so a
   // query loaded there has lastSync 0, which is a load all the same.
   it('waitFor: ready() resolves for a query that loaded with the clock at 0, as in a HyperFrames render', async ({ skip }) => {
     const { wf } = await load();

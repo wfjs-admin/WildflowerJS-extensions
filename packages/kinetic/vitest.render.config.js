@@ -8,7 +8,7 @@ import { flakyRoute } from './test/flaky-route.js'
 // in canvas) is behind a Chrome flag in 154. Everything else mirrors
 // vitest.config.js.
 //
-//   node scripts/build-rollup.cjs kinetic.wf
+//   node scripts/build-extension.cjs kinetic
 //   npx vitest run --config packages/kinetic/vitest.render.config.js
 //   EXT_BUILD=min npx vitest run --config packages/kinetic/vitest.render.config.js
 
@@ -35,7 +35,7 @@ export default defineConfig({
       headless: true,
     },
     // runtime.test.js runs in the main suite too, where its render() tests skip.
-    include: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js', 'packages/kinetic/test/still-end.test.js', 'packages/kinetic/test/runtime.test.js'],
+    include: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js', 'packages/kinetic/test/still-end.test.js', 'packages/kinetic/test/tools-pixels.test.js', 'packages/kinetic/test/batch-render.test.js', 'packages/kinetic/test/alpha-render.test.js', 'packages/kinetic/test/runtime.test.js'],
     testTimeout: 60000,
     isolate: true,
     globals: true,

@@ -73,16 +73,15 @@ async function playAndSample(k, store, from, ms, read, w = window) {
 // is seeked once it is 50 ms off, and the frame it shows stays put while
 // that seek lands, about 45 ms more (a sample 67 ms behind was seen on a
 // rate-2 clip during one); and `median`, how many source frames behind the
-// middle sample is. Measured 2026-10-08 in Playwright's Chromium 151 and Chrome 155,
-// headless: the element's currentTime sits 40 to 47 ms behind the clock (the
+// middle sample is. In Playwright's Chromium 151 and Chrome 155,
+// headless, the element's currentTime sits 40 to 47 ms behind the clock (the
 // stall of its start), and the frame drawn from it is 0 or 1 frames behind
 // in every one of about 2,900 samples, never 2, so a median of at most 1 is
 // not a coin flip.
 //
 // Under load (the whole suite on a busy machine) a frame can come late and
 // a sample land past the 100 ms while a re-seek is under way: three such
-// samples in a 1 s play were seen 2026-10-28, on the commit before the
-// review fixes too. What the rule guarantees is that a clip out of step
+// samples in a 1 s play have been seen. What the rule guarantees is that a clip out of step
 // comes back, so `run` is the longest stretch of samples out of step, in ms.
 function inStep(samples, key, opts = {}) {
   const { rate = 1, fps = 30 } = opts;
@@ -118,7 +117,7 @@ function expectInStep(samples, key, opts) {
 // down to the millisecond (frame 61 of the 30 fps fixture at 2.033000, not
 // 2.0333), so a frame can start up to 1 ms before its nominal time: within
 // about 2 ms of the next frame the clip shows that one (a pause at 2.0322
-// showed frame 61, probed 2026-10-10). Seeks on whole frames, as check() and
+// shows frame 61). Seeks on whole frames, as check() and
 // render() make, are unaffected.
 async function expectPausedOn(k, store, els, opts) {
   k.pause();
@@ -491,9 +490,9 @@ describe(`footage attributes (${BUILD} extension, ${CORE_TIER} core)`, () => {
   });
 
   // Chrome can fire seeked for a seek onto the end of the file before it has
-  // flushed the last frames, and sets ended once they are out: seen under the
-  // full suite's load as frame 117 at seeked, then 119 with ended 100 ms
-  // later. Here ended reads false after the real seeked, as it did then.
+  // flushed the last frames, and sets ended once they are out: under load,
+  // frame 117 at seeked, then 119 with ended 100 ms later. Here ended reads
+  // false after the real seeked, as Chrome can report it.
   it('a seek onto the end of the file is settled once the element has ended, not at seeked alone', async () => {
     const { el } = await past('fe9');
     const v = el('v');
@@ -517,7 +516,7 @@ describe(`footage attributes (${BUILD} extension, ${CORE_TIER} core)`, () => {
 
   // ended reads only the position, true once the time is the duration, so it
   // can be true while the frame on the element is still the one before the
-  // seek: seen once in the full matrix as frame 117 after the seek settled.
+  // seek: frame 117 after the seek settled, under load.
   // A seek onto the end also waits for the element to present a frame.
   it('a seek onto the end of the file is settled once the element has presented a frame, not at ended alone', async () => {
     const { el } = await past('fe10');

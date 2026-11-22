@@ -102,8 +102,8 @@ brightest step that is still the brand's.
 - **A hold keeps pushing**: a slow push or truck of about 5% of the frame a
   second through every hold, so no frame is dead.
 - **Tilt and roll a few degrees with the move**, the whole world turning as
-  a group: the tilt study, three panels turned together with a rack focus,
-  was the strongest of the five on sight.
+  a group: three panels turned together, with a rack focus between them,
+  read as a place.
 - **Magnified layers drawn finer.** A layer the camera brings close while it
   is turned gets `depth(z, { detail, camera: cameraAt(t, tracks) })` (`api.md`,
   "Camera").

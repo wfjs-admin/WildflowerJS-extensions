@@ -539,7 +539,7 @@ function splitText(s) {
         from = end;
         continue;
       }
-      // Otherwise as before: path( is text, then the quoted string.
+      // Otherwise path( is text, then the quoted string.
       end = TOKEN.lastIndex = at + 5;
     } else if (c === '#' || c === 'r' || c === 'R') {
       tok = parseColor(w);
@@ -1115,6 +1115,8 @@ function checkTrack(tr, label, key) {
 // it gives them their units itself (FOLDED).
 const LENGTH = /^(?:width|height|top|right|bottom|left|inset\w*|(?:min|max)(?:Width|Height)|(?:margin|padding)\w*|fontSize|letterSpacing|wordSpacing|lineHeight|textIndent|gap|rowGap|columnGap|flexBasis|outlineWidth|outlineOffset|offsetDistance|border\w*(?:Radius|Width))$/;
 const camel = (k) => k.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+// Whether a style property, written either way ('fontSize', 'font-size'), takes a length.
+export const isLength = (prop) => LENGTH.test(camel(prop));
 const round2 = (v) => Math.round(v * 100) / 100;
 
 // What a valid track does that its author is unlikely to want, warned about
@@ -1458,8 +1460,9 @@ function eyeOf(o, who) {
 // message names: camera or cameraAt.
 function cameraNumbers(t, tracks, o, name) {
   const who = name + '(t, tracks)';
-  // A moves() camera is a function of time. Given as it is, it read as no
-  // tracks, and the camera stayed at rest without a word.
+  // A moves() camera is a function of time. Given as it is, it would read
+  // as no tracks and leave the camera at rest without a word, so it is
+  // refused here.
   if (typeof tracks == 'function') throw fail(CODES.BAD_CALL, who, __DEV__ && 'tracks is the camera at t; a moves() camera is called for it: pass CAM(t), not CAM');
   const c = Object.assign({}, CAMERA);
   for (const k of tracks && typeof tracks == 'object' ? Object.keys(tracks) : []) {

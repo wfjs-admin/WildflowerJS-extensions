@@ -10,12 +10,20 @@
  *   wildflower.kinetic.ready()                   resolves when frame 0 may be
  *                                                captured (readiness.js)
  *   wildflower.kinetic.check({ samples })        the render self-test
- *                                                (check.js)
- *   wildflower.kinetic.render({ fps, codec, shutter, finish })
+ *                                                (check.js); its other
+ *                                                options are passes of
+ *                                                kinetic.tools.js, loaded
+ *                                                on demand (tools/wf.js)
+ *   wildflower.kinetic.render({ fps, codec, shutter, finish, alpha })
  *                                                an MP4 from the page, with
  *                                                WebCodecs (render.js); a
  *                                                shutter averages seeks inside
- *                                                each frame
+ *                                                each frame; alpha: a MOV of
+ *                                                PNG frames with transparency
+ *   wildflower.kinetic.render.batch(rows, options)
+ *                                                one MP4 per row of variables,
+ *                                                each row in a frame of its own
+ *                                                (batch.js, tools/batch.js)
  *   wildflower.kinetic.seek(seconds)             move the clock (the runtime's
  *                                                player when there is one)
  *   wildflower.kinetic.play() / play({ from, to }) / pause()
@@ -27,7 +35,7 @@
  *                                                `follow` on a scene eases
  *                                                toward a store path by a
  *                                                spring (follow.js)
- *   wildflower.kinetic.config({ fps, channel, autoplay, preview, frameNotice, loop, fit, sound, shutter, mode })
+ *   wildflower.kinetic.config({ fps, channel, autoplay, preview, frameNotice, loop, fit, sound, shutter, alpha, mode })
  *                                                preview: the bar (preview.js);
  *                                                frameNotice: its note before a
  *                                                render in a frame;
@@ -127,6 +135,7 @@ import { createCheck } from './check.js';
 import { createPreview, previewRequested } from './preview.js';
 import { createFit } from './fit.js';
 import { createEmbed } from './embed.js';
+import { createBatch } from './batch.js';
 import { createThree } from './three.js';
 import { createRender } from './render.js';
 import { createAudio } from './audio.js';
@@ -148,8 +157,9 @@ import { textMetrics, fontsMeasured, trackFonts } from './metrics.js';
 import { ticks, rank, captions, moment, srt, beat } from './data.js';
 import { timeOf, tempo, onFrame, useFps } from './times.js';
 import { moves, look } from './moves.js';
+import { createLayers } from './layers.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 // Read while this script is the current one: a later call sees null.
 const PREVIEW_REQUESTED = previewRequested();
@@ -251,10 +261,14 @@ function install(wf) {
     ticks, rank, captions, moment, srt, beat,
     timeOf, tempo, onFrame,
   };
+  // Layer records, drawn with the calls above.
+  api.layers = createLayers(wf, api);
   useFps(() => clock.store.fps, clock.fpsSetting);
-  preview = createPreview(wf, api, clock, PREVIEW_REQUESTED, audio);
+  preview = createPreview(wf, api, clock, PREVIEW_REQUESTED, audio, scenes.hasInputs);
   // Under ?embed inside a frame, the parent drives the clock by postMessage.
   createEmbed(clock, api);
+  // render.batch(), and in a frame it renders a row in, the frame's side.
+  createBatch(api);
   audio.usePreview(preview);
   clock.usePreview(preview);
   clock.useFit(fit);

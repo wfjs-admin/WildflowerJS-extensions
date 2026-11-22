@@ -5,11 +5,9 @@
  * size from its data attributes, no fit and no data-kinetic-ready (so the
  * documented hide-until-ready rule hides it for good). The development build
  * says so once after load, naming both roots; a composition nested inside
- * the first root is the first root's own and is not warned about. This used
- * to pass in silence.
+ * the first root is the first root's own and is not warned about.
  *
- * The warning's code is a proposal: the next free development warning in
- * diagnostics.js. The test reads the text, not the number.
+ * The test reads the warning's text, not its code.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { load, tick, CORE, WF_FILE, BUILD, CORE_TIER } from './helpers.js';

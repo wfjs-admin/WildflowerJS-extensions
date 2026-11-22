@@ -396,7 +396,7 @@ export function createLesson(wf, clock) {
   // plays on into the next with no hold between, so a run of them plays as
   // one range, to the first step after them that holds. A step that holds
   // on its first frame ends the run before it, and is entered with a seek of
-  // its own, as before.
+  // its own.
   function runEnd(tb, i) {
     let j = i;
     while (defOf(tb[j]).wait === false && j + 1 < tb.length && holdOf(tb, j + 1) > tb[j + 1].start + EPS) j++;

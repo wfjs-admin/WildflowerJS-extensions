@@ -43,7 +43,7 @@
  * run of readiness fetches it again, so once the file is there they pass.
  *
  * KN-100 on every build for a bad call, and from animatedImage() in a
- * browser without ImageDecoder (Safari at the time of writing), where a page
+ * browser without ImageDecoder (Safari, for one), where a page
  * can show the file in a plain <img>, which plays on the browser's clock.
  */
 

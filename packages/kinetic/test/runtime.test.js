@@ -311,8 +311,8 @@ async function stripePage(fps, duration, { before = '', runtime = true, runtimeA
 
 // The time each of the first `n` frames of a rendered file carries, in
 // 1/300 s: the stripes read across the middle of each frame. One <video>
-// per frame (frameAt): reusing one for this file stalled on its second
-// seek, which never fired seeked.
+// per frame (frameAt): reusing one for this file stalls on its second
+// seek, which never fires seeked.
 async function stripesOf(blob, n, fps) {
   const out = [];
   for (let i = 0; i < n; i++) {
@@ -409,8 +409,8 @@ describe(`the player's frame grid with Kinetic loaded in page order (${BUILD} ex
 
   // The runtime's tag deferred, as the docs give it: its script runs once
   // the page is parsed, after Kinetic's plain tag has run, and reads the
-  // config then. (Probed outside the suite: a deferred Kinetic tag after a
-  // deferred runtime's runs too late, and KN-206 follows.)
+  // config then. (A deferred Kinetic tag after a deferred runtime's runs
+  // too late, and KN-206 follows.)
   it("with the runtime's tag deferred, as the docs give it, the player seeks on the root's 1/25 s", async () => {
     const { w, store } = await stripePage(25, 1, { runtimeAttrs: ' defer' });
     const got = [];

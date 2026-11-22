@@ -149,8 +149,9 @@ describe(`preview bar frame steps (${BUILD} extension, ${CORE_TIER} core)`, () =
 // edge cannot be reached at all. On a narrow window the bar wraps onto a
 // second row instead; with room it stays one row.
 describe(`preview bar layout (${BUILD} extension, ${CORE_TIER} core)`, () => {
-  // The frame notice is a row of its own under the controls (tested below).
-  const controls = (bar) => Array.from(bar.children).filter((el) => !el.hasAttribute('data-kinetic-frame-notice'));
+  // The frame notice is a row of its own under the controls, and the alpha
+  // dialog shows over the page (both tested below).
+  const controls = (bar) => Array.from(bar.children).filter((el) => !el.hasAttribute('data-kinetic-frame-notice') && !el.hasAttribute('data-kinetic-alpha-notice'));
 
   it('keeps every control inside a 390 px window by wrapping', async () => {
     const { w, bar } = await framed('', 390);
@@ -534,5 +535,87 @@ describe(`preview bar frame notice (${BUILD} extension, ${CORE_TIER} core)`, () 
     await f.click('[data-action="render"]');
     expect(f.shown()).toBe(false);
     expect(f.renders()).toBe(1);
+  });
+
+  it('in a frame with config({ alpha: true }): the frame notice, then the size dialog, then the render', async () => {
+    const f = await framedRender('<script>wildflower.kinetic.config({ alpha: true });<\/script>');
+    const dialog = f.bar.querySelector('dialog[data-kinetic-alpha-notice]');
+    await f.click('[data-action="render"]');
+    expect(f.shown()).toBe(true);
+    expect(dialog.open).toBe(false);
+    await f.click('[data-action="renderAnyway"]');
+    expect(f.shown()).toBe(false);
+    expect(dialog.open).toBe(true);
+    expect(f.renders()).toBe(0);
+    await f.click('[data-action="alphaRender"]');
+    expect(dialog.open).toBe(false);
+    expect(f.renders()).toBe(1);
+  });
+});
+
+// config({ alpha: true }): the bar's Render asks first, in a modal dialog of
+// the bar's own, with an estimate of the file's size.
+describe(`preview bar alpha dialog (${BUILD} extension, ${CORE_TIER} core)`, () => {
+  async function alphaBar(attrs) {
+    const { wf } = await load();
+    const host = await mount('<div data-composition-id="pa1" data-start="0" ' + attrs + '></div>');
+    cleanup.push(host);
+    wf.kinetic.config({ preview: true, alpha: true });
+    restores.push(() => wf.kinetic.config({ alpha: false }));
+    await tick(10);
+    let renders = 0;
+    stub(wf.kinetic, 'render', async () => { renders++; return { name: 'pa1.mov', frames: 1, ms: 1 }; });
+    const bar = bars()[0];
+    const dialog = bar.querySelector('dialog[data-kinetic-alpha-notice]');
+    return { wf, bar, dialog, renders: () => renders, click: async (sel) => { bar.querySelector(sel).click(); await tick(20); } };
+  }
+
+  it('Render shows the dialog and starts no render; Cancel closes it and renders nothing; Render in the dialog renders', async () => {
+    const b = await alphaBar('data-duration="120" data-width="1920" data-height="1080" data-fps="30"');
+    expect(b.dialog.open).toBe(false);
+    await b.click('[data-action="render"]');
+    expect(b.dialog.open).toBe(true);
+    expect(b.dialog.matches(':modal'), 'modal').toBe(true);
+    const text = b.dialog.textContent;
+    expect(text).toContain('about 6.7 GB');
+    expect(text).toContain('2 minutes');
+    expect(text).toContain('1920 × 1080');
+    expect(text).toContain('estimate');
+    expect(b.renders()).toBe(0);
+    await b.click('[data-action="alphaCancel"]');
+    expect(b.dialog.open).toBe(false);
+    expect(b.renders(), 'Cancel renders nothing').toBe(0);
+    // Every alpha render asks.
+    await b.click('[data-action="render"]');
+    expect(b.dialog.open).toBe(true);
+    await b.click('[data-action="alphaRender"]');
+    expect(b.dialog.open).toBe(false);
+    expect(b.renders()).toBe(1);
+    await b.click('[data-action="render"]');
+    expect(b.dialog.open).toBe(true);
+    expect(b.renders()).toBe(1);
+    // Escape cancels, as Cancel does.
+    b.dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    b.dialog.close();
+    await tick(20);
+    expect(b.dialog.open).toBe(false);
+    expect(b.renders()).toBe(1);
+  });
+
+  it('the estimate follows the composition: a short small piece in MB and seconds', async () => {
+    const b = await alphaBar('data-duration="4" data-width="640" data-height="360" data-fps="25"');
+    await b.click('[data-action="render"]');
+    // 100 frames of 640 x 360 at the measured 0.9 bytes a pixel: about 21 MB.
+    expect(b.dialog.textContent).toContain('about 21 MB');
+    expect(b.dialog.textContent).toContain('4 seconds');
+    await b.click('[data-action="alphaCancel"]');
+  });
+
+  it('without alpha the bar renders straight away, with no dialog', async () => {
+    const b = await alphaBar('data-duration="2" data-width="320" data-height="180" data-fps="10"');
+    b.wf.kinetic.config({ alpha: false });
+    await b.click('[data-action="render"]');
+    expect(b.dialog.open).toBe(false);
+    expect(b.renders()).toBe(1);
   });
 });

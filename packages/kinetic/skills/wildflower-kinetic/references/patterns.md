@@ -1,7 +1,8 @@
 # Kinetic patterns
 
-This file holds the sixty-nine Kinetic patterns, each one idea with its markup and scene code, all running inside the composition set up in the first section.
-Every helper comes from `wildflower.kinetic`, destructured in the line at the top of the scene file.
+This file holds 73 Kinetic patterns, each one idea with its markup and its layers, all running inside the composition set up in the first section.
+The layers are handed to `layers.scene(name, { layers: [...] }, { fns })`, and the helpers a function in `fns` uses come from `wildflower.kinetic`, destructured in the line at the top of the file.
+A few patterns are a scene written in code, for what no layer can describe; each says so.
 
 Contents, one entry for each `##` section below:
 
@@ -23,13 +24,13 @@ Contents, one entry for each `##` section below:
 - [A star that breathes, a pie that fills](#a-star-that-breathes-a-pie-that-fills)
 - [A clip that changes shape](#a-clip-that-changes-shape)
 - [Enter and exit](#enter-and-exit)
-- [Styling the scene's own root](#styling-the-scenes-own-root)
+- [Styling the clip itself](#styling-the-clip-itself)
 - [One scene, several clips](#one-scene-several-clips)
 - [A push between two scenes](#a-push-between-two-scenes)
 - [An iris into the next scene](#an-iris-into-the-next-scene)
 - [A title that wipes in and fades out](#a-title-that-wipes-in-and-fades-out)
 - [A sequence of transitions](#a-sequence-of-transitions)
-- [A transition inside a scene](#a-transition-inside-a-scene)
+- [A transition inside a clip](#a-transition-inside-a-clip)
 - [Still effects with an SVG filter](#still-effects-with-an-svg-filter)
 - [A luma matte](#a-luma-matte)
 - [An alpha matte and a feathered mask](#an-alpha-matte-and-a-feathered-mask)
@@ -64,6 +65,7 @@ Contents, one entry for each `##` section below:
 - [A landing on a whole frame](#a-landing-on-a-whole-frame)
 - [A simulation baked at load](#a-simulation-baked-at-load)
 - [Cuts on whole frames](#cuts-on-whole-frames)
+- [Solids in 2.5D](#solids-in-25d)
 - [A camera push and a fly-through](#a-camera-push-and-a-fly-through)
 - [Morphing a formation](#morphing-a-formation)
 - [Depth of field in 3D](#depth-of-field-in-3d)
@@ -81,13 +83,13 @@ Contents, one entry for each `##` section below:
 
 ## The composition
 
-Every pattern is a scene inside a composition root.
+Every pattern is a scene's layers drawn on a clip inside a composition root.
 The root carries `data-composition-id`, its length in `data-duration`, and its size and frame rate.
-Kinetic loads after the framework, and the scene file loads after both.
+Kinetic loads after the framework, and the page's own file loads after both.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js" data-preview></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.3/dist/kinetic.wf.js" data-preview></script>
 <script defer src="app.js"></script>
 
 <div id="stage" data-composition-id="main"
@@ -108,52 +110,47 @@ The last rule is Kinetic's cloak: it hides the stage until Kinetic sets `data-ki
 [data-composition-id]:not([data-kinetic-ready]) { visibility: hidden; }
 ```
 
-A scene is registered with `scene(name, definition)` and bound to the element whose `data-component` has the same name.
-The element's `data-start` and `data-duration` set its clip, and `this.local` counts seconds from `data-start`.
-`this.time` is the composition's seconds; `local` holds at 0 before the clip and at the clip's length after it, where the scene is hidden.
-The scene code in every pattern follows these two lines at the top of the file: the shutter, so every render has motion blur, and the helpers.
+`layers.scene(name, { layers: [...] })` draws its layers on the element whose `data-component` has the same name.
+The element's `data-start` and `data-duration` set its clip, and the layers' times count seconds from `data-start`; before the clip and after it, the clip is hidden.
+Each layer selects an element with `src`, a selector searched in the scene's clip first and then the whole composition, and its `place`, `look` and `content` move the element from where the CSS put it.
+Every pattern's file starts with these lines: the shutter, so every render has motion blur, and the helpers its functions use.
+The scenes below leave out `id`, `size` and `duration`, which `layers.scene()` takes from the scene's name, the root's `data-width` and `data-height`, and the clip's `data-duration`.
 
 ```javascript
 wildflower.kinetic.config({ shutter: 180 });
-const { scene, split, styleAt, stagger, sweep, repeat, typewriter, scramble, moment, interpolate, ease, spring, ramp, mix, focus, random, noise, transition, effect, shade, blur, boil, text, lottie, animatedImage, matchPaths, shape, format, ticks, rank, captions, srt, beat, level, spectrum } = wildflower.kinetic;
+const { layers, split, stagger, sweep, moment, interpolate, ease, spring, ramp, mix, focus, random, noise, shape, format, ticks, rank, textMetrics } = wildflower.kinetic;
 ```
 
 ## A staggered title
 
 The letters of a title fade in and spring up into place, one after another.
-`split()` returns a row for each letter, and `styleAt()` turns the tracks in `RISE` into a style object at a given time.
-Each row is styled at `local - 0.2 - stagger(i, n, { each: 0.06 })`, so each letter starts 0.06 s after the one before it.
+A text layer with `split: 'letter'` makes a part for each letter, and `animate` gives every part the same tracks, each in the part's own time.
+`start: 0.2, each: 0.06` starts the first letter at 0.2 s and each one after it 0.06 s later.
 `from: 'center'` would start from the middle letter outward, and `total: 0.5` would spread the starts over half a second whatever the length of the title.
-A row whose time is still negative returns the first value of each track.
-`RISE` fades the letter in, springs it up from 48 px below and settles its scale.
-The row needs `white-space: pre`, because spaces get rows of their own, and `display: inline-block`, because a transform has no effect on an inline element.
+A part whose time is still negative holds the first value of each track.
+The tracks fade the letter in, spring it up from 48 px below and settle its scale.
+Each part is a span set `display: inline-block`, because a transform has no effect on an inline element, and `white-space: pre`, because spaces get parts of their own.
 
 ```html
 <div class="layer" data-component="title" data-start="0" data-duration="4">
-    <h1 data-list="letters" data-key="key">
-        <template><span style="display: inline-block; white-space: pre" data-bind="text" data-bind-style="style"></span></template>
-    </h1>
+    <h1 class="word"></h1>
 </div>
 ```
 
 ```javascript
-const RISE = {
-    opacity:    { at: [0, 0.35], to: [0, 1] },
-    translateY: { at: [0, 0.6],  to: [48, 0], ease: 'spring' },
-    scale:      { at: [0, 0.6],  to: [0.9, 1], ease: 'power2.out' },
-};
-
-scene('title', {
-    computed: {
-        letters() {
-            const rows = split('WILDFLOWER');
-            return rows.map((r) => ({
-                key: r.key,
-                text: r.text,
-                style: r.space ? {} : styleAt(this.local - 0.2 - stagger(r.i, rows.length, { each: 0.06 }), RISE),
-            }));
+layers.scene('title', {
+    layers: [{
+        id: 'word', kind: 'text', src: '.word',
+        content: { text: 'WILDFLOWER', split: 'letter' },
+        animate: {
+            start: 0.2, each: 0.06,
+            place: {
+                translate: [0, { at: [0, 0.6], to: [48, 0], ease: 'spring' }],
+                scale: { at: [0, 0.6], to: [0.9, 1], ease: 'power2.out' },
+            },
+            look: { opacity: { at: [0, 0.35], to: [0, 1] } },
         },
-    },
+    }],
 });
 ```
 
@@ -162,53 +159,47 @@ The Launch Title demo (/demos/kinetic-title/) styles the letters of its title th
 ## A title that sweeps in
 
 The letters of a title rise and fade in under a window that sweeps through the word, each letter's change scaled by its weight, so neighboring letters overlap in motion instead of starting one after another.
-`sweep(i, n, p, options)` gives letter i's weight: 0 before the window reaches it, 1 once the window has passed, and in between the window's shape at the letter's place in it.
-`p` is the sweep's progress, here `ramp(local, 0.2, 1.4)`.
-The weight is then the time of a one-second track set: `styleAt(w, RISE)`, with `RISE`'s keys at 0 and 1, gives the letter's style from its weight, with the units and the transform folded as `styleAt()` folds them.
+`{ sweep: { p, width, ease } }` gives each letter its weight, as `sweep(i, n, p)` does: 0 before the window reaches it, 1 once the window has passed, and in between the window's shape at the letter's place in it.
+`p` is the sweep's progress, here a shared track from 0 to 1 over 0.2 to 1.4 s.
+Each of the letter's tracks is then driven by its weight: `{ keys: [[0, a], [1, b]], by: weight }` reads `a` at weight 0 and `b` at weight 1.
 `shape: 'triangle'` makes a bump instead, a wave that travels through the word and leaves the letters as they were; `from: 'center'` sweeps outward from the middle; `width` is the window as a fraction of the letters, and a wider one has more of them moving at once.
-Spaces are rows and count, which pauses the sweep at each gap.
+Spaces are parts and count, which pauses the sweep at each gap.
 
 ```html
 <div class="layer" data-component="title" data-start="0" data-duration="4">
-    <h1 data-list="letters" data-key="key">
-        <template><span style="display: inline-block; white-space: pre" data-bind="text" data-bind-style="style"></span></template>
-    </h1>
+    <h1 class="word"></h1>
 </div>
 ```
 
 ```javascript
-const RISE = {
-    opacity:    { at: [0, 1], to: [0, 1] },
-    translateY: { at: [0, 1], to: [40, 0] },
-    blur:       { at: [0, 1], to: [6, 0] },
-};
+// Each letter's weight under the window, and a track driven by it.
+const weight = { sweep: { p: 'p', width: 0.4, ease: 'power2.out' } };
+const by = (a, b) => ({ keys: [[0, a], [1, b]], by: weight });
 
-scene('title', {
-    computed: {
-        letters() {
-            const rows = split('WILDFLOWER');
-            const p = ramp(this.local, 0.2, 1.4, 'power1.inOut');
-            return rows.map((r) => ({
-                key: r.key,
-                text: r.text,
-                style: r.space ? {} : styleAt(sweep(r.i, rows.length, p, { width: 0.4, ease: 'power2.out' }), RISE),
-            }));
+layers.scene('title', {
+    shared: { p: { at: [0.2, 1.4], to: [0, 1], ease: 'power1.inOut' } },
+    layers: [{
+        id: 'word', kind: 'text', src: '.word',
+        content: { text: 'WILDFLOWER', split: 'letter' },
+        animate: {
+            place: { translate: [0, by(40, 0)] },
+            look: { opacity: by(0, 1), blur: by(6, 0) },
         },
-    },
+    }],
 });
 ```
 
 ## A repeater
 
-A shape repeated twelve times, each copy the transform of the one before it again, so a small turn makes a fan and a turn with a move an arc; a `data-list` of the rows, each copy bound to its row's style.
-`repeat(n, options)` returns the rows, every copy's transform composed as one matrix about the element's `transform-origin`, which `origin` writes.
-The copies sit on one another to start, so the copy is absolutely positioned at the list element's origin and the list element is placed where the fan's pivot goes.
+A shape is repeated twelve times, each copy applying the same transform again to the one before it, so a small turn makes a fan and a turn with a move makes an arc.
+`look.repeat` makes `count` copies of the element's `<template>`, every copy's transform composed as one matrix about its `transform-origin`, which `origin` writes, as Kinetic's `repeat()` does.
+The copies start on top of one another, so the copy is absolutely positioned at the container's origin and the container is placed where the fan's pivot goes.
 A track drives any number: `rotate` here fans the copies out over 1.4 seconds, and `opacity` fades them from the first to the last.
 
 ```html
 <div class="layer" data-component="fan" data-start="0" data-duration="4">
-    <div class="copies" data-list="copies" data-key="key">
-        <template><div class="leaf" data-bind-style="style"></div></template>
+    <div class="copies">
+        <template><div class="leaf"></div></template>
     </div>
 </div>
 ```
@@ -219,34 +210,33 @@ A track drives any number: `rotate` here fans the copies out over 1.4 seconds, a
 ```
 
 ```javascript
-scene('fan', {
-    computed: {
-        copies() {
-            const turn = interpolate(this.local, [0.2, 1.6], [0, 15], { ease: 'power2.out' });
-            return repeat(12, { rotate: turn, opacity: [1, 0.35], origin: '50% 100%' });
-        },
-    },
+layers.scene('fan', {
+    layers: [{
+        id: 'fan', kind: 'html', src: '.copies',
+        look: { repeat: { count: 12, rotate: { at: [0.2, 1.6], to: [0, 15], ease: 'power2.out' }, opacity: [1, 0.35], origin: '50% 100%' } },
+    }],
 });
 ```
 
 ## A typewriter line
 
 A line of text types itself out one character at a time.
-`typewriter(t, text, cps)` returns the first `Math.floor(t * cps)` characters of the text, counted by grapheme, so an emoji types as one character.
-With `t` as `local` minus a start time, the string is empty until the start, grows at `cps` characters per second, and is the whole text once it has been typed.
+A text layer's `typewriter: { start, cps }` shows the first `Math.floor((t - start) * cps)` characters of the text, counted by grapheme, so an emoji types as one character, as `typewriter()` does.
+The line is empty until the start, grows at `cps` characters per second, and is the whole text once it has been typed.
 An empty string gives the element no height, so it needs a `min-height` to keep the layout still.
 
 ```html
 <div class="layer" data-component="subtitle" data-start="0" data-duration="4">
-    <p style="min-height: 1.3em" data-bind="typed"></p>
+    <p class="typed" style="min-height: 1.3em"></p>
 </div>
 ```
 
 ```javascript
-scene('subtitle', {
-    computed: {
-        typed() { return typewriter(this.local - 0.5, 'Every frame is a function of time.', 28); },
-    },
+layers.scene('subtitle', {
+    layers: [{
+        id: 'line', kind: 'text', src: '.typed',
+        content: { text: 'Every frame is a function of time.', typewriter: { start: 0.5, cps: 28 } },
+    }],
 });
 ```
 
@@ -257,8 +247,8 @@ To type it in place, keep a hidden copy of the whole line in the same grid cell:
 
 ```html
 <p class="typed-line">
-    <span class="full" aria-hidden="true" data-bind="line"></span>
-    <span data-bind="typed"></span>
+    <span class="full" aria-hidden="true">Every frame is a function of time.</span>
+    <span class="typed"></span>
 </p>
 ```
 
@@ -269,13 +259,11 @@ To type it in place, keep a hidden copy of the whole line in the same grid cell:
 ```
 
 ```javascript
-const LINE = 'Every frame is a function of time.';
-
-scene('subtitle', {
-    computed: {
-        line() { return LINE; },
-        typed() { return typewriter(this.local - 0.5, LINE, 28); },
-    },
+layers.scene('subtitle', {
+    layers: [{
+        id: 'line', kind: 'text', src: '.typed-line .typed',
+        content: { text: 'Every frame is a function of time.', typewriter: { start: 0.5, cps: 28 } },
+    }],
 });
 ```
 
@@ -284,30 +272,31 @@ Center the `<p>` as any element is centered (a flex parent's `justify-content: c
 ## Style tracks on an element
 
 A badge slides up, straightens and fades in, then fades out, while the backdrop behind it shifts from near-black to a dark purple and back.
-A `keyframes` entry that is an object of tracks becomes a style object.
-`translateY`, `rotate` and `scale` among its tracks fold into one `transform`, in that order.
-Any other track is a style property of its own, so a color track such as `background` blends between colors.
-A track is `{ at, to, ease, unit }`, with `at` in the clip's seconds.
-`translateY` defaults to `px` and `rotate` to `deg`.
+A layer's `place` moves it: `translate` in px, `rotate` in degrees and `scale`, written into one `transform` in that order.
+Its `look.opacity` fades it, and `look.style` sets any other CSS property, so a color track such as `background` blends between colors.
+A track is `{ at, to, ease }`, with `at` in the clip's seconds.
 
 ```html
 <div class="layer" data-component="badge" data-start="0" data-duration="4">
-    <div class="layer" data-bind-style="backdrop"></div>
-    <div style="position: relative" data-bind-style="badge">New</div>
+    <div class="layer backdrop"></div>
+    <div class="badge" style="position: relative">New</div>
 </div>
 ```
 
 ```javascript
-scene('badge', {
-    keyframes: {
-        badge: {
-            opacity:    { at: [0, 0.4, 3.4, 4], to: [0, 1, 1, 0] },
-            translateY: { at: [0, 0.6], to: [40, 0], ease: 'spring' },
-            rotate:     { at: [0, 0.6], to: [-6, 0], ease: 'power3.out' },
-            scale:      { at: [0, 0.6], to: [0.9, 1], ease: 'power2.out' },
+layers.scene('badge', {
+    layers: [
+        { id: 'backdrop', kind: 'html', src: '.backdrop', look: { style: { background: { at: [0, 2, 4], to: ['#0b0f1a', '#181030', '#0b0f1a'] } } } },
+        {
+            id: 'badge', kind: 'html', src: '.badge',
+            place: {
+                translate: [0, { at: [0, 0.6], to: [40, 0], ease: 'spring' }],
+                rotate: { at: [0, 0.6], to: [-6, 0], ease: 'power3.out' },
+                scale: { at: [0, 0.6], to: [0.9, 1], ease: 'power2.out' },
+            },
+            look: { opacity: { at: [0, 0.4, 3.4, 4], to: [0, 1, 1, 0] } },
         },
-        backdrop: { background: { at: [0, 2, 4], to: ['#0b0f1a', '#181030', '#0b0f1a'] } },
-    },
+    ],
 });
 ```
 
@@ -315,7 +304,7 @@ The Launch Title demo (/demos/kinetic-title/) uses a color track for its backdro
 
 ## Spring in, ease out
 
-A heading springs up into place, holds, and then accelerates away upward, all on one `translateY` track.
+A heading springs up into place, holds, and then accelerates away upward, all on one track of its `translate`.
 An `ease` that is an array gives each pair of keyframes its own ease, one entry per segment, so four keyframes take three entries.
 The first segment springs, the middle one holds at 0, and the last one eases in with `power3.in`.
 The spring's segment is 1 second long, which leaves the default spring within 0.3% of rest when the second key arrives.
@@ -323,32 +312,31 @@ A shorter segment cuts the spring off while it is still moving, the value jumps 
 
 ```html
 <div class="layer" data-component="headline" data-start="0" data-duration="3">
-    <h2 data-bind-style="title">Spring sale</h2>
+    <h2 class="sale">Spring sale</h2>
 </div>
 ```
 
 ```javascript
-scene('headline', {
-    keyframes: {
-        title: {
-            opacity:    { at: [0, 0.3, 2.6, 3], to: [0, 1, 1, 0] },
-            translateY: { at: [0, 1, 2.4, 3], to: [60, 0, 0, -60], ease: ['spring', 'linear', 'power3.in'] },
-        },
-    },
+layers.scene('headline', {
+    layers: [{
+        id: 'title', kind: 'html', src: '.sale',
+        place: { translate: [0, { at: [0, 1, 2.4, 3], to: [60, 0, 0, -60], ease: ['spring', 'linear', 'power3.in'] }] },
+        look: { opacity: { at: [0, 0.3, 2.6, 3], to: [0, 1, 1, 0] } },
+    }],
 });
 ```
 
 ## A card that turns over
 
 A card comes forward, turns over to show its back, and settles again.
-`rotateY` turns it about its vertical axis and `translateZ` brings it toward the viewer during the turn, both under `perspective`, which Kinetic writes first in the transform.
-A track that holds one value has two equal keyframes, as `perspective` does here.
+`place.rotate` as `[x, y, z]` turns it about each axis, here its vertical one, and a third value in `translate` brings it toward the viewer during the turn, both under `place.perspective`, which Kinetic writes first in the transform.
+A value that never changes is a plain number, as `perspective` is here.
 The card has `transform-style: preserve-3d`, so its two faces turn with it in 3D.
 Each face has `backface-visibility: hidden`, so a face turned away from the viewer is not drawn, and the back face starts turned by 180 degrees, so the turn brings it round to the front.
 
 ```html
 <div class="layer" data-component="turn" data-start="0" data-duration="3">
-    <div class="card" data-bind-style="card">
+    <div class="card">
         <div class="face">Question</div>
         <div class="face back">Answer</div>
     </div>
@@ -362,43 +350,47 @@ Each face has `backface-visibility: hidden`, so a face turned away from the view
 ```
 
 ```javascript
-scene('turn', {
-    keyframes: {
-        card: {
-            perspective: { at: [0, 3], to: [1200, 1200] },
-            translateZ:  { at: [1, 1.4, 1.8], to: [0, 120, 0], ease: ['power2.out', 'power2.in'] },
-            rotateY:     { at: [1, 1.8], to: [0, 180], ease: 'power3.inOut' },
+layers.scene('turn', {
+    layers: [{
+        id: 'card', kind: 'html', src: '.card',
+        place: {
+            perspective: 1200,
+            translate: [0, 0, { at: [1, 1.4, 1.8], to: [0, 120, 0], ease: ['power2.out', 'power2.in'] }],
+            rotate: [0, { at: [1, 1.8], to: [0, 180], ease: 'power3.inOut' }, 0],
         },
-    },
+    }],
 });
 ```
 
 ## A wipe
 
 A panel is uncovered from left to right, holds, and is covered again from left to right.
-A `clipPath` track holds text with numbers in it, and Kinetic moves each number between keyframes while the text around the numbers stays as written.
+A `clipPath` track in `look.style` holds text with numbers in it, and Kinetic moves each number between keyframes while the text around the numbers stays as written.
 `inset(top right bottom left)` cuts that much off each side, so the right inset falling from 100% to 0% uncovers the panel, and the left inset rising from 0% to 100% covers it again.
-Every keyframe has the same text, with the same unit after each number, and a keyframe that differs throws when the scene is defined (KN-120).
+Every keyframe has the same text, with the same unit after each number (KN-120 when one differs).
 
 ```html
 <div class="layer" data-component="wipe" data-start="0" data-duration="4">
-    <div class="layer panel" data-bind-style="panel">
+    <div class="layer panel">
         <h2>Chapter two</h2>
     </div>
 </div>
 ```
 
 ```javascript
-scene('wipe', {
-    keyframes: {
-        panel: {
-            clipPath: {
-                at: [0, 0.8, 3, 3.8],
-                to: ['inset(0% 100% 0% 0%)', 'inset(0% 0% 0% 0%)', 'inset(0% 0% 0% 0%)', 'inset(0% 0% 0% 100%)'],
-                ease: ['power3.out', 'linear', 'power3.in'],
+layers.scene('wipe', {
+    layers: [{
+        id: 'panel', kind: 'html', src: '.panel',
+        look: {
+            style: {
+                clipPath: {
+                    at: [0, 0.8, 3, 3.8],
+                    to: ['inset(0% 100% 0% 0%)', 'inset(0% 0% 0% 0%)', 'inset(0% 0% 0% 0%)', 'inset(0% 0% 0% 100%)'],
+                    ease: ['power3.out', 'linear', 'power3.in'],
+                },
             },
         },
-    },
+    }],
 });
 ```
 
@@ -411,23 +403,26 @@ In the last segment the radius shrinks while the center moves to the point, so t
 
 ```html
 <div class="layer" data-component="iris" data-start="0" data-duration="4">
-    <div class="layer" data-bind-style="shot">
+    <div class="layer shot">
         <img src="harbour.jpg" alt="" style="width: 100%; height: 100%; object-fit: cover">
     </div>
 </div>
 ```
 
 ```javascript
-scene('iris', {
-    keyframes: {
-        shot: {
-            clipPath: {
-                at: [0, 1, 2.8, 3.6],
-                to: ['circle(0% at 50% 50%)', 'circle(75% at 50% 50%)', 'circle(75% at 50% 50%)', 'circle(0% at 72% 38%)'],
-                ease: ['expo.out', 'linear', 'power2.in'],
+layers.scene('iris', {
+    layers: [{
+        id: 'shot', kind: 'html', src: '.shot',
+        look: {
+            style: {
+                clipPath: {
+                    at: [0, 1, 2.8, 3.6],
+                    to: ['circle(0% at 50% 50%)', 'circle(75% at 50% 50%)', 'circle(75% at 50% 50%)', 'circle(0% at 72% 38%)'],
+                    ease: ['expo.out', 'linear', 'power2.in'],
+                },
             },
         },
-    },
+    }],
 });
 ```
 
@@ -436,12 +431,12 @@ scene('iris', {
 A tile rises a little, and its shadow drops further below it, spreads and fades.
 `filter: drop-shadow()` draws the shadow from what the element draws, rounded corners and transparent parts included.
 The `filter` track holds text with a color in it, and Kinetic mixes the `rgba()` color per channel, alpha included, while it moves the offset and the blur.
-The tile's `translateY` and `scale` tracks sit beside it and fold into `transform`.
-A `blur` track cannot sit beside a `filter` track, since both write `filter`, so a blur goes into the same text, as in `'blur(0px) drop-shadow(...)'`.
+The tile's `translate` and `scale` sit beside it in `place`.
+A `look.blur` cannot sit beside a `filter` in `look.style`, since both write `filter`, so a blur goes into the same text, as in `'blur(0px) drop-shadow(...)'`.
 
 ```html
 <div class="layer" data-component="lift" data-start="0" data-duration="3">
-    <div class="tile" data-bind-style="tile">Pick me</div>
+    <div class="tile">Pick me</div>
 </div>
 ```
 
@@ -450,18 +445,23 @@ A `blur` track cannot sit beside a `filter` track, since both write `filter`, so
 ```
 
 ```javascript
-scene('lift', {
-    keyframes: {
-        tile: {
-            translateY: { at: [0.5, 1.1], to: [0, -18], ease: 'power2.out' },
-            scale:      { at: [0.5, 1.1], to: [1, 1.04], ease: 'power2.out' },
-            filter: {
-                at: [0.5, 1.1],
-                to: ['drop-shadow(0px 2px 3px rgba(20, 16, 48, 0.35))', 'drop-shadow(0px 22px 28px rgba(20, 16, 48, 0.25))'],
-                ease: 'power2.out',
+layers.scene('lift', {
+    layers: [{
+        id: 'tile', kind: 'html', src: '.tile',
+        place: {
+            translate: [0, { at: [0.5, 1.1], to: [0, -18], ease: 'power2.out' }],
+            scale: { at: [0.5, 1.1], to: [1, 1.04], ease: 'power2.out' },
+        },
+        look: {
+            style: {
+                filter: {
+                    at: [0.5, 1.1],
+                    to: ['drop-shadow(0px 2px 3px rgba(20, 16, 48, 0.35))', 'drop-shadow(0px 22px 28px rgba(20, 16, 48, 0.25))'],
+                    ease: 'power2.out',
+                },
             },
         },
-    },
+    }],
 });
 ```
 
@@ -474,7 +474,7 @@ Any variable font with weight and width axes works, such as Roboto Flex, whose `
 
 ```html
 <div class="layer" data-component="breathe" data-start="0" data-duration="4">
-    <h1 class="word" data-bind-style="word">Breathe</h1>
+    <h1 class="word">Breathe</h1>
 </div>
 ```
 
@@ -489,16 +489,19 @@ Any variable font with weight and width axes works, such as Roboto Flex, whose `
 ```
 
 ```javascript
-scene('breathe', {
-    keyframes: {
-        word: {
-            fontVariationSettings: {
-                at: [0, 2, 4],
-                to: ['"wght" 200, "wdth" 75', '"wght" 900, "wdth" 125', '"wght" 200, "wdth" 75'],
-                ease: 'sine.inOut',
+layers.scene('breathe', {
+    layers: [{
+        id: 'word', kind: 'html', src: '.word',
+        look: {
+            style: {
+                fontVariationSettings: {
+                    at: [0, 2, 4],
+                    to: ['"wght" 200, "wdth" 75', '"wght" 900, "wdth" 125', '"wght" 200, "wdth" 75'],
+                    ease: 'sine.inOut',
+                },
             },
         },
-    },
+    }],
 });
 ```
 
@@ -506,8 +509,8 @@ scene('breathe', {
 
 A signature draws itself, one stroke after another.
 `pathLength="1"` makes a path measure its own length as 1, so `stroke-dasharray: 1` gives it one dash as long as the path and a gap as long again.
-A `strokeDashoffset` track from 1 to 0 shifts the dash along the path, and the stroke appears from its start to its end.
-A path with several subpaths draws all of them at once, each at the same rate, so strokes that draw one after another are separate paths with staggered tracks.
+A `strokeDashoffset` track from 1 to 0 in `look.style` shifts the dash along the path, and the stroke appears from its start to its end.
+A path with several subpaths draws all of them at once, each at the same rate, so strokes that draw one after another are separate paths: one layer whose `src` finds all three, each `delay`ed by its stagger, 0.6 s after the one before.
 With `stroke-linecap: round`, the first frame after the offset leaves 1 shows a dot at the start of the stroke, which is the round cap.
 The dash draws a stroke only. For a fill drawn partway, such as a band, or the part as a shape a canvas or three.js draws, use `trimPath()` (api.md, "Paths and shapes"); never cut the curves by hand.
 `pathLength` works the same way on `circle`, `rect`, `ellipse`, `line` and `polygon`.
@@ -515,9 +518,9 @@ The dash draws a stroke only. For a fill drawn partway, such as a band, or the p
 ```html
 <div class="layer" data-component="sign" data-start="0" data-duration="3">
     <svg class="layer" viewBox="0 0 1280 720" width="1280" height="720">
-        <path class="stroke" pathLength="1" d="M 200 400 C 300 200 450 200 520 380" data-bind-style="s1"></path>
-        <path class="stroke" pathLength="1" d="M 560 380 L 640 220 L 720 380" data-bind-style="s2"></path>
-        <path class="stroke" pathLength="1" d="M 760 300 C 860 200 980 420 1080 300" data-bind-style="s3"></path>
+        <path class="stroke" pathLength="1" d="M 200 400 C 300 200 450 200 520 380"></path>
+        <path class="stroke" pathLength="1" d="M 560 380 L 640 220 L 720 380"></path>
+        <path class="stroke" pathLength="1" d="M 760 300 C 860 200 980 420 1080 300"></path>
     </svg>
 </div>
 ```
@@ -527,10 +530,12 @@ The dash draws a stroke only. For a fill drawn partway, such as a band, or the p
 ```
 
 ```javascript
-const draw = (from, to) => ({ strokeDashoffset: { at: [from, to], to: [1, 0], ease: 'power2.inOut' } });
-
-scene('sign', {
-    keyframes: { s1: draw(0.2, 1.2), s2: draw(0.8, 1.8), s3: draw(1.4, 2.4) },
+layers.scene('sign', {
+    layers: [{
+        id: 'strokes', kind: 'svg', src: '.stroke',
+        delay: { stagger: { each: 0.6 } },
+        look: { style: { strokeDashoffset: { at: [0.2, 1.2], to: [1, 0], ease: 'power2.inOut' } } },
+    }],
 });
 ```
 
@@ -547,8 +552,8 @@ Square caps do the same for a shape whose corners are right angles, such as a re
 ## Along a path
 
 A paper plane flies along a curve and turns with it.
-CSS `offset-path: path('…')` puts an element on a path, `offset-rotate: auto` turns it to the path's direction, and an `offsetDistance` track moves it from 0% to 100% of the way.
-The track needs `unit: '%'`, since the browser ignores a bare number there, and development builds warn about a track without one (KN-122).
+CSS `offset-path: path('…')` puts an element on a path, `offset-rotate: auto` turns it to the path's direction, and an `offsetDistance` track in `look.style` moves it from 0% to 100% of the way.
+The track needs `unit: '%'`, since the browser ignores a bare number there.
 The path's coordinates start at the element's own position, so the plane sits at `left: 0; top: 0` in a layer whose coordinates are the drawn path's, here the stage's.
 The plane's center is the point on the path.
 The dashed route is the same path, drawn in an SVG the size of the stage.
@@ -558,7 +563,7 @@ The dashed route is the same path, drawn in an SVG the size of the stage.
     <svg class="layer" viewBox="0 0 1280 720" width="1280" height="720">
         <path class="route" d="M 160 560 C 400 80 880 80 1120 560"></path>
     </svg>
-    <div class="plane" data-bind-style="plane"></div>
+    <div class="plane"></div>
 </div>
 ```
 
@@ -569,28 +574,29 @@ The dashed route is the same path, drawn in an SVG the size of the stage.
 ```
 
 ```javascript
-scene('flight', {
-    keyframes: {
-        plane: { offsetDistance: { at: [0.3, 3.5], to: [0, 100], unit: '%', ease: 'power1.inOut' } },
-    },
+layers.scene('flight', {
+    layers: [{
+        id: 'plane', kind: 'html', src: '.plane',
+        look: { style: { offsetDistance: { at: [0.3, 3.5], to: [0, 100], unit: '%', ease: 'power1.inOut' } } },
+    }],
 });
 ```
 
 ## A shape that becomes another
 
 A square rounds into a circle as it turns, and beside it a triangle grows into an octagon.
-A track between two paths moves their numbers, so the paths need the same commands in the same order, and a square drawn with lines and a circle drawn with arcs do not have them (KN-120).
-`matchPaths()` converts both to cubic curves with the same commands and the same number of segments, and its result goes into the track's `to`.
+A track between two paths moves their numbers, so the paths need the same commands in the same order, and a square drawn with lines and a circle drawn with arcs do not have them.
+A `keys` track on `content.d` with `match` runs `matchPaths()` on its keys once, converting them to cubic curves with the same commands and the same number of segments, and blends them.
 It gives each path at least 8 segments, the fewest that keeps a square to a circle from twisting, and turns each later path to run the same way as the first and start at the point nearest the first's start.
 For polygons, `segments` set to the least common multiple of the two corner counts gives every side an even share of the points, which is 24 for a triangle and an octagon.
-The square turns about its own center because it has `transform-box: fill-box; transform-origin: center`, and without them a `rotate` track on an SVG element turns it about the origin of the `viewBox`.
-A transform track replaces the element's `transform` attribute, so each shape is placed by a wrapping `<g>`.
+The square turns about its own center because it has `transform-box: fill-box; transform-origin: center`, and without them a CSS `rotate` on an SVG element turns it about the origin of the `viewBox`.
+The turn is a `transform` in `look.style`, which replaces the element's `transform`, so each shape is placed by a wrapping `<g>`.
 
 ```html
 <div class="layer" data-component="morph" data-start="0" data-duration="3">
     <svg class="layer" viewBox="0 0 1280 720" width="1280" height="720">
-        <g transform="translate(400 360)"><path class="shape turning" data-bind-attr="{ d: blob }" data-bind-style="turn"></path></g>
-        <g transform="translate(880 360)"><path class="shape" data-bind-attr="{ d: poly }"></path></g>
+        <g transform="translate(400 360)"><path class="shape turning blob"></path></g>
+        <g transform="translate(880 360)"><path class="shape poly"></path></g>
     </svg>
 </div>
 ```
@@ -606,28 +612,31 @@ const CIRCLE = 'M 0 -120 A 120 120 0 1 1 0 120 A 120 120 0 1 1 0 -120 Z';
 const TRIANGLE = shape('polygon', { sides: 3, radius: 130 });
 const OCTAGON = shape('polygon', { sides: 8, radius: 120 });
 
-scene('morph', {
-    keyframes: {
-        blob: { at: [0.3, 1.5], to: matchPaths([SQUARE, CIRCLE]), ease: 'power2.inOut' },
-        turn: { rotate: { at: [0.3, 1.5], to: [0, 45], ease: 'power2.inOut' } },
-        poly: { at: [1, 2.6], to: matchPaths([TRIANGLE, OCTAGON], { segments: 24 }), ease: 'power2.inOut' },
-    },
+layers.scene('morph', {
+    layers: [
+        {
+            id: 'blob', kind: 'svg', src: '.blob',
+            content: { d: { keys: [[0.3, SQUARE], [1.5, CIRCLE]], match: {}, ease: 'power2.inOut' } },
+            look: { style: { transform: { at: [0.3, 1.5], to: ['rotate(0deg)', 'rotate(45deg)'], ease: 'power2.inOut' } } },
+        },
+        { id: 'poly', kind: 'svg', src: '.poly', content: { d: { keys: [[1, TRIANGLE], [2.6, OCTAGON]], match: { segments: 24 }, ease: 'power2.inOut' } } },
+    ],
 });
 ```
 
 ## A star that breathes, a pie that fills
 
 A star's points grow and shrink twice, and a pie beside it fills from nothing to a whole circle.
-`shape()` returns the path data of a polygon, star, sector or arrow from numbers, so a computed that calls it with a value from a track draws a new shape on every frame.
-The star's inner radius comes from the `inner` track, and the pie's end angle, in degrees clockwise from up, from the `sweep` track.
+`shape()` returns the path data of a polygon, star, sector or arrow from numbers, so a function in `fns` that calls it with a value from a track draws a new shape on every frame.
+The star's inner radius comes from one track, and the pie's end angle, in degrees clockwise from up, from another.
 At 0 degrees the sector is an empty string, which draws nothing, and at 360 it is two arcs that close into a circle.
 A count such as `sides` or `points` has to be a whole number, so a track cannot take a star from 5 points to 6 (KN-100); to change the count, morph between the two shapes with `matchPaths()`, as in the pattern above.
 
 ```html
 <div class="layer" data-component="gauges" data-start="0" data-duration="4">
     <svg class="layer" viewBox="0 0 1280 720" width="1280" height="720">
-        <path class="star" data-bind-attr="{ d: star }"></path>
-        <path class="pie" data-bind-attr="{ d: pie }"></path>
+        <path class="star"></path>
+        <path class="pie"></path>
     </svg>
 </div>
 ```
@@ -638,16 +647,17 @@ A count such as `sides` or `points` has to be a whole number, so a track cannot 
 ```
 
 ```javascript
-scene('gauges', {
-    keyframes: {
-        inner: { at: [0, 1, 2, 3, 4], to: [40, 80, 40, 80, 40], ease: 'sine.inOut' },
-        sweep: { at: [0.5, 3.5], to: [0, 360], ease: 'power2.inOut' },
-    },
-    computed: {
-        star() { return shape('star', { points: 5, outer: 120, inner: this.inner, cx: 400, cy: 360 }); },
-        pie() { return shape('sector', { radius: 120, to: this.sweep, cx: 880, cy: 360 }); },
-    },
-});
+const fns = {
+    star: (inner) => shape('star', { points: 5, outer: 120, inner, cx: 400, cy: 360 }),
+    pie: (to) => shape('sector', { radius: 120, to, cx: 880, cy: 360 }),
+};
+
+layers.scene('gauges', {
+    layers: [
+        { id: 'star', kind: 'svg', src: '.star', content: { d: { call: 'star', args: [{ at: [0, 1, 2, 3, 4], to: [40, 80, 40, 80, 40], ease: 'sine.inOut' }] } } },
+        { id: 'pie', kind: 'svg', src: '.pie', content: { d: { call: 'pie', args: [{ at: [0.5, 3.5], to: [0, 360], ease: 'power2.inOut' }] } } },
+    ],
+}, { fns });
 ```
 
 ## A clip that changes shape
@@ -655,13 +665,13 @@ scene('gauges', {
 A photo opens from a point into a diamond and then fills the frame, and afterwards a star-shaped badge rounds into a disc.
 A `clipPath` track over `polygon()` moves every vertex, so each keyframe lists the same number of points, and the photo's first keyframe puts all four on the center.
 A `clipPath` track over `path("…")` reads the path data inside the quotes as commands and numbers, so its keyframes need the same commands.
-The badge's star and disc go through `matchPaths()`, which takes `path("…")` values and returns them in the same form.
+The badge's star and disc are a `keys` track with `match`, whose `matchPaths()` takes `path("…")` values and returns them in the same form.
 The coordinates inside `path()` are pixels in the element's own box, and every keyframe uses the same quote style, since the quotes are text.
 
 ```html
 <div class="layer" data-component="reveal" data-start="0" data-duration="3">
-    <div class="layer photo" data-bind-style="photo"></div>
-    <div class="layer badge" data-bind-style="badge"></div>
+    <div class="layer photo"></div>
+    <div class="layer badge"></div>
 </div>
 ```
 
@@ -671,60 +681,60 @@ The coordinates inside `path()` are pixels in the element's own box, and every k
 ```
 
 ```javascript
-const [STAR, DISC] = matchPaths([
-    'path("' + shape('star', { points: 5, outer: 200, inner: 90, cx: 640, cy: 360 }) + '")',
-    'path("' + shape('sector', { radius: 260, to: 360, cx: 640, cy: 360 }) + '")',
-]);
+const STAR = 'path("' + shape('star', { points: 5, outer: 200, inner: 90, cx: 640, cy: 360 }) + '")';
+const DISC = 'path("' + shape('sector', { radius: 260, to: 360, cx: 640, cy: 360 }) + '")';
 
-scene('reveal', {
-    keyframes: {
-        photo: {
-            clipPath: {
-                at: [0, 0.6, 1.4],
-                to: ['polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)', 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)'],
-                ease: ['power2.out', 'power2.inOut'],
+layers.scene('reveal', {
+    layers: [
+        {
+            id: 'photo', kind: 'html', src: '.photo',
+            look: {
+                style: {
+                    clipPath: {
+                        at: [0, 0.6, 1.4],
+                        to: ['polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)', 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)'],
+                        ease: ['power2.out', 'power2.inOut'],
+                    },
+                },
             },
         },
-        badge: { clipPath: { at: [1.4, 2.6], to: [STAR, DISC], ease: 'power2.inOut' } },
-    },
+        { id: 'badge', kind: 'html', src: '.badge', look: { style: { clipPath: { keys: [[1.4, STAR], [2.6, DISC]], match: {}, ease: 'power2.inOut' } } } },
+    ],
 });
 ```
 
 ## Enter and exit
 
 A card with a heading fades in at the start of its clip and fades out at the end.
-A plain fade like this is the clip's attributes by default, `data-clip-enter="fade 0.4"` and `data-clip-exit="fade 0.6"`, with no scene code; the form below is for a scene whose own code needs to know how far in or out it is (the "Which to use" tables in rules.md).
-With `edges: { enter, exit }`, `enter` rises from 0 to 1 over the first `enter` seconds of the clip and `exit` rises from 0 to 1 over its last `exit` seconds.
-`presence` is `enter * (1 - exit)`, which is 0 at both ends and 1 between them, so it fades a layer in and out.
-The opacity goes on a layer inside the scene, which reads the scene's values wherever the scene sits, as the next pattern explains.
+A plain fade like this is done by default with the clip's attributes, `data-clip-enter="fade 0.4"` and `data-clip-exit="fade 0.6"`, with no layer; the form below is for a layer inside the clip that fades on its own, or whose fade other values follow (the "Which to use" tables in rules.md).
+A `keys` track on its opacity rises over the first 0.4 s and falls over the last 0.6 s.
+`'last'` is the clip's last captured frame, a frame before its end (`'end'`), so the fade is complete in the file and moves with the clip.
+`'last - 0.6'` is a sum: a name, then ` - ` and a number.
 
 ```html
 <div class="layer" data-component="card" data-start="2" data-duration="3">
-    <div class="layer" data-bind-style="card">
+    <div class="layer card">
         <h2>Spring sale</h2>
     </div>
 </div>
 ```
 
 ```javascript
-scene('card', {
-    edges: { enter: 0.4, exit: 0.6 },
-    computed: {
-        card() { return { opacity: String(this.presence) }; },
-    },
+layers.scene('card', {
+    layers: [{
+        id: 'card', kind: 'html', src: '.card',
+        look: { opacity: { keys: [[0, 0], [0.4, 1], ['last - 0.6', 1], ['last', 0]] } },
+    }],
 });
 ```
 
 The Launch Title (/demos/kinetic-title/), Sales Chart (/demos/kinetic-chart/) and Captions on a Beat (/demos/kinetic-captions/) demos each fade their scene this way.
 
-## Styling the scene's own root
+## Styling the clip itself
 
-The background of a scene shifts from near-black to a dark purple and back while its heading stays where it is.
-The `root:` block of a definition applies to the scene's root element, and each value is an expression in the scene's own scope, so a `keyframes` entry such as `bg` can drive the root's `background`.
-A binding written on the root tag, such as `data-bind-style="bg"`, reads the scene's values too, unless the scene sits inside a component of your own, which happens only when you put the composition inside a component or one scene inside another.
-The binding then reads that component, where `bg` does not exist, so the `root:` block is the form that works in both cases.
-Development builds warn when a binding on the root tag of a scene inside a component of your own uses a value that belongs to the scene (WF-521 from WildflowerJS, or KN-154 for one of Kinetic's own values in a scene inside a scene).
-`root:` also takes `class`, `attr`, `show` and `directives`, and Bindings on a component's root (/docs/components#root-bindings) has the rules.
+The background of a clip shifts from near-black to a dark purple and back while its heading stays where it is.
+A layer whose `src` is `':scope'` is the clip the scene is drawn on, so its `look.style` styles the clip's own element.
+The other layers' selectors look inside the clip first, then in the whole composition.
 
 ```html
 <div class="layer" data-component="backdrop" data-start="0" data-duration="6">
@@ -733,11 +743,11 @@ Development builds warn when a binding on the root tag of a scene inside a compo
 ```
 
 ```javascript
-scene('backdrop', {
-    keyframes: {
-        bg: { at: [0, 2.6, 5.6], to: ['#0b0f1a', '#181030', '#0b0f1a'] },
-    },
-    root: { style: { background: 'bg' } },
+layers.scene('backdrop', {
+    layers: [{
+        id: 'clip', kind: 'html', src: ':scope',
+        look: { style: { background: { at: [0, 2.6, 5.6], to: ['#0b0f1a', '#181030', '#0b0f1a'] } } },
+    }],
 });
 ```
 
@@ -745,42 +755,44 @@ The Launch Title demo (/demos/kinetic-title/) animates its backdrop with a color
 
 ## One scene, several clips
 
-Three name cards follow one another, each with its own name, role and color, all from one scene.
-A registered scene runs on every element whose `data-component` is the scene's name, and each clip counts its own `local` from its own `data-start`.
-Text that the scene only animates goes in each clip's markup, as the names do here.
-A value the scene computes from is a prop on the clip element, `data-prop-role="'Director'"`, which the scene declares in `props` and a computed reads as `this.props.role` (a binding reads `props.role`).
+Three name cards follow one another, each with its own name, role and color, all from one scene's layers.
+The scene runs on every element whose `data-component` is its name; each clip counts its own time from its own `data-start` and looks for its layers' elements inside itself first.
+Text that the layers only animate goes in each clip's markup, as the names do here.
+A value that changes from clip to clip is a prop on the clip element, `data-prop-role="'Director'"`, declared in the scene's `props` and read with `{ from: 'props.role' }`.
 Text is always quoted, one word or many, as `'Director'` and `'#892dbf'` are, since a bare word names a value; a number, `true` and `false` go bare.
-A color for each clip goes on the scene's own root through `root: { style: { background: 'background' } }`, from a computed that reads `this.props.color`, and `presence` fades each card on the same root.
-`inputs` are composition-wide, so every clip of a scene reads the same values, and for values that change from clip to clip, each clip takes its own props, as this pattern does.
+The clip's own element (`src: ':scope'`) takes each card's color and its fade.
+`inputs` are composition-wide, so every clip reads the same values; for values that change from clip to clip, give each clip its own props, as this pattern does.
 The stylesheet needs `.card { position: absolute; left: 80px; bottom: 80px; padding: 18px 28px; color: #fff; }`.
 
 ```html
 <div class="card" data-component="name-card" data-start="0" data-duration="2" data-prop-role="'Director'" data-prop-color="'#892dbf'">
-    <div data-bind-style="slide"><h2>Ada Lovelace</h2><p data-bind="role"></p></div>
+    <div class="slide"><h2>Ada Lovelace</h2><p class="role"></p></div>
 </div>
 <div class="card" data-component="name-card" data-start="2" data-duration="2" data-prop-role="'Engineer'" data-prop-color="'#2d5fbf'">
-    <div data-bind-style="slide"><h2>Grace Hopper</h2><p data-bind="role"></p></div>
+    <div class="slide"><h2>Grace Hopper</h2><p class="role"></p></div>
 </div>
 <div class="card" data-component="name-card" data-start="4" data-duration="2" data-prop-role="'Mathematician'" data-prop-color="'#bf6a2d'">
-    <div data-bind-style="slide"><h2>Katherine Johnson</h2><p data-bind="role"></p></div>
+    <div class="slide"><h2>Katherine Johnson</h2><p class="role"></p></div>
 </div>
 ```
 
 ```javascript
-scene('name-card', {
+layers.scene('name-card', {
     props: {
         role: { type: String, default: '' },
         color: { type: String, default: '#0b0f1a' },
     },
-    edges: { enter: 0.4, exit: 0.4 },
-    root: { style: { background: 'background', opacity: 'presence' } },
-    keyframes: {
-        slide: { translateX: { at: [0, 0.5], to: [-40, 0], ease: 'power3.out' } },
-    },
-    computed: {
-        background() { return this.props.color; },
-        role() { return typewriter(this.local - 0.3, this.props.role, 24); },
-    },
+    layers: [
+        {
+            id: 'card', kind: 'html', src: ':scope',
+            look: {
+                opacity: { keys: [[0, 0], [0.4, 1], ['last - 0.4', 1], ['last', 0]] },
+                style: { background: { from: 'props.color' } },
+            },
+        },
+        { id: 'slide', kind: 'html', src: '.slide', place: { translate: [{ at: [0, 0.5], to: [-40, 0], ease: 'power3.out' }, 0] } },
+        { id: 'role', kind: 'text', src: '.role', content: { text: { from: 'props.role' }, typewriter: { start: 0.3, cps: 24 } } },
+    ],
 });
 ```
 
@@ -791,62 +803,64 @@ No demo uses this pattern yet.
 A title card gives way to a counter, which pushes it out to the left as it comes in from the right.
 The second clip starts 0.6 seconds before the first ends, with `data-start="intro - 0.6"`, and `data-clip-transition` turns that overlap into a push.
 The overlap is the push's length, so a change to the first clip's duration moves the push with it.
-Kinetic writes `translate` on both clip elements during the overlap and removes it after, and each scene's own motion stays on the elements inside it.
+Kinetic writes `translate` on both clip elements during the overlap and removes it after, and each scene's layers move only the elements inside its clip.
 The ease is `power3.inOut`, and without one a transition takes `power2.inOut`.
+The count is a track whose number a small function rounds and formats.
 
 ```html
 <div id="intro" class="layer" data-component="title" data-start="0" data-duration="3">
-    <h1 data-bind-style="rise">Northwind</h1>
+    <h1>Northwind</h1>
 </div>
 <div class="layer" data-component="numbers" data-start="intro - 0.6" data-duration="3.6"
      data-clip-transition="push from-right power3.inOut">
-    <h2 data-bind="orders"></h2>
+    <h2 class="orders"></h2>
 </div>
 ```
 
 ```javascript
-scene('title', {
-    keyframes: {
-        rise: { opacity: { at: [0.2, 0.8], to: [0, 1] }, translateY: { at: [0.2, 0.8], to: [40, 0], ease: 'power3.out' } },
-    },
+layers.scene('title', {
+    layers: [{
+        id: 'rise', kind: 'html', src: 'h1',
+        place: { translate: [0, { at: [0.2, 0.8], to: [40, 0], ease: 'power3.out' }] },
+        look: { opacity: { at: [0.2, 0.8], to: [0, 1] } },
+    }],
 });
 
-scene('numbers', {
-    computed: {
-        orders() { return format(Math.round(interpolate(this.local, [0.6, 2], [0, 48200], { ease: 'power2.out' }))) + ' orders'; },
-    },
-});
+layers.scene('numbers', {
+    layers: [{
+        id: 'orders', kind: 'html', src: '.orders',
+        content: { text: { call: 'orders', args: [{ at: [0.6, 2], to: [0, 48200], ease: 'power2.out' }] } },
+    }],
+}, { fns: { orders: (n) => format(Math.round(n)) + ' orders' } });
 ```
 
 No demo uses this pattern yet.
 
 ## An iris into the next scene
 
-A photo of a harbour gives way to a photo of a market, which opens from a point at the center of the frame.
+A photo of a harbor gives way to a photo of a market, which opens from a point at the center of the frame.
 `data-clip-transition="iris power2.out"` on the second clip grows a `clip-path: circle()` on it over the 0.8 seconds it overlaps the first, until the circle reaches the corners.
 The first clip stays as it is underneath until its own window ends.
-Both clips use one scene that drifts each photo 8% larger over four seconds.
+Both clips use one scene whose layer drifts each photo 8% larger over four seconds; on each clip, the layer finds the `.drift` inside that clip.
 The drift goes on the layer inside the clip, so it scales the photo and leaves the circle on the clip at its own size.
 
 ```html
 <div id="harbour" class="layer" data-component="still" data-start="0" data-duration="3">
-    <div class="layer" data-bind-style="drift">
+    <div class="layer drift">
         <img src="harbour.jpg" alt="" style="width: 100%; height: 100%; object-fit: cover">
     </div>
 </div>
 <div class="layer" data-component="still" data-start="harbour - 0.8" data-duration="3.8"
      data-clip-transition="iris power2.out">
-    <div class="layer" data-bind-style="drift">
+    <div class="layer drift">
         <img src="market.jpg" alt="" style="width: 100%; height: 100%; object-fit: cover">
     </div>
 </div>
 ```
 
 ```javascript
-scene('still', {
-    keyframes: {
-        drift: { scale: { at: [0, 4], to: [1, 1.08] } },
-    },
+layers.scene('still', {
+    layers: [{ id: 'drift', kind: 'html', src: '.drift', place: { scale: { at: [0, 4], to: [1, 1.08] } } }],
 });
 ```
 
@@ -857,7 +871,7 @@ No demo uses this pattern yet.
 A title wipes in from the left over a backdrop whose color shifts, holds, and fades out.
 `data-clip-enter` and `data-clip-exit` take a length of their own, since no clip comes before or after the title.
 The wipe takes 0.6 seconds, and the fade takes 12 frames, which at 30 fps is 0.4 seconds.
-The title needs no scene, since an element with `data-start` is a clip, and Kinetic writes the wipe's `clip-path` and the fade's `opacity` on it directly.
+The title needs no layers, since an element with `data-start` is a clip, and Kinetic writes the wipe's `clip-path` and the fade's `opacity` on it directly.
 The backdrop is a sibling that runs for the whole composition, and `data-clip-enter` and `data-clip-exit` do not look at siblings.
 The stylesheet needs `.title { position: absolute; left: 120px; top: 300px; margin: 0; font-size: 96px; color: #fff; }`.
 
@@ -868,11 +882,8 @@ The stylesheet needs `.title { position: absolute; left: 120px; top: 300px; marg
 ```
 
 ```javascript
-scene('sky', {
-    keyframes: {
-        bg: { at: [0, 6], to: ['#0b0f1a', '#181030'] },
-    },
-    root: { style: { background: 'bg' } },
+layers.scene('sky', {
+    layers: [{ id: 'sky', kind: 'html', src: ':scope', look: { style: { background: { at: [0, 6], to: ['#0b0f1a', '#181030'] } } } }],
 });
 ```
 
@@ -896,29 +907,29 @@ The stylesheet needs `.card { display: flex; align-items: center; justify-conten
 
 No demo uses this pattern yet.
 
-## A transition inside a scene
+## A transition inside a clip
 
-A quiz card turns over from its question to its answer, inside one scene.
-`transition(kind, p)` returns the incoming and outgoing style objects of a kind at a progress p, the same values the attributes write, for a part of a scene that is no clip.
-`ramp()` gives the eased progress from 1.6 to 2.2 seconds, the question takes the outgoing side of a `flip`, and the answer takes the incoming side.
+A quiz card turns over from its question to its answer, inside one clip.
+`look.transition: { kind, p, side }` writes a kind's incoming or outgoing styles at a progress p, the same values the attributes write, for a part of a clip that is no clip of its own.
+`p` is a shared track, eased from 1.6 to 2.2 seconds; the question takes the outgoing side of a `flip`, and the answer takes the incoming side.
 At p = 0 the answer stands edge-on, where it cannot be seen, and at p = 1 the question stands edge-on in its place.
-`perspective` on the scene's root makes the turn read as depth.
+`perspective` on the clip makes the turn read as depth.
 The stylesheet needs `.face { display: flex; align-items: center; justify-content: center; background: #102040; color: #fff; }`.
 
 ```html
 <div class="layer" data-component="quiz" data-start="0" data-duration="4" style="perspective: 1200px">
-    <div class="layer face" data-bind-style="question"><h2>What is the capital of Australia?</h2></div>
-    <div class="layer face" data-bind-style="answer"><h2>Canberra</h2></div>
+    <div class="layer face question"><h2>What is the capital of Australia?</h2></div>
+    <div class="layer face answer"><h2>Canberra</h2></div>
 </div>
 ```
 
 ```javascript
-scene('quiz', {
-    computed: {
-        turn() { return transition('flip', ramp(this.local, 1.6, 2.2, 'power2.inOut')); },
-        question() { return this.turn.out; },
-        answer() { return this.turn.in; },
-    },
+layers.scene('quiz', {
+    shared: { p: { at: [1.6, 2.2], to: [0, 1], ease: 'power2.inOut' } },
+    layers: [
+        { id: 'question', kind: 'html', src: '.question', look: { transition: { kind: 'flip', p: 'p', side: 'out' } } },
+        { id: 'answer', kind: 'html', src: '.answer', look: { transition: { kind: 'flip', p: 'p', side: 'in' } } },
+    ],
 });
 ```
 
@@ -930,7 +941,7 @@ A title card sits over a stippled sky, and a photo beside it is printed as a hal
 Both effects are SVG filters on ordinary HTML, which suits HTML that does not change, since `effect()` takes only an image, a video or a canvas.
 The stipple compares fine noise from `feTurbulence` with the brightness under it and puts ink where the noise is higher.
 The halftone does the same with a field of dot cones, white at each dot's center and black at its cell's corners, so a dark area gets large dots.
-The field is a PNG the scene draws once on a canvas and sets on the `feImage` itself, since a binding does not accept an SVG `data:` URL in an attribute.
+The field is a PNG the page draws once on a canvas and sets on the `feImage` itself, since an SVG `data:` URL does not work there.
 The stylesheet needs `.sky { position: absolute; inset: 0; background: linear-gradient(#0a0a10, #6b6b78 45%, #f4f4f4); }` and `.photo { position: absolute; right: 0; top: 0; width: 50%; height: 100%; }`.
 
 ```html
@@ -961,8 +972,8 @@ The stylesheet needs `.sky { position: absolute; inset: 0; background: linear-gr
 </defs></svg>
 
 <div class="layer" data-component="night-card" data-start="0" data-duration="4">
-    <div class="sky" data-bind-style="sky"></div>
-    <img class="photo" src="tree.jpg" alt="" data-bind-style="photo">
+    <div class="sky"></div>
+    <img class="photo" src="tree.jpg" alt="">
     <h1 class="title">Night Shift</h1>
 </div>
 ```
@@ -986,17 +997,16 @@ function dotField(w, h, cell, angle) {
     return c.toDataURL('image/png');
 }
 
-scene('night-card', {
-    init() {
-        document.getElementById('dot-field').setAttribute('href', dotField(640, 720, 12, 45));
-    },
-    computed: {
-        // Each filter is on only inside the clip's window: the clip starts at 0, and
-        // after it local holds at its length, so remaining is 0 there.
-        on() { return this.remaining > 0; },
-        sky() { return { filter: this.on ? 'url(#stipple)' : 'none' }; },
-        photo() { return { filter: this.on ? 'url(#halftone)' : 'none' }; },
-    },
+document.getElementById('dot-field').setAttribute('href', dotField(640, 720, 12, 45));
+
+// Each filter is on only inside the clip's window: until its end, then none.
+const within = (filter) => ({ keys: [[0, filter], ['end', 'none']] });
+
+layers.scene('night-card', {
+    layers: [
+        { id: 'sky', kind: 'html', src: '.sky', look: { style: { filter: within('url(#stipple)') } } },
+        { id: 'photo', kind: 'html', src: '.photo', look: { style: { filter: within('url(#halftone)') } } },
+    ],
 });
 ```
 
@@ -1007,7 +1017,7 @@ Two rules keep filters like these cheap and correct.
   For an effect that changes on every frame, use `effect()` on an image, a video or a canvas (the next pattern).
 - A filter with `feFlood`, `feImage` or `feTurbulence` paints even inside a clip hidden with `visibility: hidden`.
   Kinetic hides a clip outside its window so that nothing in it paints.
-  A runtime that hides with `visibility` alone would let the stippled sky show over the scenes before and after the card, so the scene turns each filter on only inside the clip's window, as `on` does here.
+  A runtime that hides with `visibility` alone would let the stippled sky show over the scenes before and after the card, so the layers turn each filter on only inside the clip's window, as `within` does here.
 
 No demo uses this pattern yet.
 
@@ -1015,12 +1025,12 @@ No demo uses this pattern yet.
 
 A layer shows through where a matte is bright and is hidden where it is dark, and the matte moves, so a photo is revealed by a sweep with a soft edge.
 `mask-image` on the layer takes the matte, a gradient here, or an image such as a photograph of smoke, with `mask-mode: luminance` so its brightness is the matte rather than its alpha.
-The gradient is twice the layer's width with a soft step in its middle, and a `maskPosition` track slides it across: at 100% the dark half covers the layer and at 0% the bright half does.
+The gradient is twice the layer's width with a soft step in its middle, and a `maskPosition` track in `look.style` slides it across: at 100% the dark half covers the layer and at 0% the bright half does.
 Nothing here is an SVG `<mask>` referenced by id, which the page draws and a render does not.
 
 ```html
 <div class="layer" data-component="reveal" data-start="0" data-duration="4">
-    <img class="photo" src="harbour.jpg" alt="" data-bind-style="matte">
+    <img class="photo" src="harbour.jpg" alt="">
 </div>
 ```
 
@@ -1031,10 +1041,11 @@ Nothing here is an SVG `<mask>` referenced by id, which the page draws and a ren
 ```
 
 ```javascript
-scene('reveal', {
-    keyframes: {
-        matte: { maskPosition: { at: [0.3, 1.8], to: [100, 0], unit: '%', ease: 'power2.inOut' } },
-    },
+layers.scene('reveal', {
+    layers: [{
+        id: 'matte', kind: 'html', src: '.photo',
+        look: { style: { maskPosition: { at: [0.3, 1.8], to: [100, 0], unit: '%', ease: 'power2.inOut' } } },
+    }],
 });
 ```
 
@@ -1050,10 +1061,8 @@ For any other shape with a feather, an SVG image is the mask, with the shape blu
 ```
 
 ```javascript
-scene('iris', {
-    keyframes: {
-        disc: { maskSize: { at: [0.3, 1.5], to: ['20% 20%', '300% 300%'], ease: 'power2.in' } },
-    },
+layers.scene('iris', {
+    layers: [{ id: 'disc', kind: 'html', src: '.disc', look: { style: { maskSize: { at: [0.3, 1.5], to: ['20% 20%', '300% 300%'], ease: 'power2.in' } } } }],
 });
 ```
 
@@ -1066,7 +1075,7 @@ The paper here is an SVG image of turbulence as a data URL, so the pattern needs
 ```html
 <div class="layer" data-component="texture" data-start="0" data-duration="6">
     <div class="paper"></div>
-    <div class="leak" data-bind-style="leak"></div>
+    <div class="leak"></div>
 </div>
 ```
 
@@ -1079,22 +1088,24 @@ The paper here is an SVG image of turbulence as a data URL, so the pattern needs
 ```
 
 ```javascript
-scene('texture', {
-    keyframes: {
-        leak: { translateX: { at: [0, 6], to: [-200, 200] }, opacity: { at: [0, 1, 5, 6], to: [0, 1, 1, 0] } },
-    },
+layers.scene('texture', {
+    layers: [{
+        id: 'leak', kind: 'html', src: '.leak',
+        place: { translate: [{ at: [0, 6], to: [-200, 200] }, 0] },
+        look: { opacity: { at: [0, 1, 5, 6], to: [0, 1, 1, 0] } },
+    }],
 });
 ```
 
 ## An adjustment layer
 
 An element over part of the stage with `backdrop-filter` changes everything beneath it in its area and nothing above: a grade on the footage under a title, a blur behind a panel, or a desaturated half that a track slides across.
-It is the one layer an author places; the finish is the same thing over the whole frame.
+It covers only the area you place it over; the finish does the same over the whole frame.
 A camera's world draws it flat with the layers under it, so it sits above the world, not inside it.
 
 ```html
 <div class="layer" data-component="grade" data-start="0" data-duration="5">
-    <div class="adjust" data-bind-style="adjust"></div>
+    <div class="adjust"></div>
 </div>
 ```
 
@@ -1103,17 +1114,16 @@ A camera's world draws it flat with the layers under it, so it sits above the wo
 ```
 
 ```javascript
-scene('grade', {
-    keyframes: {
-        adjust: { left: { at: [0.5, 2], to: [100, 50], unit: '%', ease: 'power2.inOut' } },
-    },
+layers.scene('grade', {
+    layers: [{ id: 'adjust', kind: 'html', src: '.adjust', look: { style: { left: { at: [0.5, 2], to: [100, 50], unit: '%', ease: 'power2.inOut' } } } }],
 });
 ```
 
 ## A halftone that moves
 
-A photo turns into a halftone whose dots grow and turn as the scene runs.
-`effect(canvas, { scene: this, source, kind })` draws the photo into the canvas through a WebGL shader after every seek, and `set()` changes the cell, the angle, the density and the colors on every frame for the cost of one draw.
+A photo turns into a halftone whose dots grow and turn as the clip runs.
+`look.effect: { kind, source, ... }` on a canvas layer draws the photo into the canvas through Kinetic's `effect()`, a WebGL shader, after every seek, and its parameters change on every frame for the cost of one draw.
+Here the cell, the angle and the density are driven by one shared progress `p`.
 The `<img>` is the source and stays hidden, and the canvas covers the layer.
 The stylesheet needs `.fill { position: absolute; inset: 0; width: 100%; height: 100%; }`.
 
@@ -1125,24 +1135,18 @@ The stylesheet needs `.fill { position: absolute; inset: 0; width: 100%; height:
 ```
 
 ```javascript
-scene('poster', {
-    init() {
-        this.fx = effect(this.element.querySelector('canvas'), {
-            scene: this,
-            source: this.element.querySelector('img'),
-            kind: 'halftone',
-            ink: '#1b1530',
-            paper: '#f3ead8',
-        });
-    },
-    seek(local) {
-        const p = ramp(local, 0, 3, 'power2.inOut');
-        this.fx.set({ cell: 18 - 8 * p, angle: 45 + 30 * p, density: p - 0.5 });
-    },
+const by = (a, b) => ({ keys: [[0, a], [1, b]], by: 'p' });
+
+layers.scene('poster', {
+    shared: { p: { at: [0, 3], to: [0, 1], ease: 'power2.inOut' } },
+    layers: [{
+        id: 'poster', kind: 'html', src: 'canvas',
+        look: { effect: { kind: 'halftone', source: 'img', ink: '#1b1530', paper: '#f3ead8', cell: by(18, 10), angle: by(45, 75), density: by(-0.5, 0.5) } },
+    }],
 });
 ```
 
-The same scene with `kind: 'stipple'`, `'dither'` or `'duotone'` draws the other looks, and a `<video data-start>` as the source puts the effect on footage, drawn from the footage's frame on every seek.
+The same layer with `kind: 'stipple'`, `'dither'` or `'duotone'` draws the other looks, and a `<video data-start>` as the source puts the effect on footage, drawn from the footage's frame on every seek.
 `color: 'source'` prints each dot in the photo's color under it.
 
 No demo uses this pattern yet.
@@ -1151,7 +1155,7 @@ No demo uses this pattern yet.
 
 Flat shapes get printed shading.
 Here that is crayon stipple down one edge of a block, splatter thickening at a hill's edge, a sphere shaded from an offset light, and a stripe across the sky.
-`shade(canvas, { kind, marks })` paints a field of how much ink each point gets from marks, and draws it as stipple, splatter, halftone or dither in the color of the field.
+`look.shade: { kind, marks }` on a canvas layer paints a field of how much ink each point gets from marks, and draws it as stipple, splatter, halftone or dither in the color of the field, as Kinetic's `shade()` does; each mark is data, `{ band: {...}, ink, clip }`.
 Each mark is cut to a shape with `clip` and falls off by an ease, and `fps: 2` gives the noise a new seed twice a second, so the specks change place twice a second and hold still between.
 Each canvas fills the scene and sits above the shapes it shades.
 A layer has one kind, so the splatter has a canvas of its own; marks of one kind belong on one layer, since each layer is one canvas and one WebGL context.
@@ -1168,30 +1172,39 @@ The stylesheet places the shapes where the marks expect them: `.block { position
 ```
 
 ```javascript
-scene('park', {
-    init() {
-        // The canvas is the 1280 x 720 stage, so the marks use the stage's px.
-        shade(this.element.querySelector('canvas:not(.spray)'), { scene: this, kind: 'stipple', fps: 2, grade: 0.6, marks: (m) => {
-            // One edge of a block: a band along its left side, falling off inward, cut to the block.
-            // Walking down the screen from `from` to `to`, the block is on the left.
-            m.band({ from: [200, 300], to: [200, 620], width: 50, side: 'left', ink: '#f3ead8', clip: { rect: [200, 300, 220, 320] } })
-             // A sphere: shading that rises away from a light up and to the left, cut to the circle.
-             .glow({ at: [930, 160], radius: 140, invert: true, ink: '#b2462e', amount: 0.7, falloff: 'smooth', clip: { circle: [980, 210, 110] } })
-             // A stripe across the sky, falling off on both sides of its line.
-             .band({ from: [0, 120], to: [1280, 90], width: 24, ink: '#ffffff', amount: 0.5 });
-        } });
+// The canvases are the 1280 x 720 stage, so the marks use the stage's px.
+layers.scene('park', {
+    layers: [
+        {
+            id: 'crayon', kind: 'html', src: 'canvas:not(.spray)',
+            look: {
+                shade: {
+                    kind: 'stipple', fps: 2, grade: 0.6,
+                    marks: [
+                        // One edge of a block: a band along its left side, falling off inward, cut to the block.
+                        // Walking down the screen from `from` to `to`, the block is on the left.
+                        { band: { from: [200, 300], to: [200, 620], width: 50, side: 'left' }, ink: '#f3ead8', clip: { rect: [200, 300, 220, 320] } },
+                        // A sphere: shading that rises away from a light up and to the left, cut to the circle.
+                        { glow: { at: [930, 160], radius: 140, invert: true }, ink: '#b2462e', amount: 0.7, falloff: 'smooth', clip: { circle: [980, 210, 110] } },
+                        // A stripe across the sky, falling off on both sides of its line.
+                        { band: { from: [0, 120], to: [1280, 90], width: 24 }, ink: '#ffffff', amount: 0.5 },
+                    ],
+                },
+            },
+        },
         // Splatter on its own layer, denser at the hill's top edge. The clip is the hill's
         // outline taken past the canvas on three sides, so only its top edge is in view.
-        shade(this.element.querySelector('canvas.spray'), { scene: this, kind: 'splatter', fps: 2, marks: (m) => {
-            m.edge({ width: 60, ink: '#2c5a46', falloff: 'power2.in', clip: { path: 'M-80 560 L0 560 C 320 420, 760 440, 1280 520 L1360 520 L1360 800 L-80 800 Z' } });
-        } });
-    },
+        {
+            id: 'spray', kind: 'html', src: 'canvas.spray',
+            look: { shade: { kind: 'splatter', fps: 2, marks: [{ edge: { width: 60 }, ink: '#2c5a46', falloff: 'power2.in', clip: { path: 'M-80 560 L0 560 C 320 420, 760 440, 1280 520 L1360 520 L1360 800 L-80 800 Z' } }] } },
+        },
+    ],
 });
 ```
 
 The sphere's light sits up and to the left of the circle's center, so `invert` leaves that side bare and the far side shaded; `edge` follows any outline inward, here the hill's path.
 `freeze` and `move` set what moving marks do between seeds, and need `fps` above 0.
-By default (`freeze: 'seed'`) the marks are painted for every frame and the seed is kept, `freeze: 'all'` paints them once a seed so the whole texture holds still and jumps, and `move(t)` sets the canvas's transform so the specks move with marks that all move together, as in a tunnel of growing rings: `{ fps: 2, move: (t) => ({ scale: Math.pow(1.5, t), origin: [640, 360] }) }`.
+By default (`freeze: 'seed'`) the marks are painted for every frame and the seed is kept, `freeze: 'all'` paints them once a seed so the whole texture holds still and jumps, and `move`, the name of a function in `fns`, sets the canvas's transform so the specks move with marks that all move together, as in a tunnel of growing rings: `move: 'grow'` with `grow: (t) => ({ scale: Math.pow(1.5, t), origin: [640, 360] })`.
 
 No demo uses this pattern yet.
 
@@ -1199,7 +1212,8 @@ No demo uses this pattern yet.
 
 A street of HTML shapes is made to look like a model.
 It is sharp across the middle and blurred toward the top and the bottom, with a warm light leak drifting in from a corner and grain heavier toward the frame's edges.
-`blur(element, { radius, marks })` blurs what is under an element where the marks paint and leaves it sharp where they do not, and `shade()` with `kind: 'light'` paints the marks as light, blended by screen, and with `kind: 'grain'` as noise as strong as the marks, blended by overlay.
+`look.backdrop: { radius, marks }` blurs what is under an element where the marks paint and leaves it sharp where they do not, as Kinetic's `blur()` does, and `look.shade` with `kind: 'light'` paints the marks as light, blended by screen, and with `kind: 'grain'` as noise as strong as the marks, blended by overlay.
+The leak's glow drifts left 40 px a second: its `at` is `{ add: [1180, { rate: -40 }] }`, a number plus a rate.
 The marks are the same ones shading uses: two bands for the tilt-shift, a glow for the leak, and an inverted glow for the grain, none at the center and full at the corners.
 The `.over` element and both canvases fill the scene above the street; the blur goes under the light and the grain, so they stay sharp.
 
@@ -1213,17 +1227,29 @@ The `.over` element and both canvases fill the scene above the street; the blur 
 ```
 
 ```javascript
-scene('model', {
-    init() {
-        const q = (s) => this.element.querySelector(s);
-        blur(q('.over'), { scene: this, radius: 12, marks: (m) => m
-            .band({ from: [0, 0], to: [1280, 0], width: 300, side: 'right', falloff: 'smooth' })
-            .band({ from: [1280, 720], to: [0, 720], width: 300, side: 'right', falloff: 'smooth' }) });
-        shade(q('canvas.leak'), { scene: this, kind: 'light', marks: (m, t) => m
-            .glow({ at: [1180 - t * 40, 60], radius: 420, ink: '#ff9a4a', amount: 0.6, falloff: 'smooth' }) });
-        shade(q('canvas.grain'), { scene: this, kind: 'grain', fps: 30, opacity: 0.5, marks: (m) => m
-            .glow({ at: [640, 360], radius: 734, invert: true, falloff: 'power2.in' }) });
-    },
+layers.scene('model', {
+    layers: [
+        {
+            id: 'focus', kind: 'html', src: '.over',
+            look: {
+                backdrop: {
+                    radius: 12,
+                    marks: [
+                        { band: { from: [0, 0], to: [1280, 0], width: 300, side: 'right' }, falloff: 'smooth' },
+                        { band: { from: [1280, 720], to: [0, 720], width: 300, side: 'right' }, falloff: 'smooth' },
+                    ],
+                },
+            },
+        },
+        {
+            id: 'leak', kind: 'html', src: 'canvas.leak',
+            look: { shade: { kind: 'light', marks: [{ glow: { at: [{ add: [1180, { rate: -40 }] }, 60], radius: 420 }, ink: '#ff9a4a', amount: 0.6, falloff: 'smooth' }] } },
+        },
+        {
+            id: 'grain', kind: 'html', src: 'canvas.grain',
+            look: { shade: { kind: 'grain', fps: 30, opacity: 0.5, marks: [{ glow: { at: [640, 360], radius: 734, invert: true }, falloff: 'power2.in' }] } },
+        },
+    ],
 });
 ```
 
@@ -1237,34 +1263,31 @@ No demo uses this pattern yet.
 ## Hand-drawn wobble on shapes
 
 A sun and a hill wobble at their edges, and the wobble changes eight times a second.
-`boil(d, options)` moves an SVG path's outline along its normals by noise and returns the new path data, which a computed returns as `{ d }` for the path's `data-bind-attr`.
-It steps its noise's seed 8 times a second (`fps: 8`) and takes the scene's local time as `t`, so each wobble holds for an eighth of a second and then changes.
+`look.boil` on an SVG layer moves its `content.d` along its normals by noise, as Kinetic's `boil()` does.
+It steps its noise's seed 8 times a second (`fps: 8`) by the clip's time, so each wobble holds for an eighth of a second and then changes.
 
 ```html
 <div class="layer" data-component="sketch" data-start="0" data-duration="6">
     <svg class="fill" viewBox="0 0 1280 720">
-        <path data-bind-attr="sun" fill="#e8a33d"></path>
-        <path data-bind-attr="hill" fill="#3f7a5c"></path>
+        <path class="sun" fill="#e8a33d"></path>
+        <path class="hill" fill="#3f7a5c"></path>
     </svg>
 </div>
 ```
 
 ```javascript
-const SUN = 'M 980 90 A 110 110 0 1 1 979.99 90 Z';
-const HILL = 'M -20 560 C 320 420, 760 440, 1300 520 L 1300 740 L -20 740 Z';
-
-scene('sketch', {
-    computed: {
-        sun() { return { d: boil(SUN, { amount: 4, scale: 40, fps: 8, t: this.local }) }; },
-        hill() { return { d: boil(HILL, { amount: 3, scale: 60, fps: 8, t: this.local, seed: 2 }) }; },
-    },
+layers.scene('sketch', {
+    layers: [
+        { id: 'sun', kind: 'svg', src: '.sun', content: { d: 'M 980 90 A 110 110 0 1 1 979.99 90 Z' }, look: { boil: { amount: 4, scale: 40, fps: 8 } } },
+        { id: 'hill', kind: 'svg', src: '.hill', content: { d: 'M -20 560 C 320 420, 760 440, 1300 520 L 1300 740 L -20 740 Z' }, look: { boil: { amount: 3, scale: 60, fps: 8, seed: 2 } } },
+    ],
 });
 ```
 
 `amount` is about the largest move in px and `scale` the length along the outline over which the noise changes, in px; a different `seed` keeps two shapes from wobbling in step.
 `detail` is the spacing of the samples along the outline, 2 px by default, and every sample is moved on every frame: for a large shape (a frame, a keyboard's outline) raise it to 4 to 8, which keeps the wobble and costs a fraction of the work.
-`boil()` works on paths only, so HTML text does not wobble; draw a title as a path, or with `text()` on a canvas and through the boil effect.
-A canvas, an image or a video takes the same wobble from `effect(canvas, { source, kind: 'boil', fps: 8 })`, a new seed 8 times a second.
+`look.boil` works on paths only, so HTML text does not wobble; draw a title as a path, or as a text layer on a canvas and through the boil effect.
+A canvas, an image or a video takes the same wobble from `look.effect: { kind: 'boil', source, fps: 8 }`, a new seed 8 times a second.
 
 No demo uses this pattern yet.
 
@@ -1274,8 +1297,8 @@ A two-ink print: the title is set once in each ink, as layers that multiply wher
 
 ```html
 <div class="layer" data-component="plates" data-start="0" data-duration="6">
-    <h1 class="plate pink" data-bind-style="pink">JAZZ NIGHT</h1>
-    <h1 class="plate blue" data-bind-style="blue">JAZZ NIGHT</h1>
+    <h1 class="plate pink">JAZZ NIGHT</h1>
+    <h1 class="plate blue">JAZZ NIGHT</h1>
 </div>
 ```
 
@@ -1287,33 +1310,29 @@ A two-ink print: the title is set once in each ink, as layers that multiply wher
 
 ```javascript
 // Each ink's plate slides into register over 1.2 s and stops a few px out.
-scene('plates', {
-    keyframes: {
-        pink: {
-            translateX: { at: [0, 1.2], to: [-40, -3], ease: 'power3.out' },
-            translateY: { at: [0, 1.2], to: [18, 2], ease: 'power3.out' },
-        },
-        blue: {
-            translateX: { at: [0, 1.2], to: [36, 2], ease: 'power3.out' },
-            translateY: { at: [0, 1.2], to: [-14, -1], ease: 'power3.out' },
-        },
-    },
+const slide = (x, y) => [{ at: [0, 1.2], to: x, ease: 'power3.out' }, { at: [0, 1.2], to: y, ease: 'power3.out' }];
+
+layers.scene('plates', {
+    layers: [
+        { id: 'pink', kind: 'html', src: '.pink', place: { translate: slide([-40, -3], [18, 2]) } },
+        { id: 'blue', kind: 'html', src: '.blue', place: { translate: slide([36, 2], [-14, -1]) } },
+    ],
 });
 ```
 
 `mix-blend-mode: multiply` mixes the inks where they overlap, as printed inks do (pink over blue gives a deep navy, pink over yellow an orange), so the overlap and the fringes both read as print.
 Keep the final offsets small, 1 to 3 px, as a real print shows them; more reads as a mistake.
-Shapes take the same plates: set each ink's shapes in a layer of its own with `multiply` and a small offset, and give their edges `boil()` (above) for a drawn line.
-For the paper, the finish's grain (`config({ finish: { grain } })`) over the whole frame.
+Shapes take the same plates: set each ink's shapes in a layer of its own with `multiply` and a small offset, and give their edges `look.boil` (above) for a drawn line.
+For the paper, add the finish's grain (`finish: { grain }` in `layers.scene()`) over the whole frame.
 
 No demo uses this pattern yet.
 
 ## A title that swells in weight
 
 A title's letters thicken one after another and thin again, so the peak moves along the word, and on the way the line widens and narrows with them.
-`text(canvas, { scene: this, font, lines })` draws the line from Work Sans's outlines, which the outline baker writes as `work-sans-outlines.js` when given the characters SPRING and the variable name `WORK_SANS`; each letter takes its own weight from `letter(i)`.
+A text layer on a canvas with `content.font` draws the line through Kinetic's `text()` from Work Sans's outlines, which the outline baker writes as `work-sans-outlines.js` when given the characters SPRING and the variable name `WORK_SANS`; each letter takes its own weight from `animate.axes`.
 Animating `font-variation-settings` on page text can stutter while the browser prepares each new weight; `text()` draws outlines, so it prepares none.
-The canvas fills the scene with the `.fill` rule from the halftone pattern, and the outlines' script loads before the scene's.
+The canvas fills the clip with the `.fill` rule from the halftone pattern, and the outlines' script loads before the scene's.
 
 ```html
 <script src="work-sans-outlines.js"></script>
@@ -1323,13 +1342,12 @@ The canvas fills the scene with the `.fill` rule from the halftone pattern, and 
 ```
 
 ```javascript
-scene('swell', {
-    init() {
-        text(this.element.querySelector('canvas'), { scene: this, font: window.WORK_SANS, lines: (m, t) => {
-            m.line('SPRING', { at: [640, 360], size: 120, align: 'center', valign: 'middle', tracking: 0.08, color: '#26282d' },
-                (i) => ({ wght: interpolate(t - stagger(i, 6, { each: 0.08 }), [0.5, 1.5, 2.5], [300, 900, 300], { ease: 'sine.inOut' }) }));
-        } });
-    },
+layers.scene('swell', {
+    layers: [{
+        id: 'word', kind: 'text', src: 'canvas',
+        content: { font: 'WORK_SANS', text: 'SPRING', at: [640, 360], size: 120, align: 'center', valign: 'middle', tracking: 0.08, color: '#26282d' },
+        animate: { each: 0.08, axes: { wght: { at: [0.5, 1.5, 2.5], to: [300, 900, 300], ease: 'sine.inOut' } } },
+    }],
 });
 ```
 
@@ -1340,8 +1358,8 @@ No demo uses this pattern yet.
 ## A Lottie logo sting
 
 A logo animation exported from After Effects plays once as the scene opens and holds on its last frame, and a tagline fades in under it.
-lottie-web plays the animation, and `lottie(anim, { scene: this, start })` hands it to Kinetic's clock, so a scrub, a check and a render each show the frame for their time.
-The page loads lottie-web after Kinetic, and Kinetic waits for `logo.json` to load before the first frame.
+A `kind: 'lottie'` layer loads the animation into its element with lottie-web and hands it to Kinetic's clock through `lottie()`, so a scrub, a check and a render each show the frame for their time.
+The page loads lottie-web before Kinetic draws, and Kinetic waits for `logo.json` to load before the first frame.
 The stylesheet gives `.mark` the logo's size.
 
 ```html
@@ -1349,38 +1367,30 @@ The stylesheet gives `.mark` the logo's size.
 
 <div class="layer" data-component="sting" data-start="0" data-duration="3">
     <div class="mark"></div>
-    <p class="tagline" data-bind-style="tagline">Made with care</p>
+    <p class="tagline">Made with care</p>
 </div>
 ```
 
 ```javascript
-scene('sting', {
-    init() {
-        this.anim = window.lottie.loadAnimation({
-            container: this.element.querySelector('.mark'),
-            renderer: 'svg', loop: false, autoplay: false, path: 'logo.json',
-        });
-        lottie(this.anim, { scene: this, start: 0.2 });
-    },
-    computed: {
-        tagline() { return { opacity: ramp(this.local, 1.6, 2.2) }; },
-    },
-    destroy() { this.anim.destroy(); },
+layers.scene('sting', {
+    layers: [
+        { id: 'logo', kind: 'lottie', src: '.mark', content: { path: 'logo.json', start: 0.2 } },
+        { id: 'tagline', kind: 'html', src: '.tagline', look: { opacity: { at: [1.6, 2.2], to: [0, 1] } } },
+    ],
 });
 ```
 
-The animation holds its first frame until 0.2 s, then plays on the scene's own time, and after its last frame it holds that frame for the rest of the clip.
-`scene: this` puts the animation on the scene's own time, and `lottie()` goes in the same task as `loadAnimation()`, so a failed load is heard.
-The animation's `destroy()` in the scene's frees it, since lottie-web keeps every animation until then, and Kinetic lets go of it at the same time.
+The animation holds its first frame until 0.2 s, then plays on the clip's own time, and after its last frame it holds that frame for the rest of the clip.
 `rate: 1.5` plays it faster, and `loop: true` starts it again at its end for a mark that keeps moving.
-The `'canvas'` renderer suits an animation with many shapes, and it renders the same way.
+`renderer: 'canvas'` suits an animation with many shapes, and it renders the same way.
 
 No demo uses this pattern yet.
 
 ## A looping sticker
 
 An animated GIF sticker waves in a corner for the whole composition.
-`animatedImage()` decodes the file once, made at the top of the file so the first frame waits for it, and the scene draws the frame for its time into a canvas on every seek.
+No layer draws an animated image, so this is a scene written in code (api.md, "A scene").
+`animatedImage()`, called at the top of the file so the first frame waits for it, decodes the file once, and the scene draws the frame for its time into a canvas on every seek.
 A browser without WebCodecs' `ImageDecoder` shows the file in a plain `<img>` instead, which plays on the browser's own clock, close to the render for a preview.
 The stylesheet gives `.sticker` its size and place.
 
@@ -1391,6 +1401,8 @@ The stylesheet gives `.sticker` its size and place.
 ```
 
 ```javascript
+const { scene, animatedImage } = wildflower.kinetic;
+
 const wave = 'ImageDecoder' in window ? animatedImage('wave.gif') : null;
 
 scene('sticker', {
@@ -1419,19 +1431,18 @@ No demo uses this pattern yet.
 ## Bars that grow in
 
 Bars grow from the left one after another, the top one first, while the number beside each bar counts up.
-Each bar's growth is `interpolate(local, [start, end], [0, 1], { ease })`, a number that is 0 before `start` and 1 after `end`.
-Each bar starts `slot * 0.12` seconds after the first, so the bars grow in top first when the rows are listed largest first.
-A width is a string with its unit.
-The number beside the bar is the value times the same growth, written by `format()`, which uses `en-US` unless `locale` is passed, so the text reads the same on every render machine.
+A comp is placed once per row (`repeat: { over: ROWS }`), each copy a clone of the container's `<template>` reading its row's fields as parameters.
+Each copy starts 0.12 s after the one above (`start: { stagger: { each: 0.12 } }`), so the bars grow in top first when the rows are listed largest first.
+A bar's growth is one track from 0 to 1, and two small functions turn it into the bar's width, a string with its unit, and the number beside it, written by `format()`, which uses `en-US` unless `locale` is passed, so the text reads the same on every render machine.
 
 ```html
 <div class="layer" data-component="bars" data-start="0" data-duration="4">
-    <div data-list="bars" data-key="id">
+    <div class="rows">
         <template>
             <div style="display: flex; align-items: center; height: 56px">
-                <span style="width: 120px" data-bind="name"></span>
-                <div style="height: 36px" data-bind-style="bar"></div>
-                <b data-bind="shown"></b>
+                <span class="name" style="width: 120px"></span>
+                <div class="bar" style="height: 36px"></div>
+                <b class="shown"></b>
             </div>
         </template>
     </div>
@@ -1445,23 +1456,25 @@ const ROWS = [
     { id: 'birch', name: 'Birch', color: '#5fa6a6', value: 4200000 },
     { id: 'cedar', name: 'Cedar', color: '#e8b416', value: 3100000 },
 ];
+const MAX = Math.max(...ROWS.map((r) => r.value));
+const fns = {
+    width: (value, grown) => (PLOT * value / MAX * grown).toFixed(2) + 'px',
+    shown: (value, grown) => format(value * grown, { notation: 'compact', maximumFractionDigits: 1 }),
+};
 
-scene('bars', {
-    computed: {
-        bars() {
-            const max = Math.max(...ROWS.map((r) => r.value));
-            return ROWS.map((row, slot) => {
-                const grown = interpolate(this.local, [0.4 + slot * 0.12, 1.6 + slot * 0.12], [0, 1], { ease: 'power3.out' });
-                return {
-                    id: row.id,
-                    name: row.name,
-                    bar: { width: (PLOT * row.value / max * grown).toFixed(2) + 'px', background: row.color },
-                    shown: format(row.value * grown, { notation: 'compact', maximumFractionDigits: 1 }),
-                };
-            });
+const grown = { at: [0.4, 1.6], to: [0, 1], ease: 'power3.out' }, value = { from: 'params.value' };
+layers.scene('bars', {
+    comps: {
+        row: {
+            layers: [
+                { id: 'name', kind: 'html', src: '.name', content: { text: { from: 'params.name' } } },
+                { id: 'bar', kind: 'html', src: '.bar', look: { style: { width: { call: 'width', args: [value, grown] }, background: { from: 'params.color' } } } },
+                { id: 'shown', kind: 'html', src: '.shown', content: { text: { call: 'shown', args: [value, grown] } } },
+            ],
         },
     },
-});
+    layers: [{ id: 'rows', kind: 'comp', comp: 'row', src: '.rows', start: { stagger: { each: 0.12 } }, repeat: { over: ROWS } }],
+}, { fns });
 ```
 
 The Sales Chart demo (/demos/kinetic-chart/) grows its bars in this way before the race starts.
@@ -1471,17 +1484,17 @@ The Sales Chart demo (/demos/kinetic-chart/) grows its bars in this way before t
 Bars for three products change length and swap places as the years pass from 2021 to 2024, with the year shown above them.
 `rank(t, rows, by)` takes `t` as a fractional keyframe.
 Whole numbers are the keyframes that `by(row, k)` reads, here an index into each row's `values`, and a fraction blends the two neighboring values and the two orderings.
-`year` maps the clock onto that `t` with `interpolate`, and holds each year for its first 45 percent before easing to the next.
-Each result's `position` (0 is first) times the row height gives the row's `translateY`, and its blended `value` sets the bar's width.
+`year`, a shared value from a small function of the time, maps the clock onto that `t`, and holds each year for its first 45 percent before easing to the next.
+Each row is a copy of a comp: its rank's `position` (0 is first) times the row height gives the copy's `translate`, and its blended `value` sets the bar's width.
 
 ```html
 <div class="layer" data-component="race" data-start="0" data-duration="8">
-    <h2 data-bind="label"></h2>
-    <div style="position: relative" data-list="bars" data-key="id">
+    <h2 class="label"></h2>
+    <div class="rows" style="position: relative">
         <template>
-            <div style="position: absolute; top: 0; left: 0; display: flex; align-items: center; height: 56px" data-bind-style="style">
-                <span style="width: 120px" data-bind="name"></span>
-                <div style="height: 36px" data-bind-style="bar"></div>
+            <div style="position: absolute; top: 0; left: 0; display: flex; align-items: center; height: 56px">
+                <span class="name" style="width: 120px"></span>
+                <div class="bar" style="height: 36px"></div>
             </div>
         </template>
     </div>
@@ -1500,26 +1513,38 @@ const ROWS = [
     { id: 'cedar', name: 'Cedar', color: '#e8b416', values: [2000000, 3800000, 5200000, 4000000] },
 ];
 
-scene('race', {
-    computed: {
-        // 0 is 2021, 3 is 2024, and fractions fall between. Each year holds
-        // for its first 45%, then the rows move to the next ordering.
-        year() {
-            const raw = interpolate(this.local, RACE, [0, YEARS.length - 1]);
-            const k = Math.floor(raw);
-            return k + interpolate(raw - k, [0.45, 1], [0, 1], { ease: 'power2.inOut' });
-        },
-        label() { return String(YEARS[Math.round(this.year)]); },
-        bars() {
-            return rank(this.year, ROWS, (r, k) => r.values[k]).map(({ row, value, position }) => ({
-                id: row.id,
-                name: row.name,
-                style: styleAt(this.local, { translateY: position * ROW }),
-                bar: { width: (PLOT * value / SCALE).toFixed(2) + 'px', background: row.color },
-            }));
+const fns = {
+    // 0 is 2021, 3 is 2024, and fractions fall between. Each year holds
+    // for its first 45%, then the rows move to the next ordering.
+    year(t) {
+        const raw = interpolate(t, RACE, [0, YEARS.length - 1]);
+        const k = Math.floor(raw);
+        return k + interpolate(raw - k, [0.45, 1], [0, 1], { ease: 'power2.inOut' });
+    },
+    label: (year) => String(YEARS[Math.round(year)]),
+    // A row's place in the ranking and its value at the year.
+    ranked: (year, id) => rank(year, ROWS, (r, k) => r.values[k]).find((e) => e.row.id === id),
+    y: (year, id) => fns.ranked(year, id).position * ROW,
+    width: (year, id) => (PLOT * fns.ranked(year, id).value / SCALE).toFixed(2) + 'px',
+};
+
+const id = { from: 'params.id' };
+layers.scene('race', {
+    shared: { year: { call: 'year', args: [{ rate: 1 }] } },
+    comps: {
+        row: {
+            layers: [
+                { id: 'row', kind: 'html', src: ':scope', place: { translate: [0, { call: 'y', args: ['year', id] }] } },
+                { id: 'name', kind: 'html', src: '.name', content: { text: { from: 'params.name' } } },
+                { id: 'bar', kind: 'html', src: '.bar', look: { style: { width: { call: 'width', args: ['year', id] }, background: { from: 'params.color' } } } },
+            ],
         },
     },
-});
+    layers: [
+        { id: 'label', kind: 'html', src: '.label', content: { text: { call: 'label', args: ['year'] } } },
+        { id: 'rows', kind: 'comp', comp: 'row', src: '.rows', repeat: { over: ROWS } },
+    ],
+}, { fns });
 ```
 
 The Sales Chart demo (/demos/kinetic-chart/) races its product lines across six years this way.
@@ -1531,13 +1556,14 @@ Vertical lines mark round values from 0 to 6M, each labeled with a short number 
 Bar widths computed as `PLOT * value / scaleMax` keep the axis and the bars on one scale for the whole race.
 The last tick replaces the constant `SCALE` in the race above.
 `format(v, { notation: 'compact' })` writes the labels, such as `2M`.
+The ticks are a comp repeated over the list `ticks()` gives, so `repeat.over` is a `{ call }`, and each copy reads its tick as `item`.
 
 ```html
 <div class="layer" data-component="axis" data-start="0" data-duration="4">
-    <div style="position: relative; height: 200px" data-list="axis" data-key="key">
+    <div class="ticks" style="position: relative; height: 200px">
         <template>
-            <div style="position: absolute; top: 0; bottom: 0; border-left: 1px solid #888" data-bind-style="style">
-                <span data-bind="label"></span>
+            <div style="position: absolute; top: 0; bottom: 0; border-left: 1px solid #888">
+                <span></span>
             </div>
         </template>
     </div>
@@ -1547,20 +1573,26 @@ The last tick replaces the constant `SCALE` in the race above.
 ```javascript
 const PLOT = 600;
 const VALUES = [3100000, 4200000, 5800000];
+const TICKS = ticks(0, Math.max(...VALUES), 5);   // [0, 2000000, 4000000, 6000000]
+const SCALE_MAX = TICKS[TICKS.length - 1];
+const fns = {
+    ticks: () => TICKS,
+    left: (v) => (PLOT * v / SCALE_MAX) + 'px',
+    label: (v) => format(v, { notation: 'compact' }),
+};
 
-scene('axis', {
-    computed: {
-        axisTicks() { return ticks(0, Math.max(...VALUES), 5); },   // [0, 2000000, 4000000, 6000000]
-        scaleMax() { const t = this.axisTicks; return t[t.length - 1]; },
-        axis() {
-            return this.axisTicks.map((v) => ({
-                key: v,
-                label: format(v, { notation: 'compact' }),
-                style: { left: (PLOT * v / this.scaleMax) + 'px' },
-            }));
+const tick = { from: 'params.item' };
+layers.scene('axis', {
+    comps: {
+        tick: {
+            layers: [
+                { id: 'line', kind: 'html', src: ':scope', look: { style: { left: { call: 'left', args: [tick] } } } },
+                { id: 'label', kind: 'html', src: 'span', content: { text: { call: 'label', args: [tick] } } },
+            ],
         },
     },
-});
+    layers: [{ id: 'axis', kind: 'comp', comp: 'tick', src: '.ticks', repeat: { over: { call: 'ticks' } } }],
+}, { fns });
 ```
 
 The Sales Chart demo (/demos/kinetic-chart/) draws its axis from the largest value in any year.
@@ -1568,14 +1600,14 @@ The Sales Chart demo (/demos/kinetic-chart/) draws its axis from the largest val
 ## A pie from data
 
 A donut chart fills clockwise, its four slices growing out together.
-Kinetic has no chart module: each slice's angles come from a running sum of the shares, worked out once beside the scene, and `shape('sector')` draws the slice.
-The slices are paths inside an `<svg>`, so they are a pool (see "Shapes from data inside an SVG").
-`seek(local)` multiplies every angle by one `ramp()`, so the pie fills from the top; give each slice its own `ramp()` delayed by `stagger()` to grow them one after another.
+Kinetic has no chart module: each slice's angles come from a running sum of the shares, worked out once beside the layers, and `shape('sector')` draws the slice in a small function.
+The slices are a comp repeated over them inside the `<svg>`: the HTML parser leaves a `<template>` there inert, and a comp's copies still clone the path inside it.
+Every angle is multiplied by one shared progress `p`, so the pie fills from the top; give each copy a `start: { stagger: {...} }` to grow them one after another.
 
 ```html
 <div class="layer" data-component="pie" data-start="0" data-duration="4">
     <svg viewBox="0 0 1280 720" width="1280" height="720">
-        <g data-pool="slices" data-key="id"><template><path data-bind-attr="attrs"></path></template></g>
+        <g class="slices"><template><path></path></template></g>
     </svg>
 </div>
 ```
@@ -1597,17 +1629,20 @@ const SLICES = DATA.map((d, id) => {
     return slice;
 });
 
-scene('pie', {
-    pools: { slices: {} },
-    init() { for (const s of SLICES) this.pools.slices.add({ id: s.id, attrs: { d: '', fill: s.color } }); },
-    seek(local) {
-        const p = ramp(local, 0.3, 1.5, 'power2.inOut');
-        for (const s of SLICES) {
-            const d = shape('sector', { cx: 640, cy: 360, radius: 220, inner: 120, from: s.from * p, to: s.to * p });
-            this.pools.slices.update(s.id, { attrs: { d, fill: s.color } });
-        }
+const fns = { slice: (from, to, p) => shape('sector', { cx: 640, cy: 360, radius: 220, inner: 120, from: from * p, to: to * p }) };
+
+layers.scene('pie', {
+    shared: { p: { at: [0.3, 1.5], to: [0, 1], ease: 'power2.inOut' } },
+    comps: {
+        slice: {
+            layers: [{
+                id: 'path', kind: 'svg', src: ':scope',
+                content: { d: { call: 'slice', args: [{ from: 'params.from' }, { from: 'params.to' }, 'p'] }, fill: { from: 'params.color' } },
+            }],
+        },
     },
-});
+    layers: [{ id: 'slices', kind: 'comp', comp: 'slice', src: '.slices', repeat: { over: SLICES } }],
+}, { fns });
 ```
 
 At `p` 0 every slice is empty, since a sector whose `to` equals its `from` is `''`; at 1 the slices meet round the full circle.
@@ -1615,17 +1650,17 @@ At `p` 0 every slice is empty, since a sector whose `to` equals its `from` is `'
 ## Data before frame 0
 
 A list shows one name for each row of a data file, already filled in on the first frame.
-A scene that reads a query lists it in `waitFor`, and frame 0 is not captured until the query has its rows.
-Kinetic settles readiness after the first scan, the fonts, every `waitFor` query and the images under the scenes, and registers it at `window.__hf.buildReady.kinetic` for a renderer that waits on it.
+List each query the layers read in `queries`, and frame 0 is not captured until the query has its rows; the layers are built once the rows are in, so a comp repeated `over: 'sales.rows'` makes one copy per row.
+Kinetic settles readiness after the first scan, the fonts, every query the layers read and the images under the clips, and registers it at `window.__hf.buildReady.kinetic` for a renderer that waits on it.
 `await wildflower.kinetic.ready()` is the same promise for code of your own.
 Queries exist on the full tier only.
-A query that fails is KN-131, and a `waitFor` entry that matches no query is KN-133.
+A query that fails is KN-131, and a name in `queries` that matches no query is KN-133.
 Either one stops the render at its timeout.
 
 ```html
 <div class="layer" data-component="chart" data-start="0" data-duration="6">
-    <ul data-list="rows" data-key="id">
-        <template><li data-bind="name"></li></template>
+    <ul class="names">
+        <template><li></li></template>
     </ul>
 </div>
 ```
@@ -1637,11 +1672,10 @@ wildflower.query('sales', {
     select: (data) => data.rows,
 });
 
-scene('chart', {
-    waitFor: ['sales'],
-    computed: {
-        rows() { return wildflower.getQuery('sales').rows; },
-    },
+layers.scene('chart', {
+    queries: ['sales'],
+    comps: { name: { layers: [{ id: 'name', kind: 'html', src: ':scope', content: { text: { from: 'params.name' } } }] } },
+    layers: [{ id: 'names', kind: 'comp', comp: 'name', src: '.names', repeat: { over: 'sales.rows' } }],
 });
 ```
 
@@ -1650,16 +1684,15 @@ The Sales Chart (/demos/kinetic-chart/) and Captions on a Beat (/demos/kinetic-c
 ## Captions from a transcript
 
 A line of words appears dimmed, each word lights up as it is spoken, and the word being spoken swells a little.
-`captions(t, words, options)` groups a transcript into lines at a sentence end and at a pause longer than `maxGap` seconds, and between those into the fewest lines `maxWords` and `maxChars` allow, about equal in length and broken after a comma when one is near the middle, so no line strands a word or two.
-It returns the line current at `t`, with `empty: true` and no words between lines.
-Each word carries a `state` of `past`, `active` or `future` and a `p`, its own progress from 0 to 1, so a word's style is a function of those two.
+A text layer's `content.captions` groups a transcript into lines as Kinetic's `captions()` does: at a sentence end and at a pause longer than `maxGap` seconds, and between those into the fewest lines `maxWords` and `maxChars` allow, about equal in length and broken after a comma when one is near the middle, so no line strands a word or two.
+It shows the line current now, one part per word, and nothing between lines.
+Each word is in a `state` of `past`, `active` or `future`, and `look.words` gives each state its style; inside it, `p` names the word's own progress from 0 to 1.
 `hold` is how many seconds a line stays after its last word.
-A `data-list` over the mapped words renders nothing while the line is empty.
 
 ```html
 <div class="layer" data-component="captions" data-start="0" data-duration="13">
-    <p data-list="lineWords" data-key="key">
-        <template><span style="display: inline-block; margin: 0 0.2em" data-bind="text" data-bind-style="style"></span></template>
+    <p class="line">
+        <template><span style="display: inline-block; margin: 0 0.2em"></span></template>
     </p>
 </div>
 ```
@@ -1668,33 +1701,33 @@ A `data-list` over the mapped words renders nothing while the line is empty.
 // a word-timed transcript: [{ id, text, start, end }, ...]
 wildflower.query('words', { from: 'data/transcript.json' });
 
-scene('captions', {
-    waitFor: ['words'],
-    computed: {
-        line() { return captions(this.local, wildflower.getQuery('words').rows, { maxWords: 4, hold: 0.5 }); },
-        lineWords() {
-            return this.line.words.map((w) => {
-                const lift = w.state === 'active' ? 1 - w.p : 0;
-                return {
-                    key: w.key,
-                    text: w.text,
-                    style: styleAt(this.local, { opacity: w.state === 'future' ? 0.3 : 1, scale: 1 + 0.08 * lift }),
-                };
-            });
+const fns = { swell: (p) => 'scale(' + (1 + 0.08 * (1 - p)) + ')' };
+
+layers.scene('captions', {
+    queries: ['words'],
+    layers: [{
+        id: 'line', kind: 'text', src: '.line',
+        content: { captions: { cues: { from: 'words.rows' }, maxWords: 4, hold: 0.5 } },
+        look: {
+            words: {
+                active: { opacity: 1, transform: { call: 'swell', args: ['p'] } },
+                past: { opacity: 1, transform: 'scale(1)' },
+                future: { opacity: 0.3, transform: 'scale(1)' },
+            },
         },
-    },
-});
+    }],
+}, { fns });
 ```
 
-`this.local` counts from the scene's own clip, so the words follow the clip, and a clip at `data-start="voice.start"` reads them from the voice's start.
-`captions()` compares the times only with `t`, so with `data-media-start="12"` on the voice, a transcript timed from the start of the file reads `captions(this.local + 12, words)`.
+The layers' time counts from their own clip, so the words follow the clip, and a clip at `data-start="voice.start"` reads them from the voice's start.
+The transcript's times are compared with that time alone, so with `data-media-start="12"` on the voice, shift the transcript's times by 12 s when it is timed from the start of the file.
 
 The Captions on a Beat demo (/demos/kinetic-captions/) drives its caption line from a transcript this way.
 
 ### From a subtitle file
 
 A URL `from` reads the response as JSON, so an `.srt` or `.vtt` file takes a function `from` that fetches the text and returns the words `srt()` reads from it.
-The scene's `waitFor` holds frame 0 until they are in.
+Listing the query in `queries` holds frame 0 until the words are in.
 
 ```javascript
 wildflower.query('words', {
@@ -1705,17 +1738,17 @@ wildflower.query('words', {
 ## A pulse on the beat
 
 A disc swells on each beat, and a ring of bars around it ripples and grows taller.
-`beat(t, beats)` reads a beat file, an object whose `beats` array holds `{ time, strength }`, or that array itself, and returns a value from 0 to 1.
-The value jumps to each beat's strength and decays from there, with a time constant of 0.2 s unless `{ decay }` is passed.
-Multiplying a scale by `1 + 0.14 * pulse` swells an element on each beat.
-A ring of bars takes its heights from `noise()` at an offset of each bar's own, scaled by the pulse.
+`{ beat: { beats } }` reads a beat file, an object whose `beats` array holds `{ time, strength }`, or that array itself, and gives a value from 0 to 1, as Kinetic's `beat()` does.
+The value jumps to each beat's strength and decays from there, with a time constant of 0.2 s unless `decay` is given.
+A scale driven from 1 to 1.14 by the pulse swells an element on each beat.
+A ring of 36 bars, `repeat: { count: 36 }` copies of a template, takes its heights from `noise()` at an offset of each bar's own, scaled by the pulse, in a small function.
 
 ```html
 <div class="layer" data-component="pulse" data-start="0" data-duration="13">
-    <div style="position: absolute; left: 50%; top: 50%; width: 0; height: 0" data-list="bars" data-key="key">
-        <template><i style="position: absolute; left: -4px; top: -4px; width: 8px; background: #c9b8ff; transform-origin: 50% 0" data-bind-style="style"></i></template>
+    <div class="ring" style="position: absolute; left: 50%; top: 50%; width: 0; height: 0">
+        <template><i style="position: absolute; left: -4px; top: -4px; width: 8px; background: #c9b8ff; transform-origin: 50% 0"></i></template>
     </div>
-    <div style="position: absolute; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; background: #9d7bff" data-bind-style="disc"></div>
+    <div class="disc" style="position: absolute; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; background: #9d7bff"></div>
 </div>
 ```
 
@@ -1723,23 +1756,22 @@ A ring of bars takes its heights from `noise()` at an offset of each bar's own, 
 wildflower.query('beats', { from: 'data/beats.json', select: (file) => file.beats });
 
 const BARS = 36;
+const fns = {
+    height: (i, t, pulse) => (18 + 70 * (0.5 + 0.5 * noise(i * 0.61 + t * 1.7, 11)) * (0.35 + 0.65 * pulse)).toFixed(1) + 'px',
+    turn: (i) => 'rotate(' + (360 / BARS) * i + 'deg) translateY(112px)',
+};
 
-scene('pulse', {
-    waitFor: ['beats'],
-    computed: {
-        pulse() { return beat(this.time, wildflower.getQuery('beats').rows); },
-        disc() { return styleAt(this.time, { scale: 1 + 0.14 * this.pulse }); },
-        bars() {
-            const out = [];
-            for (let i = 0; i < BARS; i++) {
-                const n = 0.5 + 0.5 * noise(i * 0.61 + this.time * 1.7, 11);
-                const h = 18 + 70 * n * (0.35 + 0.65 * this.pulse);
-                out.push({ key: i, style: { height: h.toFixed(1) + 'px', transform: 'rotate(' + (360 / BARS) * i + 'deg) translateY(112px)' } });
-            }
-            return out;
+layers.scene('pulse', {
+    queries: ['beats'],
+    shared: { pulse: { beat: { beats: { from: 'beats.rows' } } } },
+    layers: [
+        {
+            id: 'ring', kind: 'html', src: '.ring', repeat: { count: BARS },
+            animate: { look: { style: { height: { call: 'height', args: ['i', { rate: 1 }, 'pulse'] }, transform: { call: 'turn', args: ['i'] } } } },
         },
-    },
-});
+        { id: 'disc', kind: 'html', src: '.disc', place: { scale: { keys: [[0, 1], [1, 1.14]], by: 'pulse' } } },
+    ],
+}, { fns });
 ```
 
 The Captions on a Beat demo (/demos/kinetic-captions/) pulses a disc and a ring of bars this way.
@@ -1747,7 +1779,7 @@ The Captions on a Beat demo (/demos/kinetic-captions/) pulses a disc and a ring 
 ## Music under a scene
 
 Music plays under a title for the whole composition, fading in over its first second and out over its last two.
-The `<audio>` element sits inside the composition root with `data-start`, and the scene's code does not change for it.
+The `<audio>` element sits inside the composition root with `data-start`, and the layers do not change for it.
 `data-volume="0.8"` is about 2 dB down, and each fade runs from the clip's own start or end.
 In the preview, the speaker button on the bar turns the sound on, since a browser plays sound only after a gesture on the page.
 `render()` mixes the clip into the file's sound track.
@@ -1755,18 +1787,17 @@ In the preview, the speaker button on the bar turns the sound on, since a browse
 ```html
 <audio id="music" src="music.mp3" data-start="0" data-duration="6" data-volume="0.8" data-fade-in="1" data-fade-out="2"></audio>
 <div class="layer" data-component="title" data-start="0" data-duration="6">
-    <h1 data-bind-style="heading">Northwind</h1>
+    <h1>Northwind</h1>
 </div>
 ```
 
 ```javascript
-scene('title', {
-    keyframes: {
-        heading: {
-            opacity:    { at: [0.5, 1.5], to: [0, 1] },
-            translateY: { at: [0.5, 1.5], to: [30, 0], ease: 'power3.out' }
-        }
-    }
+layers.scene('title', {
+    layers: [{
+        id: 'heading', kind: 'html', src: 'h1',
+        place: { translate: [0, { at: [0.5, 1.5], to: [30, 0], ease: 'power3.out' }] },
+        look: { opacity: { at: [0.5, 1.5], to: [0, 1] } },
+    }],
 });
 ```
 
@@ -1801,7 +1832,7 @@ Listen to the seams before the film is done: a track whose last bars change (a f
 
 A loop of 8 bars cut to a 115 BPM track, its drop the first strike.
 Ask the user for a track within about 5 BPM of the tempo the piece was designed at, in 4/4, with a clear kick on the beats (a kick on dotted or syncopated counts never sits under a cut), dry, punchy hits for the strikes, a phrase of 4 bars, and a license for where the piece will go.
-`scripts/beatgrid.cjs` finds the tempo and the first downbeat for the clip's `data-tempo` and `data-downbeat`; confirm the drop by its low kick (below 120 Hz) and by the user's ear, since the model cannot listen.
+The Beat grid page (https://kinetic.wildflowerjs.com/docs/beat-grid/) finds the tempo and the first downbeat for the clip's `data-tempo` and `data-downbeat`: ask the user to drop the track on it and paste what it gives. Confirm the drop by its low kick (below 120 Hz) and by the user's ear, since you cannot listen to the track.
 Find the phrase before choosing the length: compare each bar's spectrum with the drop bar's, and the bar that matches best is where the groove repeats (here bar 13 matched bar 9, a phrase of 4 bars). A loop of 4 or 8 bars is seamless; 6 bars cuts a phrase.
 The clip starts one beat before the drop (`data-media-start` = the drop's time in the file − one beat), so the drop is the first strike and every pass of the loop gets one beat of the build as a pickup.
 Write the beat grid once and place everything on it: a contact (a strike, a landing) on the beat's whole frame, a move started early so it lands on the beat (`rules.md`, "Motion habits"), a clip's edge on the whole frame nearest its beat.
@@ -1821,6 +1852,7 @@ const moveFrom = (k) => onFrame(B(k) - LAND);                 // a 0.3 s spring 
 ```
 
 8 bars at 115 is 32 beats, 16.696 s, which rounds to 501 frames, 16.7 s.
+In layers, the beats are names: `'beat 4'` is beat 4 of the track's grid, counted from its downbeat as beat 0 and read in the clip's own time (`'beat 4.5'` is halfway to beat 5), and `snap: 'frame'` puts every beat and marker on its nearest frame, so a contact is a key at `'beat 4'` and a move that lands there is a key at `'beat 4 - 0.24'`.
 
 ## A sound on a cut
 
@@ -1838,15 +1870,15 @@ An audio clip never counts as the clip a transition replaces, so the whoosh besi
 ## Bars that move with the music
 
 Sixteen bars rise and fall with the music, the bass on the left and the treble on the right.
-`spectrum(t, 16)` returns 16 levels from 0 to 1, from 20 Hz to 16 kHz on a logarithmic scale, for the frame nearest `t`, and each level becomes a bar's height.
+`{ spectrum: {} }` gives each of `n` copies its bin of Kinetic's `spectrum(t, n)`: 16 levels from 0 to 1, from 20 Hz to 16 kHz on a logarithmic scale, for the frame nearest the time, and each level becomes a bar's height.
 Kinetic analyzes the decoded music once, before frame 0, so each frame reads a table and the bars come out the same in every render.
 Each level is measured against its own loudest frame in the composition, and it falls over about 0.15 s after a sound stops.
 
 ```html
 <audio id="music" src="music.mp3" data-start="0"></audio>
 <div class="layer" data-component="bars" data-start="0" data-duration="6">
-    <div class="bars" data-list="bars" data-key="key">
-        <template><i data-bind-style="style"></i></template>
+    <div class="bars">
+        <template><i></i></template>
     </div>
 </div>
 ```
@@ -1857,83 +1889,77 @@ Each level is measured against its own loudest frame in the composition, and it 
 ```
 
 ```javascript
-scene('bars', {
-    computed: {
-        bars() {
-            return spectrum(this.time, 16).map((v, i) => ({ key: i, style: { height: (4 + 296 * v).toFixed(1) + 'px' } }));
-        },
-    },
-});
+layers.scene('bars', {
+    layers: [{
+        id: 'bars', kind: 'html', src: '.bars', repeat: { count: 16 },
+        animate: { look: { style: { height: { call: 'height', args: [{ spectrum: {} }] } } } },
+    }],
+}, { fns: { height: (v) => (4 + 296 * v).toFixed(1) + 'px' } });
 ```
 
 ## A pulse on the bass
 
 A disc swells on each kick drum, and a glow behind it brightens.
-`level(t, 'bass')` returns the music's level from 20 to 250 Hz at the frame nearest `t`, from 0 to 1, so the disc follows the drum the composition plays, with no beat file.
+`{ level: 'bass' }` is the music's level from 20 to 250 Hz at the frame nearest the time, from 0 to 1, as Kinetic's `level()` gives it, so the disc follows the drum the composition plays, with no beat file.
 The level falls over about 0.15 s after each kick.
-`level(t, 'bass', { clip: 'music' })` reads one clip alone, by its `id`, when other clips play beside it.
-`beat()` gives a pulse from a beat file instead (A pulse on the beat).
+`{ level: { band: 'bass', clip: 'music' } }` reads one clip alone, by its `id`, when other clips play beside it.
+`{ beat }` gives a pulse from a beat file instead (A pulse on the beat).
 
 ```html
 <audio id="music" src="music.mp3" data-start="0"></audio>
 <div class="layer" data-component="kick" data-start="0" data-duration="6">
-    <div class="glow" style="position: absolute; inset: 0; background: radial-gradient(circle, #9d7bff66, transparent 60%)" data-bind-style="glow"></div>
-    <div class="disc" style="position: absolute; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; background: #9d7bff" data-bind-style="disc"></div>
+    <div class="glow" style="position: absolute; inset: 0; background: radial-gradient(circle, #9d7bff66, transparent 60%)"></div>
+    <div class="disc" style="position: absolute; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; background: #9d7bff"></div>
 </div>
 ```
 
 ```javascript
-scene('kick', {
-    computed: {
-        bass() { return level(this.time, 'bass'); },
-        disc() { return styleAt(this.time, { scale: 1 + 0.25 * this.bass }); },
-        glow() { return { opacity: (0.2 + 0.8 * this.bass).toFixed(3) }; },
-    },
+layers.scene('kick', {
+    shared: { bass: { level: 'bass' } },
+    layers: [
+        { id: 'disc', kind: 'html', src: '.disc', place: { scale: { keys: [[0, 1], [1, 1.25]], by: 'bass' } } },
+        { id: 'glow', kind: 'html', src: '.glow', look: { opacity: { keys: [[0, 0.2], [1, 1]], by: 'bass' } } },
+    ],
 });
 ```
 
 ## Many particles
 
 Two hundred and forty small white dots drift slowly from side to side across the frame.
-`init()` fills a pool once with positions from `random(seed)`.
-`seek(local)` rewrites each entity's style with `update()` after every seek, with a drift from `noise()` at an offset of the entity's own.
-Every seek flushes the page's pools before the frame is captured, so the DOM holds the seek's frame when the seek settles, and a pool added to the scene later is flushed the same way.
+An html layer's `repeat: { count }` makes that many copies of the element's `<template>`, each reading its index as `i`, and `animate` places each one.
+Each mote's place and size are made beside the scene from `random(seed)`, and a function in `fns` adds a drift from `noise()` at an offset of the mote's own, read at the time, `{ rate: 1 }`.
 `random(seed)` and `noise(x, seed)` give the same values on every run, where `Math.random()` would give each render a different field (KN-141).
-The pool needs a tier with pools, which is mini-pool and up.
 
 ```html
 <div class="layer" data-component="dust" data-start="0" data-duration="6">
-    <div data-pool="dust" data-key="id">
-        <template><i style="position: absolute; left: 0; top: 0; border-radius: 50%; background: #fff" data-bind-style="style"></i></template>
+    <div class="dust">
+        <template><i style="position: absolute; left: 0; top: 0; border-radius: 50%; background: #fff"></i></template>
     </div>
 </div>
 ```
 
 ```javascript
-const DUST = 240;
 const SEED = 7;
+const rnd = random(SEED);
+const DUST = Array.from({ length: 240 }, () => ({ x: rnd() * 1280, y: rnd() * 720, size: 1.5 + rnd() * 3 }));
 
-scene('dust', {
-    pools: { dust: {} },
-    init() {
-        const rnd = random(SEED);
-        for (let i = 0; i < DUST; i++) {
-            this.pools.dust.add({ id: i, x: rnd() * 1280, y: rnd() * 720, size: 1.5 + rnd() * 3, style: {} });
-        }
-    },
-    seek(local) {
-        this.pools.dust.forEach((d) => {
-            const drift = noise(d.id * 0.37 + local * 0.12, SEED) * 36;
-            this.pools.dust.update(d.id, {
-                style: {
-                    width: d.size + 'px',
-                    height: d.size + 'px',
-                    ...styleAt(local, { translateX: d.x + drift, translateY: d.y }),
-                },
-            });
-        });
-    },
-});
+const fns = {
+    at: (i, t) => [DUST[i].x + noise(i * 0.37 + t * 0.12, SEED) * 36, DUST[i].y],
+    size: (i) => DUST[i].size,
+};
+
+layers.scene('dust', {
+    layers: [
+        {
+            id: 'dust', kind: 'html', src: '.dust',
+            repeat: { count: 240 },
+            animate: {
+                place: { translate: { call: 'at', args: ['i', { rate: 1 }] } },
+                look: { style: { width: { call: 'size', args: ['i'], unit: 'px' }, height: { call: 'size', args: ['i'], unit: 'px' } } },
+            },
+        },
+    ],
+}, { fns });
 ```
 
 The Launch Title demo (/demos/kinetic-title/) drifts 240 motes of dust behind its title this way.
@@ -1941,54 +1967,53 @@ The Launch Title demo (/demos/kinetic-title/) drifts 240 motes of dust behind it
 ## Particles from an emitter
 
 A fountain throws sparks up from one point, forty a second, each falling back and fading over a second and a half.
-Every particle the clip will ever have is made beside the scene, with its birth time and its speeds from `random(seed)`, and each one is a function of its age, `local - born`, so a seek to any time draws the right sparks.
-A pool holds a fixed number of slots, and particle `i` lives in slot `i % SLOTS`.
-`SLOTS` is the rate times the life, rounded up, plus one: a particle born just as the last one in its slot reaches the end of its life would otherwise find that one still alive by a rounding error, and one of the two would not be drawn.
-A burst is the same with every birth time equal.
+An html layer's `repeat: { every, life }` makes a copy of the element's `<template>` every `every` seconds and keeps each one for `life`, so a seek to any time draws exactly the sparks alive then.
+Each copy reads its index as `i` and its age as `age`, and `animate` plays on the copy at its age, so a track in it runs over the spark's life.
+Every spark's speeds and size are made beside the scene from `random(seed)`, and a function in `fns` places spark `i` from its age in closed form.
+A burst is `repeat: { count }`, every copy at the layer's own time.
 
 ```html
 <div class="layer" data-component="fountain" data-start="0" data-duration="5">
-    <div data-pool="sparks" data-key="id">
-        <template><i style="position: absolute; left: -4px; top: -4px; border-radius: 50%; background: #f2c14e" data-bind-style="style"></i></template>
+    <div class="sparks">
+        <template><i style="position: absolute; left: -4px; top: -4px; border-radius: 50%; background: #f2c14e"></i></template>
     </div>
 </div>
 ```
 
 ```javascript
-const DURATION = 5;
-const RATE = 40;      // particles a second
-const LIFE = 1.5;     // seconds each one lives
-const G = 900;        // px/s², pulling them back down
-const SLOTS = Math.ceil(RATE * LIFE) + 1;
+const G = 900;   // px/s², pulling the sparks back down
 
+// Sparks born before frame 0 have negative i, one life's worth: 60 at forty a second.
+const FIRST = -60;
 const rnd = random(9);
-const SPARKS = Array.from({ length: Math.ceil(RATE * DURATION) }, (_, i) => ({
-    born: i / RATE, vx: -120 + 240 * rnd(), vy: -620 - 160 * rnd(), size: 4 + 6 * rnd(),
-}));
-// A hidden slot writes the same properties a shown one does, so nothing a
-// spark set at another time is left on it.
-const HIDDEN = { width: '0px', height: '0px', opacity: '0', transform: 'none' };
+const SPARKS = Array.from({ length: 261 }, () => ({ vx: -120 + 240 * rnd(), vy: -620 - 160 * rnd(), size: 4 + 6 * rnd() }));
+const spark = (i) => SPARKS[i - FIRST];
 
-scene('fountain', {
-    pools: { sparks: {} },
-    init() { for (let s = 0; s < SLOTS; s++) this.pools.sparks.add({ id: s, style: HIDDEN }); },
-    seek(local) {
-        const n = Math.floor(local * RATE + 1e-9);   // the newest particle born by now
-        for (let s = 0; s < SLOTS; s++) {
-            const p = SPARKS[n - ((((n - s) % SLOTS) + SLOTS) % SLOTS)];   // the newest one in slot s
-            const age = p ? local - p.born : -1;
-            if (!(age >= 0 && age < LIFE)) { this.pools.sparks.update(s, { style: HIDDEN }); continue; }
-            const x = 640 + p.vx * age, y = 620 + p.vy * age + 0.5 * G * age * age;
-            this.pools.sparks.update(s, {
-                style: { width: p.size + 'px', height: p.size + 'px', opacity: (1 - age / LIFE).toFixed(3), ...styleAt(local, { translateX: x, translateY: y }) },
-            });
-        }
-    },
-});
+const fns = {
+    at: (i, age) => [640 + spark(i).vx * age, 620 + spark(i).vy * age + 0.5 * G * age * age],
+    size: (i) => spark(i).size,
+};
+
+layers.scene('fountain', {
+    layers: [
+        {
+            id: 'sparks', kind: 'html', src: '.sparks',
+            repeat: { every: 0.025, life: 1.5 },   // forty a second, each living 1.5 s
+            animate: {
+                place: { translate: { call: 'at', args: ['i', 'age'] } },
+                look: {
+                    opacity: { at: [0, 1.5], to: [1, 0] },
+                    style: { width: { call: 'size', args: ['i'], unit: 'px' }, height: { call: 'size', args: ['i'], unit: 'px' } },
+                },
+            },
+        },
+    ],
+}, { fns });
 ```
 
-Before the first particle, and in a slot whose index is above the newest particle's, the lookup finds no particle and the slot is hidden.
-`update()` writes the properties it is given and leaves the rest, so a hidden slot writes every property a shown one does; with `opacity` alone a slot keeps the size and place of the spark it last showed, and a frame depends on the frames before it (`check()` reports it).
+Copies are born before frame 0 too, so the fountain is already running when the clip starts, as a stream or a tunnel of rings should be.
+The list of sparks covers every birth from -1.5 s to 5 s, since a copy past its end has no spark to read.
+For a fountain that starts empty, the opacity can come from a function in `fns` that returns 0 when `i` is below 0.
 A position from the age in closed form, as here, or from `noise()` read at the age for a drift, keeps every frame independent of the ones before it.
 
 ## Rack focus across phrases
@@ -1996,53 +2021,54 @@ A position from the age in closed form, as here, or from `noise()` read at the a
 Five phrases hang at different depths, and as the focal plane moves from the back to the front, each phrase sharpens in turn while the others soften.
 The front phrase, "the power of focus", is sharp at the end.
 `focus(z, plane, { range, max })` returns the blur in px for a thing at depth `z` when the focal plane is at `plane`, 0 on the plane and `max` far from it.
-The `plane` entry in `keyframes` is a single track, so the scene reads it as one number, `this.plane`.
-The list goes on an element inside the scene, which reads the scene's values wherever the scene sits.
-`perspective` on the field gives the phrases parallax and scale, so a far phrase is small as well as soft.
+The focal plane is a track in `shared`, which any layer reads by its name, `plane`.
+Each phrase is a copy of a comp, one per row, reading its row's `text`, `x`, `y` and `z` by name, and a function in `fns` gives its blur from its depth and the plane.
+A three-part `translate` places a phrase in depth, and `perspective` on the field gives the phrases parallax and scale, so a far phrase is small as well as soft.
 Each phrase costs one GPU filter, so this pattern suits a dozen elements, and the next two patterns cover hundreds.
-The stylesheet needs `.field { position: absolute; inset: 0; perspective: 900px; transform-style: preserve-3d; }` and `.phrase { position: absolute; left: 50%; top: 50%; font-size: 72px; font-weight: 700; white-space: nowrap; }`.
 
 ```html
 <div class="layer" data-component="phrases" data-start="0" data-duration="5">
-    <div class="field" data-list="rows" data-key="key">
-        <template><div class="phrase" data-bind="text" data-bind-style="style"></div></template>
+    <div class="field">
+        <template><div class="phrase"></div></template>
     </div>
 </div>
+```
+
+```css
+.field { position: absolute; inset: 0; perspective: 900px; transform-style: preserve-3d; }
+.phrase { position: absolute; left: 50%; top: 50%; font-size: 72px; font-weight: 700; white-space: nowrap; }
 ```
 
 ```javascript
 // Depth is CSS translateZ pixels: 0 at the stage, negative away from the camera.
 const PHRASES = [
-    { key: 'a', text: 'the power of focus', z: 0,     x: 0,    y: 0 },
-    { key: 'b', text: 'depth',              z: -300,  x: -340, y: -180 },
-    { key: 'c', text: 'field',              z: -600,  x: 300,  y: 160 },
-    { key: 'd', text: 'plane',              z: -900,  x: -120, y: 220 },
-    { key: 'e', text: 'lens',               z: -1200, x: 380,  y: -220 },
+    { text: 'the power of focus', z: 0,     x: 0,    y: 0 },
+    { text: 'depth',              z: -300,  x: -340, y: -180 },
+    { text: 'field',              z: -600,  x: 300,  y: 160 },
+    { text: 'plane',              z: -900,  x: -120, y: 220 },
+    { text: 'lens',               z: -1200, x: 380,  y: -220 },
 ];
 
-scene('phrases', {
-    keyframes: {
+const soft = (z, plane) => focus(z, plane, { range: 250, max: 14 });
+const fns = { soft, clear: (z, plane) => 1 - soft(z, plane) / 28 };
+
+layers.scene('phrases', {
+    shared: {
         // The focal plane comes from the back to the front over the clip.
         plane: { at: [0.5, 4], to: [-1200, 0], ease: 'power2.inOut' },
     },
-    computed: {
-        rows() {
-            const plane = this.plane;
-            return PHRASES.map((p) => {
-                const blur = focus(p.z, plane, { range: 250, max: 14 });
-                return {
-                    key: p.key,
-                    text: p.text,
-                    style: {
-                        transform: 'translate(-50%, -50%) translate3d(' + p.x + 'px, ' + p.y + 'px, ' + p.z + 'px)',
-                        filter: 'blur(' + blur + 'px)',
-                        opacity: String(1 - blur / 28),
-                    },
-                };
-            });
+    comps: {
+        phrase: {
+            layers: [{
+                id: 'phrase', kind: 'html', src: ':scope',
+                content: { text: { from: 'params.text' } },
+                place: { shift: ['-50%', '-50%'], translate: ['x', 'y', 'z'] },
+                look: { blur: { call: 'soft', args: ['z', 'plane'] }, opacity: { call: 'clear', args: ['z', 'plane'] } },
+            }],
         },
     },
-});
+    layers: [{ id: 'phrases', kind: 'comp', comp: 'phrase', src: '.field', repeat: { over: PHRASES } }],
+}, { fns });
 ```
 
 The Showreel demo (/demos/kinetic-showreel/) racks through the fragments of its sentence this way in its focus scene.
@@ -2050,47 +2076,59 @@ The Showreel demo (/demos/kinetic-showreel/) racks through the fragments of its 
 ## Depth bands for hundreds of elements
 
 Four hundred and fifty motes sit in three layers at three depths, and as the focal plane moves, whole layers soften and sharpen.
-Each band is a static pool inside a container, and the container's `filter` comes from a computed that calls `focus()` with `steps`.
-`init()` places the motes once with `random(seed)` and nothing writes to them again, so the three container filters are the only styles that change from frame to frame.
-`steps: 6` rounds a band's blur to one of six levels, so its filter is re-rasterised only when the level changes.
-A mote's band is fixed when it is added.
+Each band is a copy of a comp, one per row, and its `look.blur` comes from `focus()` with `steps`, so the whole band softens as one.
+Inside it, a `repeat: { count }` makes the band's motes, each placed from a list made beside the scene with `random(seed)`.
+The motes' styles never change, so Kinetic writes them once, and the three band filters are the only styles that change from frame to frame.
+`steps: 6` rounds a band's blur to one of six levels, so its filter is re-rasterized only when the level changes.
 The cost is three filters however many motes there are.
-The stylesheet needs `.band { position: absolute; inset: 0; }` and `.mote { position: absolute; border-radius: 50%; background: #fff; }`.
 
 ```html
 <div class="layer" data-component="bands" data-start="0" data-duration="5">
-    <div class="band" data-bind-style="far"><div data-pool="far" data-key="id"><template><i class="mote" data-bind-style="style"></i></template></div></div>
-    <div class="band" data-bind-style="mid"><div data-pool="mid" data-key="id"><template><i class="mote" data-bind-style="style"></i></template></div></div>
-    <div class="band" data-bind-style="near"><div data-pool="near" data-key="id"><template><i class="mote" data-bind-style="style"></i></template></div></div>
+    <div class="bands">
+        <template><div class="band"><div class="motes"><template><i class="mote"></i></template></div></div></template>
+    </div>
 </div>
 ```
 
-```javascript
-const BANDS = { far: -900, mid: -450, near: 0 };   // one depth per band
-const PER_BAND = 150;
-
-scene('bands', {
-    pools: { far: {}, mid: {}, near: {} },
-    keyframes: {
-        plane: { at: [0.5, 4.5], to: [-900, 0], ease: 'power2.inOut' },
-    },
-    init() {
-        const rnd = random(11);
-        for (const name of Object.keys(BANDS)) {
-            const scale = 1 + BANDS[name] / 1800;      // nearer bands have larger motes
-            for (let i = 0; i < PER_BAND; i++) {
-                const size = (2 + rnd() * 4) * scale;
-                this.pools[name].add({ id: i, style: { left: (rnd() * 1280).toFixed(1) + 'px', top: (rnd() * 720).toFixed(1) + 'px', width: size.toFixed(1) + 'px', height: size.toFixed(1) + 'px' } });
-            }
-        }
-    },
-    computed: {
-        far()  { return { filter: 'blur(' + focus(BANDS.far,  this.plane, { range: 300, steps: 6 }) + 'px)' }; },
-        mid()  { return { filter: 'blur(' + focus(BANDS.mid,  this.plane, { range: 300, steps: 6 }) + 'px)' }; },
-        near() { return { filter: 'blur(' + focus(BANDS.near, this.plane, { range: 300, steps: 6 }) + 'px)' }; },
-    },
-});
+```css
+.band { position: absolute; inset: 0; }
+.mote { position: absolute; border-radius: 50%; background: #fff; }
 ```
+
+```javascript
+const BANDS = [{ band: 0, z: -900 }, { band: 1, z: -450 }, { band: 2, z: 0 }];   // far to near, one depth each
+const rnd = random(11);
+const MOTES = BANDS.map(({ z }) => Array.from({ length: 150 }, () => {
+    const size = ((2 + rnd() * 4) * (1 + z / 1800)).toFixed(1);   // nearer bands have larger motes
+    return { size, x: (rnd() * 1280).toFixed(1), y: (rnd() * 720).toFixed(1) };
+}));
+
+const fns = {
+    soft: (z, plane) => focus(z, plane, { range: 300, steps: 6 }),
+    x: (band, i) => MOTES[band][i].x,
+    y: (band, i) => MOTES[band][i].y,
+    size: (band, i) => MOTES[band][i].size,
+};
+const px = (call) => ({ call, args: ['band', 'i'], unit: 'px' });
+
+layers.scene('bands', {
+    shared: { plane: { at: [0.5, 4.5], to: [-900, 0], ease: 'power2.inOut' } },
+    comps: {
+        band: {
+            layers: [
+                { id: 'band', kind: 'html', src: ':scope', look: { blur: { call: 'soft', args: ['z', 'plane'] } } },
+                {
+                    id: 'motes', kind: 'html', src: '.motes', repeat: { count: 150 },
+                    animate: { look: { style: { left: px('x'), top: px('y'), width: px('size'), height: px('size') } } },
+                },
+            ],
+        },
+    },
+    layers: [{ id: 'bands', kind: 'comp', comp: 'band', src: '.bands', repeat: { over: BANDS } }],
+}, { fns });
+```
+
+A mote reads its own index as `i` and its band's `band` from the copy it is in.
 
 No demo uses this pattern yet.
 
@@ -2098,50 +2136,51 @@ No demo uses this pattern yet.
 
 Three hundred points of light sit at different depths, and as the focal plane moves, each point out of focus becomes a soft disc that grows, the way a lens draws a point of light.
 `focus()` with `max: 1` returns an amount of defocus, 0 on the plane and close to 1 far from it.
-`seek()` writes each light's style from that amount through one static pool.
+A `repeat: { count }` makes the lights, and functions in `fns` give each one's place, size, opacity and disc from that amount and the plane, a track in `shared`.
 The disc is a radial gradient whose hard edge moves inward and whose size grows as the blur grows, so the softness comes from the gradient.
-The pool writes 300 styles per seek, and none of them sets a filter.
+Kinetic writes 300 styles per frame, and none of them sets a filter.
 The same pattern fits dust, stars, rain and city lights.
-The stylesheet needs `.light { position: absolute; left: 0; top: 0; border-radius: 50%; }`.
 
 ```html
 <div class="layer" data-component="bokeh" data-start="0" data-duration="5">
-    <div data-pool="lights" data-key="id"><template><i class="light" data-bind-style="style"></i></template></div>
+    <div class="lights"><template><i class="light"></i></template></div>
 </div>
 ```
 
-```javascript
-const COUNT = 300;
+```css
+.light { position: absolute; left: 0; top: 0; border-radius: 50%; }
+```
 
-scene('bokeh', {
-    pools: { lights: {} },
-    keyframes: {
-        plane: { at: [0.5, 4.5], to: [-1000, 0], ease: 'power2.inOut' },
+```javascript
+const rnd = random(23);
+const LIGHTS = Array.from({ length: 300 }, () => ({ x: rnd() * 1280, y: rnd() * 720, z: -rnd() * 1000, base: 3 + rnd() * 3, hue: 30 + rnd() * 40 }));
+
+const defocus = (i, plane) => focus(LIGHTS[i].z, plane, { range: 250, max: 1 });   // 0 sharp, 1 fully out of focus
+const size = (i, plane) => LIGHTS[i].base * (1 + 6 * defocus(i, plane));         // the disc grows with the blur
+
+const fns = {
+    at: (i, plane) => [LIGHTS[i].x - size(i, plane) / 2, LIGHTS[i].y - size(i, plane) / 2],
+    size: (i, plane) => size(i, plane).toFixed(1),
+    opacity: (i, plane) => 1 - 0.6 * defocus(i, plane),
+    disc: (i, plane) => {
+        const edge = 100 - 70 * defocus(i, plane);                                    // and its edge softens
+        return 'radial-gradient(circle, hsl(' + LIGHTS[i].hue.toFixed(0) + ' 90% 70%) ' + (edge - 30).toFixed(0) + '%, transparent ' + edge.toFixed(0) + '%)';
     },
-    init() {
-        const rnd = random(23);
-        for (let i = 0; i < COUNT; i++) {
-            this.pools.lights.add({ id: i, x: rnd() * 1280, y: rnd() * 720, z: -rnd() * 1000, base: 3 + rnd() * 3, hue: 30 + rnd() * 40, style: {} });
-        }
-    },
-    seek(local) {
-        const plane = this.plane;
-        this.pools.lights.forEach((l) => {
-            const blur = focus(l.z, plane, { range: 250, max: 1 });    // 0 sharp, 1 fully out of focus
-            const size = l.base * (1 + 6 * blur);                       // the disc grows with the blur
-            const edge = 100 - 70 * blur;                               // and its edge softens
-            this.pools.lights.update(l.id, {
-                style: {
-                    width: size.toFixed(1) + 'px',
-                    height: size.toFixed(1) + 'px',
-                    ...styleAt(local, { translateX: l.x - size / 2, translateY: l.y - size / 2 }),
-                    opacity: (1 - 0.6 * blur).toFixed(3),
-                    background: 'radial-gradient(circle, hsl(' + l.hue.toFixed(0) + ' 90% 70%) ' + (edge - 30).toFixed(0) + '%, transparent ' + edge.toFixed(0) + '%)',
-                },
-            });
-        });
-    },
-});
+};
+const of = (call, unit) => ({ call, args: ['i', 'plane'], unit });
+
+layers.scene('bokeh', {
+    shared: { plane: { at: [0.5, 4.5], to: [-1000, 0], ease: 'power2.inOut' } },
+    layers: [
+        {
+            id: 'lights', kind: 'html', src: '.lights', repeat: { count: 300 },
+            animate: {
+                place: { translate: of('at') },
+                look: { opacity: of('opacity'), style: { width: of('size', 'px'), height: of('size', 'px'), background: of('disc') } },
+            },
+        },
+    ],
+}, { fns });
 ```
 
 The Showreel demo (/demos/kinetic-showreel/) drifts its bokeh lights behind the phrases of its focus scene this way.
@@ -2153,19 +2192,19 @@ A render seeks to whole frames (a frame number divided by the frame rate), so a 
 The frame before it shows the ball above the floor, and the frame after shows it already rising.
 Here the ball is let go at frame 9, falls for 10 frames and then bounces for 6 and 3, so every landing is a whole frame.
 Each arc's launch speed is computed from its length, so the arc ends exactly on the floor.
-The scene counts in frames.
-`this.clipFrame` is the frame number within the clip, a whole number, so `f >= LANDS[0]` is true from the landing frame on, with no tolerance for the rounding that a time in seconds such as `19 / 30` carries.
+The functions count in frames.
+`Math.round(t * FPS)` turns the time, `{ rate: 1 }`, into the frame number within the clip, a whole number, so `f >= LANDS[0]` is true from the landing frame on, with no tolerance for the rounding that a time in seconds such as `19 / 30` carries.
 The squash is a function of the frames since the landing, so it is largest on the contact frame.
 
 ```html
 <div class="layer" data-component="ball" data-start="0" data-duration="2">
     <div style="position: absolute; left: 0; top: 470px; width: 1280px; height: 2px; background: #888"></div>
-    <div style="position: absolute; left: -22px; top: -44px; width: 44px; height: 44px; border-radius: 50%; background: #aa3de6; transform-origin: 50% 100%" data-bind-style="ball"></div>
+    <div class="ball" style="position: absolute; left: -22px; top: -44px; width: 44px; height: 44px; border-radius: 50%; background: #aa3de6; transform-origin: 50% 100%"></div>
 </div>
 ```
 
 ```javascript
-const FPS = 30;         // the root's data-fps="30"; the arcs below are worked out before any scene runs, so this.fps is not there yet
+const FPS = 30;         // the root's data-fps="30"
 const FLOOR = 470;      // px, the line the ball lands on
 const HANG = 128;       // px, the ball's bottom edge before it is let go
 const DROP = 9;         // let go at frame 9
@@ -2190,16 +2229,24 @@ function ballY(f) {
     return FLOOR;
 }
 
-scene('ball', {
-    computed: {
-        ball() {
-            const f = this.clipFrame;
-            let squash = 0;
-            for (const at of LANDS) if (f >= at) squash += 0.4 * Math.max(0, 1 - (f - at) / (0.09 * FPS));
-            return styleAt(this.local, { translateX: 640, translateY: ballY(f), scaleX: 1 + 0.8 * squash, scaleY: 1 - squash });
-        },
-    },
-});
+// The squash at frame f, largest on each contact frame.
+function squash(f) {
+    let s = 0;
+    for (const at of LANDS) if (f >= at) s += 0.4 * Math.max(0, 1 - (f - at) / (0.09 * FPS));
+    return s;
+}
+
+const frame = (t) => Math.round(t * FPS);
+const fns = {
+    at: (t) => [640, ballY(frame(t))],
+    squash: (t) => [1 + 0.8 * squash(frame(t)), 1 - squash(frame(t))],
+};
+
+layers.scene('ball', {
+    layers: [
+        { id: 'ball', kind: 'html', src: '.ball', place: { translate: { call: 'at', args: [{ rate: 1 }] }, scale: { call: 'squash', args: [{ rate: 1 }] } } },
+    ],
+}, { fns });
 ```
 
 The opening scene of the Showreel (/demos/kinetic-showreel/) demo times its bouncing ball this way.
@@ -2209,14 +2256,15 @@ The opening scene of the Showreel (/demos/kinetic-showreel/) demo times its boun
 Three balls drop and bounce, each losing a different share of its speed on every landing.
 A simulation steps forward in time while a render asks for frames in any order, so it never runs in a seek.
 Beside the scene, each ball is stepped to the end of the clip at 1/240 s, finer than any frame, and its height at every step is kept in a typed array.
-The computed reads the two steps either side of the time and mixes them, so a seek to any frame, in any order, draws the same thing.
+A function in `fns` reads the two steps either side of the time and mixes them, so a seek to any frame, in any order, draws the same thing.
+Each ball is a copy of a comp, one per row, reading its index as `i` and its row's `color` with a link, `{ from: 'params.color' }`.
 Any physics engine works this way when it runs at load with a fixed step and takes its randomness from `random(seed)`.
 
 ```html
 <div class="layer" data-component="balls" data-start="0" data-duration="4">
     <div style="position: absolute; left: 0; top: 600px; width: 1280px; height: 2px; background: #888"></div>
-    <div data-list="balls" data-key="key">
-        <template><div style="position: absolute; left: -22px; top: -44px; width: 44px; height: 44px; border-radius: 50%" data-bind-style="style"></div></template>
+    <div class="balls">
+        <template><div style="position: absolute; left: -22px; top: -44px; width: 44px; height: 44px; border-radius: 50%"></div></template>
     </div>
 </div>
 ```
@@ -2250,30 +2298,35 @@ function heightAt(b, t) {
     return mix(b.y[k], b.y[k + 1], u - k);
 }
 
-scene('balls', {
-    computed: {
-        balls() {
-            return BALLS.map((b, key) => ({ key, style: { background: b.color, ...styleAt(this.local, { translateX: b.x, translateY: heightAt(b, this.local) }) } }));
+const fns = { at: (i, t) => [BALLS[i].x, heightAt(BALLS[i], t)] };
+
+layers.scene('balls', {
+    comps: {
+        ball: {
+            layers: [
+                { id: 'ball', kind: 'html', src: ':scope', place: { translate: { call: 'at', args: ['i', { rate: 1 }] } }, look: { style: { background: { from: 'params.color' } } } },
+            ],
         },
     },
-});
+    layers: [{ id: 'balls', kind: 'comp', comp: 'ball', src: '.balls', repeat: { over: BALLS } }],
+}, { fns });
 ```
 
 A landing between two frames is never drawn, and the frames either side show the ball above the floor; for a contact that has to be seen, choose the drop and the speeds so it lands on a whole frame, as "A landing on a whole frame" does.
-When a learner's setting changes the result, bake again from a watcher on that store field.
+When a learner's setting changes the result, hand the setting to the function as a link, `{ from: 'lab.bounce' }`, and bake again when its value changes.
 
 ## Cuts on whole frames
 
 The screen cuts between five words, TYPE, SHAPE, TIME, SPACE and COLOR, in changing colors, and each card stays up for fewer frames than the one before.
 A table of cuts with `at` in frames makes every card last a whole number of frames.
-`moment(this.clipFrame, CUTS)` takes the frame number within the clip and finds the last cut whose `at` is at or before it, so each comparison is between two whole numbers.
-Here the cards shorten from 14 frames to 10, and `since`, the frames since the cut started, divided by `this.fps`, drives each card's own motion in seconds.
+`moment(f, CUTS)` takes the frame number within the clip, `Math.round(t * FPS)` of the time `{ rate: 1 }`, and finds the last cut whose `at` is at or before it, so each comparison is between two whole numbers.
+Here the cards shorten from 14 frames to 10, and `since`, the frames since the cut started, divided by the frame rate, drives each card's own motion in seconds.
 Another scene can read the same table, as the showreel's overlay does to take each cut's color.
 
 ```html
 <div class="layer" data-component="cuts" data-start="0" data-duration="2">
-    <div class="layer" style="display: flex; align-items: center; justify-content: center" data-bind-style="card">
-        <h2 data-bind="word" data-bind-style="wordStyle"></h2>
+    <div class="layer card" style="display: flex; align-items: center; justify-content: center">
+        <h2></h2>
     </div>
 </div>
 ```
@@ -2287,29 +2340,36 @@ const CUTS = [
     { at: 50, word: 'COLOR', bg: '#0c0c10', fg: '#f2eee6' },
 ];
 
-scene('cuts', {
-    computed: {
-        // The cut on screen at this frame of the clip: the at values are frames, so since is too.
-        now() { return moment(this.clipFrame, CUTS); },
-        card() { const c = this.now.row; return { background: c.bg, color: c.fg }; },
-        word() { return this.now.row.word; },
-        wordStyle() {
-            const scale = interpolate(this.now.since / this.fps, [0, 0.25], [1.14, 1], { ease: 'power3.out' });
-            return styleAt(this.local, { scale });
-        },
-    },
-});
+const FPS = 30;   // the root's data-fps="30"
+
+// The cut on screen at this frame of the clip: the at values are frames, so since is too.
+const now = (t) => moment(Math.round(t * FPS), CUTS);
+const fns = {
+    bg: (t) => now(t).row.bg,
+    fg: (t) => now(t).row.fg,
+    word: (t) => now(t).row.word,
+    pop: (t) => interpolate(now(t).since / FPS, [0, 0.25], [1.14, 1], { ease: 'power3.out' }),
+};
+const at = (call) => ({ call, args: [{ rate: 1 }] });
+
+layers.scene('cuts', {
+    layers: [
+        { id: 'card', kind: 'html', src: '.card', look: { style: { background: at('bg'), color: at('fg') } } },
+        { id: 'word', kind: 'html', src: 'h2', content: { text: at('word') }, place: { scale: at('pop') } },
+    ],
+}, { fns });
 ```
 
 The rhythm scene of the Showreel (/demos/kinetic-showreel/) demo cuts between its words this way.
 
 ## Solids in 2.5D
 
-A cage of twelve beams around a cube tumbles a quarter turn and lands on itself, so the piece loops.
+Two cubes circle a point between them half a turn and swap places, so the piece loops.
 This pattern uses kinetic.25d.js, loaded after kinetic.wf.js, which adds `wildflower.kinetic.solids`: solids in 3D only as numbers, each face projected and drawn as an SVG path, shaded by its angle to one light.
 It needs no WebGL context, stays sharp at any size, and the finish works on it as on anything else; for curved lit surfaces or solids that pass through each other, use Trillium (directions.md, "3D or 2.5D").
-`solids()` is made in `init()`, and `seek()` places the shapes and calls `draw()`, which gives the same SVG for the same values whatever was drawn before.
-A shape a quarter turn on from where it started writes the same SVG, so a loop built on a turn of its symmetry closes exactly (`check.cjs --seam` reads it as smooth).
+The scene's `stage` sets the view, light, rim and glows, and each shape is a solid layer whose `place.rotate` is a track.
+With no `bands`, the stage sorts every face by depth, so the cube passing in front draws over the one behind; the same values give the same SVG whatever was drawn before.
+Shapes that land on themselves, or on each other, write the same SVG, so a loop built on a turn of its symmetry closes exactly (`check({ seam: true })` reads it as smooth).
 
 ```html
 <script defer src="kinetic.wf.js" data-preview></script>
@@ -2326,25 +2386,22 @@ A shape a quarter turn on from where it started writes the same SVG, so a loop b
 ```
 
 ```javascript
-const { scene, ramp, solids } = wildflower.kinetic;
-
-scene('prism', {
-    init() {
-        this.stage = solids(this.element.querySelector('#world'), {
-            camera: { distance: 3.7, focal: 1350, roll: 45 },            // focal: px at a distance of 1; roll in degrees
-            light: { dir: [-0.25, 0.35, 0.9], ramp: ['#2A141D', '#5A2F2A', '#B45A35', '#EE8D4E', '#F5BC98', '#FBE4DE'], bounce: 0.18 },
-            rim: { color: '#FBE4DE', width: 1.6 },                          // brighter as a face turns edge-on
-            glows: [{ dir: [-0.85, 0.25, 0.45], color: '#F58DBA', bleed: {} }],   // soft color sliding across the faces
-        });
-        this.stage.add('cage', solids.cage({ size: 2, beam: 0.26 }), { albedo: 0.42 });
-        this.stage.add('core', solids.box({ size: 0.8 }));
+wildflower.kinetic.layers.scene('prism', {
+    stage: {
+        src: '#world',
+        view: { distance: 3.7, focal: 1350, roll: 45 },                 // focal: px at a distance of 1; roll in degrees
+        light: { dir: [-0.25, 0.35, 0.9], ramp: ['#2A141D', '#5A2F2A', '#B45A35', '#EE8D4E', '#F5BC98', '#FBE4DE'], bounce: 0.18 },
+        rim: { color: '#FBE4DE', width: 1.6 },                           // brighter as a face turns edge-on
+        glows: [{ dir: [-0.85, 0.25, 0.45], color: '#F58DBA', bleed: {} }],   // soft color sliding across the faces
     },
-    seek(t) {
-        if (!this.stage) return;
-        this.stage.set('cage', { rotate: [90 * ramp(t, 0.55, 2.25, 'power3.inOut'), 0, 0] });
-        this.stage.set('core', { rotate: [-90 * ramp(t, 0.45, 2.15, 'power3.inOut'), 0, 0] });
-        this.stage.draw();
-    },
+    layers: [
+        // Each cube turns half a turn about the point between them (pivot: the point of its own space that sits
+        // at its position, and that it turns about), eased in and out, so at the end each stands where the other began.
+        { id: 'left', kind: 'solid', content: { shape: 'box', size: 0.7 },
+          place: { pivot: [0.6, 0, 0], rotate: [45, { at: [0.3, 2.1], to: [0, 180], ease: 'power3.inOut' }, 0] } },
+        { id: 'right', kind: 'solid', content: { shape: 'box', size: 0.7 },
+          place: { pivot: [-0.6, 0, 0], rotate: [45, { at: [0.3, 2.1], to: [0, 180], ease: 'power3.inOut' }, 0] } },
+    ],
 });
 ```
 
@@ -2354,7 +2411,7 @@ For a nest of shapes that grow into each other's places, set each one's `scale` 
 ## A camera push and a fly-through
 
 A sphere of 600 purple beads bursts outward from its center as the camera pushes in, and at the end the beads fly out past the camera.
-This pattern uses Trillium, the three.js connector for WildflowerJS.
+This pattern uses Trillium, the three.js connector for WildflowerJS, which no layer drives, so this is a scene written in code (api.md, "A scene").
 A Trillium view whose canvas sits inside a scene is drawn once after every seek, so `seek(local)` can move the camera directly.
 The formation comes from a function of the clip's time, `beadsAt(t)`, bound with `view.instanced(() => this.beads, mesh, spec)`.
 The renderer is created with `preserveDrawingBuffer: true` so the canvas still holds the frame when it is captured (development builds warn with KN-190 otherwise).
@@ -2466,6 +2523,7 @@ The space scene of the Showreel (/demos/kinetic-showreel/) demo morphs its beads
 ## Depth of field in 3D
 
 A field of 600 purple beads fills the depth of the frame, and the focus moves through them from the back to the front like a camera's focus pull, with a blur computed for each pixel from its depth.
+Like the camera push, this is a Trillium scene written in code.
 A Trillium view takes a `draw: (renderer, scene, camera) => ...` option that replaces the view's own `renderer.render(scene, camera)` call, and here it renders through an `EffectComposer` with a `BokehPass`.
 Kinetic draws every view inside a scene through `view.draw()` after each seek, so `seek()` only sets the pass's focus from `plane`.
 The pass's `focus` is a distance along the camera's look direction in world units, so `plane` runs from 24, past the farthest bead, to 8, the nearest.
@@ -2473,7 +2531,6 @@ The pass blurs the rendered image by its depth, so the number of beads does not 
 The renderer, the mesh and its binding are set up as in the camera push above.
 An import map in the page maps `three` and `three/addons/` to the three.js build and its `examples/jsm/` folder.
 The pass's own shaders are not compiled by `renderer.compile()`, so one `composer.render()` in `init()` compiles them before frame 0.
-The pass was run with these values in a headless browser; the bead layout is one of many.
 
 ```html
 <div class="layer" data-component="dof" data-start="0" data-duration="5">
@@ -2538,9 +2595,9 @@ The Showreel demo (/demos/kinetic-showreel/) renders its space shot through a bo
 ## Typed inputs for a batch
 
 A promo shows a name as a heading, a price line under it and a bar in an accent color, and each video of a batch shows its own name, price and color.
-The composition root declares its variables in `data-composition-variables`, and `inputs` declares what a scene reads from the composition's values: the declared defaults with `window.__hfVariables` over them.
+The composition root declares its variables in `data-composition-variables`, and `inputs` in `layers.scene()` declares what the scene reads from the composition's values: the declared defaults with `window.__hfVariables` over them.
 An input takes a `type` of `String`, `Number` or `Boolean`, `required` and `default` for a missing value, and a `validator` that returns false, or throws, to reject one.
-The scene reads it as `this.inputs.price`, already coerced to the type (the text `'12.5'` becomes the number 12.5) and checked before frame 0.
+A layer reads it with a link, `{ from: 'inputs.price' }`, already coerced to the type (the text `'12.5'` becomes the number 12.5) and checked before frame 0.
 A value that is missing, of the wrong type or rejected is a `[KN-130]` error on the console in every build, with the scene and the input in the message, and in the development build what is wrong with the value.
 The render stops at its timeout instead of producing a wrong video.
 
@@ -2549,25 +2606,28 @@ The render stops at its timeout instead of producing a wrong video.
      data-start="0" data-duration="5" data-width="1280" data-height="720" data-fps="30"
      data-composition-variables='[{"id":"name","type":"string","label":"Name","default":"Meadow"},{"id":"price","type":"number","label":"Price","default":49},{"id":"accent","type":"color","label":"Accent","default":"#c8452d"}]'>
     <div class="layer" data-component="promo" data-start="0" data-duration="5">
-        <h1 data-bind="inputs.name"></h1>
-        <p data-bind="priceLine"></p>
-        <div style="height: 8px" data-bind-style="rule"></div>
+        <h1></h1>
+        <p></p>
+        <div class="rule" style="height: 8px"></div>
     </div>
 </div>
 ```
 
 ```javascript
-scene('promo', {
+const fns = { price: (v) => format(v, { style: 'currency', currency: 'USD' }) };
+
+layers.scene('promo', {
     inputs: {
         name:   { type: String, required: true },
         price:  { type: Number, validator: (v) => v > 0 },
         accent: { type: String, default: '#c8452d' },
     },
-    computed: {
-        priceLine() { return format(this.inputs.price, { style: 'currency', currency: 'USD' }); },
-        rule() { return { background: this.inputs.accent }; },
-    },
-});
+    layers: [
+        { id: 'name', kind: 'html', src: 'h1', content: { text: { from: 'inputs.name' } } },
+        { id: 'price', kind: 'html', src: 'p', content: { text: { call: 'price', args: [{ from: 'inputs.price' }] } } },
+        { id: 'rule', kind: 'html', src: '.rule', look: { style: { background: { from: 'inputs.accent' } } } },
+    ],
+}, { fns });
 ```
 
 The Launch Title demo (/demos/kinetic-title/) reads its title, subtitle and accent color through `inputs`, and the Sales Chart demo (/demos/kinetic-chart/) reads its title.
@@ -2575,10 +2635,10 @@ The Launch Title demo (/demos/kinetic-title/) reads its title, subtitle and acce
 ## A lesson that is also its video
 
 A lesson on the page plays one step, then waits for the learner to drag a slider or answer a question, and the same page as a video plays every step straight through with the slider's moves and the answer scripted.
-Each step is a clip with an `id` and `data-step`, and `step()` gives it the second it holds at (`wait`), the store path it waits for (`until`), the values it writes as it is entered (`entry`) and the script that writes the store in the video.
-The learner's slider and the script write one store field, and the scenes read it through `follow`, which eases it by a spring in both modes.
+Each step is a clip with an `id` and `data-step`, and `steps` in `layers.scene()` gives it the second it holds at (`wait`), the store path it waits for (`until`), the values it writes as it is entered (`entry`) and the script that writes the store in the video.
+The learner's slider and the script write one store field, and the layers read it through `follow`, which eases it by a spring in both modes.
 Once `until` is true the rest of the step plays and holds on its last frame, so the question holds 1 s in, before its explanation at 2 s, and the explanation plays once the learner has answered right; a wrong answer shows a line saying why and keeps the step waiting.
-Kinetic never moves to the next step by itself: every step holds at its end for Next. Next binds to `canAdvance`, false only while `until` is, so on a step with nothing to answer it is ready at once, and a press while the step plays skips the rest of it.
+Kinetic never moves to the next step by itself: every step holds at its end for Next. Next binds to `canAdvance`, false only while `until` is, so on a step with nothing to answer Next is enabled at once, and a press while the step plays skips the rest of it.
 At a hold the clock stands still, so the learner's slider moves the point only through `follow`.
 The page uses the one layout every lesson uses ("A lesson's layout", below), all of it inside the root: the step's heading, body, choices, and angle slider in the left column, the circle and the wave beside them, and the band along the bottom with the step, Play and Replay, and Back and Next, where the last step offers "Start again".
 The slider, the prompts, and the band show in interactive mode alone, so in the video their space is empty paper; the choices show in both, disabled in the video, where the script answers.
@@ -2588,7 +2648,7 @@ The page's CSS is the layout's, with the lines below for the circle, the wave, a
 ```html
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.3/dist/kinetic.wf.js"></script>
 <script defer src="app.js"></script>
 
 <main class="lesson">
@@ -2598,9 +2658,9 @@ The page's CSS is the layout's, with the lines below for the circle, the wave, a
             <svg viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">
                 <path class="axis" d="M610 320H910M760 170V470M930 320H1216"></path>
                 <circle class="unit" cx="760" cy="320" r="130"></circle>
-                <line class="height" data-bind-attr="height"></line>
-                <path class="wave" data-bind-attr="wave"></path>
-                <circle r="9" fill="#26282d" data-bind-attr="point"></circle>
+                <line class="height"></line>
+                <path class="wave"></path>
+                <circle class="point" r="9" fill="#26282d"></circle>
             </svg>
         </div>
         <section id="circle" class="layer cap" data-step data-start="0" data-duration="6">
@@ -2659,8 +2719,7 @@ The page's CSS is the layout's, with the lines below for the circle, the wave, a
 ```
 
 ```javascript
-const { scene, step } = wildflower.kinetic;
-wildflower.kinetic.config({ fit: true, finish: { grain: 0.08 } });   // the stage fitted to the page, and the paper's still grain
+wildflower.kinetic.config({ fit: true });   // the stage fitted to the page
 
 const TITLES = { circle: 'Round the circle', unwrap: 'Drawing the wave', ask: 'The lowest point' };
 const WHY = {
@@ -2671,31 +2730,40 @@ const WHY = {
 
 wildflower.store('sine', { state: { angle: 30, choice: null }, computed: { right() { return this.choice === 270; } } });
 
-step('circle', { wait: 2, script: { 'sine.angle': { at: [2, 5.5], to: [30, 120], ease: 'power2.inOut' } } });
-step('unwrap', { wait: 1.5, script: { 'sine.angle': { at: [1.5, 2.3, 7.5], to: [120, 0, 360], ease: ['power2.inOut', 'linear'] } } });
-step('ask', {
-    wait: 1,                                                        // the page: holds before the explanation at 2 s
-    until: 'sine.right',                                            // the page: a wrong answer keeps it waiting; the right one plays the explanation
-    entry: { 'sine.choice': null, 'sine.angle': 360 },              // the page: cleared on the way in, with the whole wave drawn
-    script: { 'sine.choice': { at: [0, 1.5], set: [null, 270] } },  // the video: 270 is chosen at 1.5 s
-});
-
 // The circle, its point's height, and the wave that height draws, one point a degree.
 const CX = 760, CY = 320, R = 130, WX = 930, WS = 286 / 360, RAD = Math.PI / 180;
 const y = (deg) => CY - R * Math.sin(deg * RAD);
-scene('sine-circle', {
-    subscribe: ['sine'],
-    follow: { angle: 'sine.angle' },   // eased toward the store's angle by a spring, in both modes
-    computed: {
-        point() { return { cx: (CX + R * Math.cos(this.angle * RAD)).toFixed(1), cy: y(this.angle).toFixed(1) }; },
-        height() { return { x1: this.point.cx, y1: CY, x2: this.point.cx, y2: this.point.cy }; },
-        wave() {
-            let d = 'M' + WX + ' ' + CY;
-            for (let a = 1; a <= this.angle; a++) d += ' L' + (WX + a * WS).toFixed(1) + ' ' + y(a).toFixed(1);
-            return { d };
+const fns = {
+    x: (deg) => CX + R * Math.cos(deg * RAD),
+    y,
+    wave(deg) {
+        let d = 'M' + WX + ' ' + CY;
+        for (let a = 1; a <= deg; a++) d += ' L' + (WX + a * WS).toFixed(1) + ' ' + y(a).toFixed(1);
+        return d;
+    },
+};
+
+wildflower.kinetic.layers.scene('sine-circle', {
+    stores: ['sine'],
+    finish: { grain: 0.08 },   // the paper's still grain
+    steps: {
+        circle: { wait: 2, script: { 'sine.angle': { at: [2, 5.5], to: [30, 120], ease: 'power2.inOut' } } },
+        unwrap: { wait: 1.5, script: { 'sine.angle': { at: [1.5, 2.3, 7.5], to: [120, 0, 360], ease: ['power2.inOut', 'linear'] } } },
+        ask: {
+            wait: 1,                                                        // the page: holds before the explanation at 2 s
+            until: 'sine.right',                                            // the page: a wrong answer keeps it waiting; the right one plays the explanation
+            entry: { 'sine.choice': null, 'sine.angle': 360 },              // the page: cleared on the way in, with the whole wave drawn
+            script: { 'sine.choice': { at: [0, 1.5], set: [null, 270] } },  // the video: 270 is chosen at 1.5 s
         },
     },
-});
+    // The angle the picture shows: the store's, eased toward it by a spring, in both modes.
+    shared: { angle: { follow: 'sine.angle' } },
+    layers: [
+        { id: 'height', kind: 'svg', src: '.height', content: { x1: { call: 'x', args: ['angle'] }, y1: CY, x2: { call: 'x', args: ['angle'] }, y2: { call: 'y', args: ['angle'] } } },
+        { id: 'wave', kind: 'svg', src: '.wave', content: { d: { call: 'wave', args: ['angle'] } } },
+        { id: 'point', kind: 'svg', src: '.point', content: { cx: { call: 'x', args: ['angle'] }, cy: { call: 'y', args: ['angle'] } } },
+    ],
+}, { fns });
 
 wildflower.component('sine-quiz', {
     subscribe: ['sine', 'kinetic'],
@@ -2748,7 +2816,7 @@ wildflower.component('lesson-controls', {
 A page can offer the video as well, from a button outside the root, where the video never draws it: `config({ mode: 'video' })` and `play({ from: 0 })` play it from the start, and `config({ mode: 'interactive' })` takes the page back to the lesson with the learner's angle and answer, where `go()` enters the step they were on.
 The question's buttons have no CSS transition, since the script changes their class in the video.
 The sine lesson demo (/demos/kinetic-sine/) is this lesson in four steps, with a last step that waits for the learner to drag the point to the bottom of the circle, and its toolbar offers the video.
-`scripts/check.cjs index.html --lesson` walks a lesson's steps: whether each holds (on the last frame before its `wait`), the `until` it waits on, the console errors and KN lines during it, and a still of each hold.
+`check({ lesson: true })` walks a lesson's steps: whether each holds (on the last frame before its `wait`), the `until` it waits on, the console errors and KN lines during it, and a still of each hold.
 The finished lesson loads the minified builds and has no preview bar.
 
 ## A question that explains a wrong answer
@@ -2757,6 +2825,7 @@ The step holds with the question up, before the explanation of the right answer.
 A wrong pick shows why it is wrong, a binding on the store that shows during the hold, and the step keeps holding for another try.
 The right pick turns `until` true, so the rest of the step plays, the explanation with it, and the step holds at its end for Next.
 In the video the script picks the right answer before the explanation, which plays as it does on the page.
+Nothing here moves, so the scene on the explanation's clip has `steps` and an empty `layers: []`.
 
 ```html
 <div id="stage" data-composition-id="planets" data-start="0" data-duration="9" data-width="1280" data-height="720" data-fps="30">
@@ -2770,7 +2839,7 @@ In the video the script picks the right answer before the explanation, which pla
         <button type="button" class="next" data-action="next" data-show="$kinetic.mode === 'interactive'" data-bind-attr="{ disabled: !$kinetic.canAdvance }">Next</button>
     </div>
     <!-- After the hold at 2 s: plays once the answer is right. -->
-    <p class="layer reveal" data-start="2" data-duration="4">Right: Mercury orbits 58 million km from the Sun.</p>
+    <p class="layer reveal" data-component="reveal" data-start="2" data-duration="4">Right: Mercury orbits 58 million km from the Sun.</p>
     <section id="next" class="layer cap" data-step data-start="ask" data-duration="3">
         <h2>Next: why Venus is hotter.</h2>
         <!-- The last step: the lesson alone offers the way back to the start. -->
@@ -2780,8 +2849,6 @@ In the video the script picks the right answer before the explanation, which pla
 ```
 
 ```javascript
-const { step } = wildflower.kinetic;
-
 const CHOICES = [
     { id: 'venus', label: 'Venus', why: 'Not quite: Venus is the second planet out. Try another.' },
     { id: 'mercury', label: 'Mercury', why: '' },
@@ -2790,11 +2857,16 @@ const CHOICES = [
 
 wildflower.store('quiz', { state: { pick: null }, computed: { right() { return this.pick === 'mercury'; } } });
 
-step('ask', {
-    wait: 2,                                                         // holds before the explanation, which starts at 2 s
-    until: 'quiz.right',                                             // a wrong pick keeps it holding; the right one plays the explanation
-    entry: { 'quiz.pick': null },                                    // cleared on the way in
-    script: { 'quiz.pick': { at: [0, 1], set: [null, 'mercury'] } }, // the video picks the right answer at 1 s
+wildflower.kinetic.layers.scene('reveal', {
+    steps: {
+        ask: {
+            wait: 2,                                                         // holds before the explanation, which starts at 2 s
+            until: 'quiz.right',                                             // a wrong pick keeps it holding; the right one plays the explanation
+            entry: { 'quiz.pick': null },                                    // cleared on the way in
+            script: { 'quiz.pick': { at: [0, 1], set: [null, 'mercury'] } }, // the video picks the right answer at 1 s
+        },
+    },
+    layers: [],
 });
 
 wildflower.component('quiz', {
@@ -2816,7 +2888,7 @@ wildflower.component('again', { subscribe: ['kinetic'], again() { wildflower.kin
 
 The buttons and the wrong pick's text take no CSS transition, since the script changes the pick in the video.
 The buttons are disabled in video mode, where the script picks.
-The last step offers "Start again" in the lesson alone, so the learner never steps back through every step.
+The last step offers "Start again" in the lesson alone, so the learner does not have to step back through every step.
 
 ## Content for the lesson alone
 
@@ -2827,8 +2899,10 @@ The store's `mode` tells the two apart: a binding reads `$kinetic.mode`, and a c
 ```html
 <div id="stage" data-composition-id="lab" data-start="0" data-duration="5" data-width="1280" data-height="720" data-fps="30">
     <section id="grow" class="layer" data-step data-start="0" data-duration="5"></section>
+    <div class="layer" data-component="dot" data-start="0" data-duration="5">
+        <svg viewBox="0 0 1280 720" width="1280" height="720"><circle class="dot" cx="640" cy="330" fill="#5fd3c6"></circle></svg>
+    </div>
     <div class="layer" data-component="lab" data-start="0" data-duration="5">
-        <svg viewBox="0 0 1280 720" width="1280" height="720"><circle cx="640" cy="330" fill="#5fd3c6" data-bind-attr="dot"></circle></svg>
         <div class="try" data-show="$kinetic.mode === 'interactive'">
             <p>Try it: double the radius.</p>
             <button type="button" data-action="small">Radius 60</button>
@@ -2840,19 +2914,20 @@ The store's `mode` tells the two apart: a binding reads `$kinetic.mode`, and a c
 ```
 
 ```javascript
-const { scene, step } = wildflower.kinetic;
-
 wildflower.store('lab', { state: { r: 60 } });
 
-// The lesson holds at 1 s for the learner; the video doubles the radius itself.
-step('grow', { wait: 1, script: { 'lab.r': { at: [1, 3], to: [60, 120], ease: 'power2.inOut' } } });
+wildflower.kinetic.layers.scene('dot', {
+    stores: ['lab'],
+    // The lesson holds at 1 s for the learner; the video doubles the radius itself.
+    steps: { grow: { wait: 1, script: { 'lab.r': { at: [1, 3], to: [60, 120], ease: 'power2.inOut' } } } },
+    shared: { r: { follow: 'lab.r' } },
+    layers: [{ id: 'dot', kind: 'svg', src: '.dot', content: { r: 'r' } }],
+});
 
-scene('lab', {
+// The lesson alone: the learner's buttons, and a hint once the radius is doubled.
+wildflower.component('lab', {
     subscribe: ['lab', 'kinetic'],
-    follow: { r: 'lab.r' },
     computed: {
-        dot() { return { r: this.r.toFixed(1) }; },
-        // The lesson alone: a hint once the learner has doubled the radius.
         hint() {
             const lesson = this.stores.kinetic.mode === 'interactive';
             return lesson && this.stores.lab.r === 120 ? 'Twice the radius gives four times the area.' : '';
@@ -2866,10 +2941,11 @@ scene('lab', {
 ## A rate the learner controls
 
 Something that runs at a rate the learner sets, such as a tank filling from a tap, growth at a chosen rate, a car at a set speed or a reaction at a temperature, takes two paths that must agree.
-The video works the amount out from the scripted settings: `seek(local)` sums the rate over the seconds each setting holds, so any frame is a function of `local`.
+The video's script writes the amount itself: `levelTrack()` sums the rate over the seconds each scripted setting holds, once at load, into a track of times and levels, so any frame is a function of the time.
 The lesson advances it while the step holds: the clock stands still there, so a store's `tick()` adds the rate of the learner's setting at each frame.
-Both read one `RATE` function, and the step's script and the video's sum read one list of settings, so the two cannot drift apart.
+Both read one `RATE` function, and the script's tap and its level read one list of settings, so the two cannot drift apart.
 A store's `tick()` runs in both modes, so it returns unless the mode is interactive and the step is held.
+The layers draw the water from the store's level, whichever path wrote it.
 
 ```html
 <div id="stage" data-composition-id="tank" data-start="0" data-duration="8" data-width="1280" data-height="720" data-fps="30">
@@ -2880,7 +2956,7 @@ A store's `tick()` runs in both modes, so it returns unless the mode is interact
     <div class="layer" data-component="tank" data-start="0" data-duration="8">
         <svg viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">
             <rect class="glass" x="760" y="160" width="300" height="400"></rect>
-            <rect class="water" x="760" width="300" data-bind-attr="water"></rect>
+            <rect class="water" x="760" width="300"></rect>
         </svg>
         <!-- The lesson alone: the learner's tap. -->
         <label class="ctl" data-show="$kinetic.mode === 'interactive'">
@@ -2892,21 +2968,23 @@ A store's `tick()` runs in both modes, so it returns unless the mode is interact
 ```
 
 ```javascript
-const { scene, step } = wildflower.kinetic;
-
 // The one rate both paths read: the share of the tank a second fills at each tap setting.
 const RATE = (tap) => tap * 0.08;
 // The video's tap settings, in the step's seconds, each held from its time.
 const TAP = { at: [0, 1, 3.5], set: [0, 1, 3] };
 
-// The level the scripted taps give at a time: each setting's rate over the seconds it holds.
-function levelAt(t) {
-    let level = 0;
-    for (let i = 0; i < TAP.at.length; i++) {
-        const end = Math.min(t, i + 1 < TAP.at.length ? TAP.at[i + 1] : Infinity);
-        if (end > TAP.at[i]) level += RATE(TAP.set[i]) * (end - TAP.at[i]);
+// The level the scripted taps give, as a track: each setting's rate over the seconds it holds, until the tank is full.
+function levelTrack() {
+    const at = [0], to = [0];
+    for (let i = 0; i < TAP.at.length && to[to.length - 1] < 1; i++) {
+        const rate = RATE(TAP.set[i]), from = TAP.at[i], level = to[to.length - 1];
+        const next = i + 1 < TAP.at.length ? TAP.at[i + 1] : Infinity;
+        const end = rate > 0 ? Math.min(next, from + (1 - level) / rate) : next;
+        if (end === Infinity) break;
+        at.push(end);
+        to.push(Math.min(1, level + rate * (end - from)));
     }
-    return Math.min(level, 1);
+    return { at, to };
 }
 
 wildflower.store('tank', {
@@ -2920,25 +2998,25 @@ wildflower.store('tank', {
     },
 });
 
-step('fill', {
-    wait: 1,                                     // the page: holds 1 s in, for the tap
-    until: 'tank.full',                          // the page: plays on once the tank is full
-    entry: { 'tank.tap': 0, 'tank.level': 0 },   // the page: empty on the way in
-    script: { 'tank.tap': TAP },                 // the video: the scripted taps
-});
+const filled = { from: 'tank.level' };
+const fns = { top: (share) => 560 - 400 * share, height: (share) => 400 * share };
 
-scene('tank', {
-    subscribe: ['tank', 'kinetic'],
-    // The video: the level is the scripted taps' sum up to this time.
-    seek(local) { if (this.stores.kinetic.mode === 'video') this.stores.tank.level = levelAt(local); },
-    computed: {
-        water() { const h = 400 * this.stores.tank.level; return { y: (560 - h).toFixed(1), height: h.toFixed(1) }; },
+wildflower.kinetic.layers.scene('tank', {
+    stores: ['tank'],
+    steps: {
+        fill: {
+            wait: 1,                                                // the page: holds 1 s in, for the tap
+            until: 'tank.full',                                     // the page: plays on once the tank is full
+            entry: { 'tank.tap': 0, 'tank.level': 0 },              // the page: empty on the way in
+            script: { 'tank.tap': TAP, 'tank.level': levelTrack() }, // the video: the scripted taps, and the level they give
+        },
     },
-});
+    layers: [{ id: 'water', kind: 'svg', src: '.water', content: { y: { call: 'top', args: [filled] }, height: { call: 'height', args: [filled] } } }],
+}, { fns });
 ```
 
-The scene's clip starts with the step, so its `local` is the step's seconds, the time `TAP.at` is in.
-A rate that changes smoothly, such as a scripted track in place of settings, is summed the same way in small steps of `local`, or in closed form where the rate has one.
+A step's script runs in the step's seconds, the time `TAP.at` is in.
+A rate that changes smoothly, such as a scripted track in place of settings, is summed the same way in small steps of time, one key at each, or in closed form where the rate has one.
 The page lays out as every lesson does ("A lesson's layout", below), with the tap in the left column and the band along the bottom.
 
 ## A lesson's layout
@@ -2955,12 +3033,12 @@ Back always works, and the last step offers "Start again" in Next's place.
 The band, the step's controls, and the prompts to the learner ("Your turn: ...") show in interactive mode alone, so `check()` and a render, which run in video mode, never draw them, and in the video their space is empty paper.
 The choices show in both modes, disabled in the video, where the script picks.
 On a phone held upright the frame is too small to read or tap, so the page shows "Turn your phone sideways" over it, outside the root, where no check or render sees it.
-Kinetic loads with no `data-preview` here, since the bar would put the lesson in video mode, and the recipe's `config()` adds the fit and the finish's grain to the shutter that "The composition" sets at the top of the scene file (`config({ shutter: 180 })`); a page made from this recipe alone sets all three in one call.
+Kinetic loads with no `data-preview` here, since the bar would put the lesson in video mode; the recipe's `config()` fits the stage to the page, and its scene's `finish` adds the paper's grain to the shutter that the top of the file sets ("The composition").
 
 ```html
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.3/dist/kinetic.wf.js"></script>
 <script defer src="app.js"></script>
 
 <main class="lesson">
@@ -2968,7 +3046,7 @@ Kinetic loads with no `data-preview` here, since the bar would put the lesson in
         <!-- The illustration, in the frame above the band. -->
         <div class="layer" data-component="disc" data-start="0" data-duration="10">
             <svg viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">
-                <circle cx="900" cy="320" fill="#B1A8FF" data-bind-attr="disc"></circle>
+                <circle class="disc" cx="900" cy="320" fill="#B1A8FF"></circle>
                 <circle cx="900" cy="320" r="80" fill="#90CDEF"></circle>
             </svg>
         </div>
@@ -3063,8 +3141,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 ```
 
 ```javascript
-const { scene, step } = wildflower.kinetic;
-wildflower.kinetic.config({ fit: true, finish: { grain: 0.08 } });   // the stage fitted to the page, and the paper's still grain
+wildflower.kinetic.config({ fit: true });   // the stage fitted to the page
 
 const TITLES = { grow: 'Growing the radius', ask: 'Twice the radius' };
 const CHOICES = [
@@ -3075,15 +3152,22 @@ const CHOICES = [
 
 wildflower.store('area', { state: { r: 80, pick: null }, computed: { right() { return this.pick === '4'; } } });
 
-step('grow', { wait: 1, entry: { 'area.r': 80 }, script: { 'area.r': { at: [1, 4], to: [80, 160], ease: 'power2.inOut' } } });
-step('ask', {
-    wait: 1,                                                    // holds before the explanation at 2 s
-    until: 'area.right',                                        // a wrong pick keeps it waiting; the right one plays the explanation
-    entry: { 'area.pick': null },                               // cleared on the way in
-    script: { 'area.pick': { at: [0, 1.5], set: [null, '4'] } }, // the video picks the right answer at 1.5 s
+// The layers: the steps, and the disc, which follows the store's radius by a spring.
+wildflower.kinetic.layers.scene('disc', {
+    stores: ['area'],
+    finish: { grain: 0.08 },   // the paper's still grain
+    steps: {
+        grow: { wait: 1, entry: { 'area.r': 80 }, script: { 'area.r': { at: [1, 4], to: [80, 160], ease: 'power2.inOut' } } },
+        ask: {
+            wait: 1,                                                    // holds before the explanation at 2 s
+            until: 'area.right',                                        // a wrong pick keeps it waiting; the right one plays the explanation
+            entry: { 'area.pick': null },                               // cleared on the way in
+            script: { 'area.pick': { at: [0, 1.5], set: [null, '4'] } }, // the video picks the right answer at 1.5 s
+        },
+    },
+    shared: { r: { follow: 'area.r' } },
+    layers: [{ id: 'disc', kind: 'svg', src: '.disc', content: { r: 'r' } }],
 });
-
-scene('disc', { subscribe: ['area'], follow: { r: 'area.r' }, computed: { disc() { return { r: this.r.toFixed(1) }; } } });
 
 wildflower.component('quiz', {
     subscribe: ['area', 'kinetic'],
@@ -3139,42 +3223,41 @@ The illustration stays clear of the band's place: the disc at its largest, a rad
 Each layer takes no pointer events, so the layers above never catch a click, and the band, the control, and the choices take them back with `pointer-events: auto`.
 The fit scales the root with a CSS transform, and a click or a drag lands on a scaled control where it is drawn.
 Play and Pause share one width, so nothing in the band moves when the label changes.
-`scripts/check.cjs index.html --lesson` walks the two steps; its stills are interactive mode, with the band drawn, and the `--frames` PNGs are video mode, where the band's place is empty paper.
+`check({ lesson: true, frames: 6 })` walks the two steps; the lesson's stills are interactive mode, with the band drawn, and the `frames` PNGs are video mode, where the band's place is empty paper.
 start.md's lesson is this layout in three steps, with a dial.
 
 ## Shapes from data inside an SVG
 
-Paths, circles or lines drawn from data inside an `<svg>` are a pool, never a list.
-The HTML parser leaves a `<template>` inside `<svg>` inert, so `data-list` draws nothing there, and WildflowerJS's development build warns and points to pools; a pool's template works inside `<svg>`.
-Each seek flushes the pools, so the paths hold the frame's shapes when the seek settles.
-Pools need the mini-pool tier or above.
-`update(key, props)` finds the entity by the field the container's `data-key` names (`id` here), so `update(f.id, ...)`.
-The `attrs` object's keys are written as attribute names, so an SVG attribute with a hyphen is a quoted key (`'stroke-width'`), never camel case.
+Paths, circles or lines drawn from data inside an `<svg>` are copies of a comp, one per row, each a clone of a `<template>` in the SVG.
+The HTML parser leaves a `<template>` inside `<svg>` inert, so `data-list` draws nothing there; a repeated comp clones the template's first child, which works inside `<svg>` as anywhere else.
+An svg layer's `content` keys are attribute names, so an attribute with a hyphen is a quoted key (`'stroke-width'`), never camel case.
+Each copy's `start` is a `{ stagger }`, so the same tracks play a little later in each.
 
 ```html
 <div class="layer" data-component="flows" data-start="0" data-duration="6">
     <svg viewBox="0 0 1280 720" width="1280" height="720">
-        <g data-pool="flows" data-key="id"><template><path fill="none" stroke="#5fd3c6" data-bind-attr="attrs"></path></template></g>
+        <g class="flows"><template><path fill="none" stroke="#5fd3c6"></path></template></g>
     </svg>
 </div>
 ```
 
 ```javascript
-const { scene, ramp, stagger } = wildflower.kinetic;
+const FLOWS = [{ y: 200 }, { y: 360 }, { y: 520 }];
 
-const FLOWS = [{ id: 0, y: 200 }, { id: 1, y: 360 }, { id: 2, y: 520 }];
+const drawn = { at: [0.5, 2.5], to: [0, 1], ease: 'power2.inOut' };
+const fns = { line: (y, p) => 'M100 ' + y + ' L' + (100 + 1080 * p).toFixed(1) + ' ' + y };
 
-scene('flows', {
-    pools: { flows: {} },
-    init() { for (const f of FLOWS) this.pools.flows.add({ id: f.id, y: f.y, attrs: { d: '', 'stroke-width': 4 } }); },
-    seek(local) {
-        this.pools.flows.forEach((f) => {
-            const p = ramp(local - stagger(f.id, FLOWS.length, { each: 0.3 }), 0.5, 2.5, 'power2.inOut');
-            const x = 100 + 1080 * p;
-            this.pools.flows.update(f.id, { attrs: { d: 'M100 ' + f.y + ' L' + x.toFixed(1) + ' ' + f.y, 'stroke-width': (2 + 6 * p).toFixed(1) } });
-        });
+layers.scene('flows', {
+    comps: {
+        flow: {
+            layers: [{
+                id: 'line', kind: 'svg', src: ':scope',
+                content: { d: { call: 'line', args: ['y', drawn] }, 'stroke-width': { at: [0.5, 2.5], to: [2, 8], ease: 'power2.inOut' } },
+            }],
+        },
     },
-});
+    layers: [{ id: 'flows', kind: 'comp', comp: 'flow', src: '.flows', start: { stagger: { each: 0.3 } }, repeat: { over: FLOWS } }],
+}, { fns });
 ```
 
 ## A Sankey from a table of flows
@@ -3182,18 +3265,18 @@ scene('flows', {
 A flow diagram draws in column by column: each band is a flow's value in height, leaving its node and arriving at the next in a fixed order, so no two bands cross at a node.
 The layout is worked out once, at load: one scale for every column (the fullest column fills the height), each node's height its value, and each band's two edges, top and bottom, as cubic curves.
 `trimPath([top, bottom], 0, p)` draws the area between the two edges from the left up to `p`, so a band grows along its own curve.
-Bands and nodes are two pools inside the `<svg>` ("Shapes from data inside an SVG"); the labels are a list on the data, left of the first column and right of the others, the middle column's on a patch of paper where they sit over bands.
+Bands and nodes are copies of two comps inside the `<svg>` ("Shapes from data inside an SVG"), each band's copy starting at its own `begins`; the labels are copies too, left of the first column and right of the others, the middle column's on a patch of paper where they sit over bands, each side from its own template with its own class.
 The one meaning that matters here, the loss, is in coral, and every other flow gray; a story in stages gives each stage's meaning its color (`kinds/data-story.md`).
 
 ```html
 <div class="layer" data-component="sankey" data-start="0" data-duration="8">
     <svg viewBox="0 0 1280 720" width="1280" height="720">
-        <g data-pool="bands" data-key="id"><template><path data-bind-attr="attrs"></path></template></g>
-        <g data-pool="nodes" data-key="id"><template><rect data-bind-attr="attrs"></rect></template></g>
+        <g class="bands"><template><path></path></template></g>
+        <g class="nodes"><template><rect width="16" fill="#26282d"></rect></template></g>
     </svg>
-    <div data-list="labels" data-key="id">
-        <template><p data-bind-class="cls" data-bind-style="pos"><b data-bind="name"></b><span data-bind="value"></span></p></template>
-    </div>
+    <div class="left"><template><p class="label left"><b></b><span></span></p></template></div>
+    <div class="right"><template><p class="label right"><b></b><span></span></p></template></div>
+    <div class="inside"><template><p class="label right inside"><b></b><span></span></p></template></div>
 </div>
 ```
 
@@ -3206,7 +3289,7 @@ The one meaning that matters here, the loss, is in coral, and every other flow g
 ```
 
 ```javascript
-const { scene, ramp, trimPath } = wildflower.kinetic;
+const { trimPath } = wildflower.kinetic;
 
 // The columns, left to right, and the flows between them: [from, to, value].
 const COLS = [['coal', 'gas', 'wind'], ['power', 'heat'], ['homes', 'industry', 'lost']];
@@ -3228,7 +3311,7 @@ COLS.forEach((col, ci) => {
 });
 // Each band leaves and arrives stacked in column order, so no two cross at a node.
 const order = (id) => COLS.flat().indexOf(id);
-const LINKS = FLOWS.map(([from, to, v], id) => ({ id, from, to, h: v * K, start: 0.8 + NODES[from].col * 1.6 }));
+const LINKS = FLOWS.map(([from, to, v]) => ({ from, to, h: v * K, begins: 0.8 + NODES[from].col * 1.6 }));
 for (const n of Object.values(NODES)) {
     let o = n.y, i = n.y;
     LINKS.filter((l) => l.from === n.id).sort((a, b) => order(a.to) - order(b.to)).forEach((l) => { l.y0 = o; o += l.h; });
@@ -3243,40 +3326,54 @@ for (const l of LINKS) {
     l.fill = l.to === 'lost' ? '#EF9481' : '#c4b7a0';   // the one meaning in color; the rest gray
 }
 
-scene('sankey', {
-    pools: { bands: {}, nodes: {} },
-    init() {
-        for (const l of LINKS) this.pools.bands.add({ id: l.id, attrs: { d: '', fill: l.fill } });
-        for (const n of Object.values(NODES)) this.pools.nodes.add({ id: n.id, attrs: { x: n.x, y: f1(n.y), width: W, height: f1(n.h), fill: '#26282d' } });
-    },
-    seek(local) {
-        for (const l of LINKS) this.pools.bands.update(l.id, { attrs: { d: trimPath(l.edges, 0, ramp(local, l.start, l.start + 1.2, 'power2.inOut')), fill: l.fill } });
-    },
-    computed: {
-        // Labels on the data: left of the first column, right of the rest, each in once its node's flow arrives.
-        labels() {
-            return Object.values(NODES).map((n) => {
-                const at = n.col === 0 ? 0.6 : 0.8 + (n.col - 1) * 1.6 + 1.2;
-                return {
-                    id: n.id, name: NAMES[n.id], value: String(value(n.id)),
-                    cls: 'label ' + (n.col === 0 ? 'left' : n.col === COLS.length - 1 ? 'right' : 'right inside'),
-                    pos: { left: (n.col === 0 ? n.x - 14 : n.x + W + 6) + 'px', top: f1(n.y + n.h / 2) + 'px', opacity: ramp(this.local, at, at + 0.4).toFixed(3) },
-                };
-            });
+// Labels on the data: left of the first column, right of the rest, each in once its node's flow arrives.
+const LABELS = Object.values(NODES).map((n) => ({
+    name: NAMES[n.id], value: String(value(n.id)),
+    side: n.col === 0 ? 'left' : n.col === COLS.length - 1 ? 'right' : 'inside',
+    left: (n.col === 0 ? n.x - 14 : n.x + W + 6) + 'px', top: f1(n.y + n.h / 2) + 'px',
+    shown: n.col === 0 ? 0.6 : 0.8 + (n.col - 1) * 1.6 + 1.2,
+}));
+const side = (s) => LABELS.filter((l) => l.side === s);
+
+const fns = { band: (i, p) => trimPath(LINKS[i].edges, 0, p) };
+
+layers.scene('sankey', {
+    comps: {
+        band: {
+            layers: [{
+                id: 'band', kind: 'svg', src: ':scope',
+                content: { d: { call: 'band', args: ['i', { at: [0, 1.2], to: [0, 1], ease: 'power2.inOut' }] }, fill: { from: 'params.fill' } },
+            }],
+        },
+        node: { layers: [{ id: 'node', kind: 'svg', src: ':scope', content: { x: 'x', y: 'y', height: 'h' } }] },
+        label: {
+            layers: [
+                { id: 'label', kind: 'html', src: ':scope', look: { opacity: { at: [0, 0.4], to: [0, 1] }, style: { left: { from: 'params.left' }, top: { from: 'params.top' } } } },
+                { id: 'name', kind: 'html', src: 'b', content: { text: { from: 'params.name' } } },
+                { id: 'value', kind: 'html', src: 'span', content: { text: { from: 'params.value' } } },
+            ],
         },
     },
-});
+    layers: [
+        { id: 'bands', kind: 'comp', comp: 'band', src: '.bands', start: 'begins', repeat: { over: LINKS } },
+        { id: 'nodes', kind: 'comp', comp: 'node', src: '.nodes', repeat: { over: Object.values(NODES) } },
+        { id: 'left', kind: 'comp', comp: 'label', src: '.left', start: 'shown', repeat: { over: side('left') } },
+        { id: 'right', kind: 'comp', comp: 'label', src: '.right', start: 'shown', repeat: { over: side('right') } },
+        { id: 'inside', kind: 'comp', comp: 'label', src: '.inside', start: 'shown', repeat: { over: side('inside') } },
+    ],
+}, { fns });
 ```
 
+Each copy starts at its row's `begins` or `shown`, so its tracks are in its own time: a band draws over its first 1.2 s, and a label fades in over its first 0.4 s.
+
 Each column draws 1.2 s after the last began, and the finished diagram holds from 4.4 s to the end, longer than any one step took to draw ("Time" in `craft.md`).
-`attrs` is replaced whole on each `update()`, so the fill goes with the path every time.
 For a story told in stages (draw the sources, then follow one node's flows), give each band a start of its own from a timing table, and its fill a `mix()` between the stage colors over the moment the story moves on.
 
 ## A Sankey laid out by pele
 
 The same diagram with pele, a Mermaid renderer loaded before the scenes (the script line in `SKILL.md`), doing the layout: for many flows, and flows that skip a column, which hand-written layout gets wrong.
 The flows are Mermaid's sankey text, one `from,to,value` row each; `pele.render()` lays them out once, at load, into an `<svg>` kept out of sight, and the scene reads its geometry: each node's rect, and each band's outline, `M` along the top in curves, `L` down the far end, and the bottom's curves back, which becomes the two edges `trimPath()` grows.
-Everything after the layout is "A Sankey from a table of flows": the pools, the growth along each band, the labels on the data.
+Everything after the layout is "A Sankey from a table of flows": the copies, the growth along each band, the labels on the data.
 `showValues: false` turns pele's own figures off, and the labels carry the source's printed totals, since pele's are sums of the flows and can differ from them by rounding.
 pele orders each column itself, so fewer bands cross; a story that needs its own order keeps the hand-built pattern.
 A band's position comes through the transforms around it (`getScreenCTM()`), so the hidden `<svg>` is in the page, laid out, not merely parsed.
@@ -3284,14 +3381,14 @@ A band's position comes through the transforms around it (`getScreenCTM()`), so 
 ```html
 <div class="layer" data-component="flows" data-start="0" data-duration="8">
     <svg viewBox="0 0 1000 560" width="1000" height="560" style="position: absolute; left: 140px; top: 110px">
-        <g data-pool="bands" data-key="id"><template><path data-bind-attr="attrs"></path></template></g>
-        <g data-pool="nodes" data-key="id"><template><rect data-bind-attr="attrs"></rect></template></g>
+        <g class="bands"><template><path></path></template></g>
+        <g class="nodes"><template><rect fill="#26282d"></rect></template></g>
     </svg>
 </div>
 ```
 
 ```javascript
-const { scene, ramp, trimPath } = wildflower.kinetic;
+const { trimPath } = wildflower.kinetic;
 
 const FLOWS = `Coal,Power,30
 Gas,Power,25
@@ -3330,19 +3427,26 @@ const LINKS = [...svg.querySelectorAll('.pele-sankey-link')].map((p) => {
     for (let i = 1; i < t.length; i += 3) top += 'C' + [t[i], t[i + 1], t[i + 2]].map(pt).join(' ');
     for (let i = b.length - 1; i >= 3; i -= 3) bottom += 'C' + [b[i - 1], b[i - 2], b[i - 3]].map(pt).join(' ');
     const col = columns.indexOf(Math.round(NODES.find((n) => n.id === from).x));
-    return { id: from + '->' + to, edges: [top, bottom], start: 0.8 + col * 1.6, fill: to === 'Lost' ? '#EF9481' : '#c4b7a0' };
+    return { edges: [top, bottom], begins: 0.8 + col * 1.6, fill: to === 'Lost' ? '#EF9481' : '#c4b7a0' };
 });
 
-scene('flows', {
-    pools: { bands: {}, nodes: {} },
-    init() {
-        for (const l of LINKS) this.pools.bands.add({ id: l.id, attrs: { d: '', fill: l.fill } });
-        for (const n of NODES) this.pools.nodes.add({ id: n.id, attrs: { x: f1(n.x), y: f1(n.y), width: f1(n.w), height: f1(n.h), fill: '#26282d' } });
+const fns = { band: (i, p) => trimPath(LINKS[i].edges, 0, p) };
+
+layers.scene('flows', {
+    comps: {
+        band: {
+            layers: [{
+                id: 'band', kind: 'svg', src: ':scope',
+                content: { d: { call: 'band', args: ['i', { at: [0, 1.2], to: [0, 1], ease: 'power2.inOut' }] }, fill: { from: 'params.fill' } },
+            }],
+        },
+        node: { layers: [{ id: 'node', kind: 'svg', src: ':scope', content: { x: 'x', y: 'y', width: 'w', height: 'h' } }] },
     },
-    seek(local) {
-        for (const l of LINKS) this.pools.bands.update(l.id, { attrs: { d: trimPath(l.edges, 0, ramp(local, l.start, l.start + 1.2, 'power2.inOut')), fill: l.fill } });
-    },
-});
+    layers: [
+        { id: 'bands', kind: 'comp', comp: 'band', src: '.bands', start: 'begins', repeat: { over: LINKS } },
+        { id: 'nodes', kind: 'comp', comp: 'node', src: '.nodes', repeat: { over: NODES } },
+    ],
+}, { fns });
 ```
 
 The labels are the hand-built pattern's list, placed from `NODES` (each node's `x`, `y + h / 2`) and carrying the printed totals.
@@ -3351,6 +3455,7 @@ The layout is pele's at its pinned version: a newer pele may place the same flow
 ## A flowchart laid out by pele
 
 A flowchart, state diagram or timeline written as Mermaid text, drawn by pele into the stage in the page's font and colors, and animated on pele's own SVG: each node rises in and each edge draws along its length, in reading order.
+The diagram's elements exist only once pele has laid it out, after the font loads, and layers find their elements when they are built, so this is a scene written in code (api.md, "A scene").
 pele measures every label in the font, so it lays out in `init()` once the font has loaded, and `seek()` returns that promise, which holds every frame until the diagram is there; the first seek waits for it, and that one slow seek is not enough to print KN-170, which needs 3 of the last 30.
 Its colors and font come from its CSS variables on the box it draws into, `--pele-bg` among them, which is the patch behind an edge's label.
 A node's group keeps pele's `transform` attribute, which places it, so a rise moves the node's children: a CSS `transform` on the group would replace the attribute and send every node to the corner.
@@ -3445,10 +3550,9 @@ console.log(frames + ' frames in ' + ms + ' ms, ' + blob.size + ' bytes');
 
 The Render button on the preview bar of each demo, such as Launch Title (/demos/kinetic-title/), makes the `render()` call.
 
-For many videos from one page, the batch script (`scripts/batch.cjs` in the package) renders the page once for each row of a JSON or CSV file, with the row's values as the composition's variables.
+For many videos from one page, `render.batch()` renders the page once for each row of a JSON or CSV file, with the row's values as the composition's variables; the preview bar's Render batch button does the same from a file the user picks.
 
-```bash
-node batch.cjs index.html rows.json --out renders
+```javascript
+// From a click: the files go into a folder the user picks.
+const files = await wildflower.kinetic.render.batch([{ title: 'MEADOW' }, { title: 'CLOVER' }], { name: 'title' });
 ```
-
-The same page also renders through HyperFrames (https://kinetic.wildflowerjs.com/docs/hyperframes/).

@@ -1,8 +1,8 @@
 /**
  * What ?embed leaves on screen (fit.js): the page shows the composition
  * alone, so an element the page adds beside the root after load is hidden
- * too, at once, with no run of readiness needed (it used to stay visible
- * until the next ready()). Nothing inside the root is touched.
+ * too, at once, with no run of readiness needed. Nothing inside the root is
+ * touched.
  *
  * The page is fixtures/page-shell.html?embed on this origin, so the test
  * can read its DOM (embed.test.js's data: URL pages are on another origin);

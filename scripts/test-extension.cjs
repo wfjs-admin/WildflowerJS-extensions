@@ -26,14 +26,12 @@
  * The size leg compares the package's compressed production file (the
  * manifest output with `minify: true`, plus `.br`) against its entry in
  * extension-budgets.json at the root, `{ br, since, why }`, and fails when
- * it is over; not in the package.json, which npm always publishes. As
- * with the framework's size-budgets.json, a raise goes in the same change as
- * the code that needed it, with `since` and `why` filled in, and a file more
- * than 200 B under budget prints the new floor to accept.
+ * it is over; not in the package.json, which npm always publishes. A raise
+ * goes in the same change as the code that needed it, with `since` and `why`
+ * filled in, and a file more than 200 B under budget prints the new floor to
+ * accept. A checkout with no extension-budgets.json has no size leg.
  *
- * build-and-test.cjs runs `--all` as its last step, so a core change that
- * breaks an extension fails the matrix. Exits 1 if any leg fails, after
- * running all of them.
+ * Exits 1 if any leg fails, after running all of them.
  */
 'use strict';
 const fs = require('fs');
@@ -197,14 +195,18 @@ function testPackage(pkgName) {
 
     // The size leg: the production file's Brotli bytes against the package's
     // budget in extension-budgets.json. A package with no budget is
-    // reported, not failed. The bytes are compressed here, with the quality
-    // build-rollup.cjs uses for its .br files, because build-extension.cjs
-    // (the extensions repo's build) writes no .br beside the file.
+    // reported, not failed. The bytes are compressed here, at Brotli quality
+    // 11, because build-extension.cjs writes no .br beside the file.
     // Every production file the manifest lists, each against its own budget:
     // the package's name, or the output's `budget` key for a second file.
-    for (const prod of (legs.includes('size') && !named.length ? manifest.outputs || [] : []).filter((o) => o.minify)) {
+    // Without the budgets file there is nothing to compare against, and the
+    // leg is left out.
+    const budgetsFile = path.join(ROOT, 'extension-budgets.json');
+    const sized = legs.includes('size') && !named.length;
+    if (sized && !fs.existsSync(budgetsFile)) console.log('== size: no extension-budgets.json here, so sizes are not checked');
+    const budgets = sized && fs.existsSync(budgetsFile) ? JSON.parse(fs.readFileSync(budgetsFile, 'utf8')) : null;
+    for (const prod of (budgets ? manifest.outputs || [] : []).filter((o) => o.minify)) {
         const min = path.join(pkgDir, prod.file);
-        const budgets = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension-budgets.json'), 'utf8'));
         const key = prod.budget || pkgName;
         const budget = budgets[key] && budgets[key].br;
         const brSize = () => zlib.brotliCompressSync(fs.readFileSync(min), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }).length;

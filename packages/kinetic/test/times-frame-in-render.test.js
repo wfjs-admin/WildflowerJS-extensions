@@ -2,11 +2,10 @@
  * timeOf('frame N') counts frames at the composition's own rate: the root's
  * data-fps, else config({ fps }), else 30. A render at another rate samples
  * the piece more finely; it does not move the piece's frames. For a root
- * with no data-fps, timeOf('frame 15') was 0.5 s in the preview and 0.25 s
- * during render({ fps: 60 }), because the rate was read from the clock's
- * store, which holds the render's rate while a render runs: an event placed
- * by frame number happened at half its time in the file. onFrame() still
- * snaps to the render's own grid, which is what a contact on a frame wants.
+ * with no data-fps, timeOf('frame 15') is 0.5 s in the preview and during
+ * render({ fps: 60 }) alike: the rate is not read from the clock's store,
+ * which holds the render's rate while a render runs. onFrame() snaps to the
+ * render's own grid, which is what a contact on a frame wants.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { load, mount, uniqueName, BUILD } from './helpers.js';

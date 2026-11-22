@@ -28,6 +28,7 @@
  */
 
 import { clampRate, parseRemap } from './mix.js';
+import { CODES, warn } from './diagnostics.js';
 
 let epoch = 0;
 export const timingEpoch = () => epoch;
@@ -234,11 +235,42 @@ export function declaredDefaults(doc) {
   return out;
 }
 
+// A frame that render.batch() (tools/batch.js) renders one row in: this
+// page, inside a frame named 'kinetic-batch:' and the row as JSON. The name
+// as such, or '' for any other window, a top-level one given that name
+// included.
+const BATCH = 'kinetic-batch:';
+export function batchName() {
+  const n = self !== self.top && self.name;
+  return n && n.startsWith(BATCH) ? n : '';
+}
+// The row a batch frame renders, parsed once per name: null outside a batch
+// frame, and for a name whose JSON is no object of variables, which leaves
+// the page's defaults (KN-104 in development).
+let named = '', row = null;
+export function batchRow() {
+  const n = batchName();
+  if (n !== named) {
+    named = n;
+    row = null;
+    if (n) {
+      try { row = JSON.parse(n.slice(BATCH.length)); } catch (_) { /* warned below */ }
+      if (!row || typeof row !== 'object' || Array.isArray(row)) {
+        row = null;
+        if (__DEV__) warn(CODES.BATCH, "the frame's name starts with kinetic-batch: and the rest is no JSON object of variables, so the page's own defaults are used",
+          'render.batch() names its frames itself; a frame named by hand needs a JSON object after kinetic-batch:.');
+      }
+    }
+  }
+  return row;
+}
+
 // The values HyperFrames resolved for an element: the per-instance table of
 // an inlined sub-composition first, then the merged top-level variables
 // (runtime/variableScope.ts in its source). With no runtime on the page,
 // the defaults the page declares, with window.__hfVariables over them, as
-// the runtime would merge them, so a standalone page shows what a render does.
+// the runtime would merge them, so a standalone page shows what a render does;
+// in a batch frame, the frame's row in place of window.__hfVariables.
 export function readVariables(el) {
   const doc = el.ownerDocument;
   const w = doc.defaultView || self;
@@ -251,6 +283,6 @@ export function readVariables(el) {
     const v = helper.getVariables();
     if (v && typeof v === 'object') return v;
   }
-  const injected = w.__hfVariables;
+  const injected = batchRow() || w.__hfVariables;
   return Object.assign(declaredDefaults(doc), injected && typeof injected === 'object' && !Array.isArray(injected) ? injected : null);
 }

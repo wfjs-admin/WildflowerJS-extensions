@@ -485,8 +485,9 @@ export function createDraw(wf, clock, scenes) {
             const x = q[0] + q[2] * w, y = q[1] + q[3] * w, time = st.t0 + tau * st.T;
             let lay = tool.base * flow * (pencil ? 1 : Math.min(1, pr + 0.3));
             // A tip under 0.75 px can miss every pixel's center, so it is laid
-            // at 0.75 px, its ink thinned by the width alone (by the area it
-            // washed a small drawing out): a thin line stays whole and dark.
+            // at 0.75 px, its ink thinned by the width alone (thinning by the
+            // area would wash a small drawing out): a thin line stays whole
+            // and dark.
             if (rr < 0.75) { lay *= rr / 0.75; rr = 0.75; }
             const x0 = Math.max(0, Math.floor(x - rr)), x1 = Math.min(W - 1, Math.ceil(x + rr));
             const y0 = Math.max(0, Math.floor(y - rr)), y1 = Math.min(H - 1, Math.ceil(y + rr));

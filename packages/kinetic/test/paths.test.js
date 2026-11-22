@@ -122,7 +122,7 @@ describe(`paths and shapes (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(() => wf.kinetic.scene(uniqueName('scene'), { keyframes: { shape: { clipPath: { at, to: ["path('M0 0L10 0L5 8Z')", "path('M0 0L20 0L10 16Z')"] } } } })).not.toThrow();
   });
 
-  it('a value that starts with M but is not path data stays text, read as before; one that is path data is read by the path grammar', async () => {
+  it('a value that starts with M but is not path data stays text, read as any text track is; one that is path data is read by the path grammar', async () => {
     const { wf } = await load();
     const { interpolate } = wf.kinetic;
     const at = [0, 1];
@@ -133,7 +133,7 @@ describe(`paths and shapes (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(interpolate(0.5, at, ['M 10 X 4', 'M 20 X 8'])).toBe('M 15 X 6');
     // There a number glued to a letter is still text, so these differ.
     expectKN(() => interpolate(0.5, at, ['M 10 X4', 'M 20 X8']), 'KN-120', 'interpolate.to[1]', /^to\[1\] has " X8" after its 1st number where to\[0\] has " X4"; the values of a track must have the same text/);
-    // A path("…") whose inside the grammar rejects is a quoted string, as before.
+    // A path("…") whose inside the grammar rejects is a quoted string.
     expect(interpolate(0.5, at, ['path("M 0 0 L") 0px', 'path("M 0 0 L") 10px'])).toBe('path("M 0 0 L") 5px');
     expect(() => interpolate(0.5, at, ['path("M 0 0 L 1")', 'path("M 0 0 L 2")'])).toThrow(/KN-120/);
     // A function whose name only ends in path is not path().
@@ -339,9 +339,9 @@ describe(`paths and shapes (${BUILD} extension, ${CORE_TIER} core)`, () => {
   });
 
   // An arc whose end point is its start point is dropped by the SVG renderer,
-  // so a sector sweeping toward 360 degrees used to collapse to its radius for
-  // the frames where the end rounded onto the start: a pie flashed off just
-  // before it closed. Each arc below a full turn is now two halves.
+  // so each arc below a full turn is drawn as two halves: a sector sweeping
+  // toward 360 degrees never collapses to its radius on the frames where its
+  // end rounds onto its start, and a pie does not flash off before it closes.
   it('shape(): a sector never collapses as it nears a full turn, either way round', async () => {
     const { wf } = await load();
     const { shape } = wf.kinetic;

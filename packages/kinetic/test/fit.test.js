@@ -7,8 +7,8 @@
  * on by default when the preview bar is asked for. Each case is a page of its
  * own in an iframe, so the window's width is the iframe's.
  *
- * The runtime here is a stand-in that writes what the pinned runtime writes
- * (probed against tools/hyperframes): margin 0, padding 0 and overflow hidden
+ * The runtime here is a stand-in that writes what the pinned runtime
+ * (tools/hyperframes) writes: margin 0, padding 0 and overflow hidden
  * on both elements as it starts, the composition's width and height on both,
  * and the size again later (__relayout()).
  */

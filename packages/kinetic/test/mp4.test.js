@@ -342,6 +342,47 @@ describe('mp4 writer', () => {
     }
   });
 
+  // The QuickTime file of PNG frames shares the MP4's frame times. Its boxes are version 0: after the version and
+  // flags, creation and modification in 32 bits, then the timescale and a 32-bit duration.
+  it('a MOV of one frame, and of 600 s at 29.97, 30000/1001, 23.976, 24000/1001, 60 and 7.5 fps, lasts frames / fps in mvhd, tkhd, the edit list, mdhd and stts, with a size for every frame', () => {
+    for (const fps of [29.97, 30000 / 1001, 23.976, 24000 / 1001, 60, 7.5]) {
+      for (const frames of [1, Math.round(600 * fps)]) {
+        const what = frames + ' frames at ' + fps + ' fps';
+        const sizes = Array.from({ length: frames }, (_, i) => 100 + (i % 7));
+        const { head, tail } = mp4.createMov({ width: 64, height: 36, fps, sizes });
+        // ftyp and mdat's header first, the frames' bytes counted in mdat's size, and moov after them.
+        const top = boxes(head, 0, 20);
+        expect(top[0].type, what).toBe('ftyp');
+        expect(type(head, top[0].size), what).toBe('mdat');
+        expect(u32(head, top[0].size), what).toBe(head.length - top[0].size + sizes.reduce((a, s) => a + s, 0));
+        const moov = boxes(tail)[0];
+        expect(moov.type, what).toBe('moov');
+        const inner = boxes(tail, moov.body, moov.start + moov.size);
+        const mvhd = find(inner, 'mvhd'), trak = find(inner, 'trak');
+        const tb = boxes(tail, trak.body, trak.start + trak.size);
+        const tkhd = find(tb, 'tkhd'), edts = find(tb, 'edts');
+        const elst = boxes(tail, edts.body, edts.start + edts.size)[0];
+        const mdhd = path(tail, trak, 'mdia', 'mdhd');
+        const stbl = path(tail, trak, 'mdia', 'minf', 'stbl');
+        const sb = boxes(tail, stbl.body, stbl.start + stbl.size);
+        const stts = find(sb, 'stts'), stsz = find(sb, 'stsz'), stco = find(sb, 'stco');
+        let n = 0, ticks = 0;
+        for (let k = 0, runs = u32(tail, stts.body + 4); k < runs; k++) { const c = u32(tail, stts.body + 8 + 8 * k), d = u32(tail, stts.body + 12 + 8 * k); n += c; ticks += c * d; expect(d, what + ': a frame lasts a tick or more').toBeGreaterThan(0); }
+        const scale = u32(tail, mdhd.body + 12), duration = u32(tail, mdhd.body + 16);
+        expect(n, what).toBe(frames);
+        expect(ticks, what).toBe(duration);
+        expect([u32(tail, mvhd.body + 12), u32(tail, mvhd.body + 16)], what + ': mvhd').toEqual([scale, duration]);
+        expect(u32(tail, tkhd.body + 20), what + ': tkhd').toBe(duration);
+        expect([u32(tail, elst.body + 4), u32(tail, elst.body + 8), u32(tail, elst.body + 12)], what + ': one edit, the whole length from 0').toEqual([1, duration, 0]);
+        expect(Math.abs(duration / scale - frames / fps), what + ': ' + duration / scale + ' s').toBeLessThan(1e-3);
+        expect(u32(tail, stsz.body + 8), what + ': stsz').toBe(frames);
+        expect(u32(tail, stsz.body + 12 + 4 * (frames - 1)), what + ': the last size').toBe(sizes[frames - 1]);
+        expect(u32(tail, stco.body + 8), what + ': the frames start after the header').toBe(head.length);
+      }
+    }
+    expect(() => mp4.createMov({ width: 64, height: 36, fps: 30, sizes: [] })).toThrow();
+  });
+
   it('without audio the file keeps one trak and next_track_ID 2', () => {
     const w = createMp4({ width: 64, height: 36, fps: 30, codec: 'avc1.640028', description: AVCC });
     w.addSample(sample(10, true), true);

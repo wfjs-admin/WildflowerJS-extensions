@@ -3,11 +3,11 @@
  * as SVG paths. Its shapes; a draw that culls the faces turned away, sorts
  * the rest far to near with a tie broken by place on screen, clips at the
  * near plane and fades there; draws that leave the same DOM for the same
- * values in any order; a cage a quarter turn on drawing the frame it started
- * from; the glows, their bleeds and the rim; and its KN-100 cases.
+ * values in any order; a cage of faces a quarter turn on drawing the frame it
+ * started from; the glows, their bleeds and the rim; and its KN-100 cases.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { load, loadScript, expectKN, BUILD, CORE_TIER } from './helpers.js';
+import { load, loadScript, expectKN, cageFaces, BUILD, CORE_TIER } from './helpers.js';
 
 const SOLIDS_FILE = typeof __KINETIC_SOLIDS_FILE__ !== 'undefined' ? __KINETIC_SOLIDS_FILE__ : '/packages/kinetic/dist/kinetic.25d.js';
 const NS = 'http://www.w3.org/2000/svg';
@@ -43,11 +43,11 @@ const ys = (d) => d.slice(1).split(' L').map((p) => Number(p.trim().split(' ')[1
 const meanOf = (a) => a.reduce((s, x) => s + x, 0) / a.length;
 
 describe(`kinetic.25d.js: solids (${BUILD} extension, ${CORE_TIER} core)`, () => {
-  it('is wildflower.kinetic.solids once kinetic.25d.js loads after kinetic.wf.js, with its shapes: a box of 6 faces, a cage of 72', async () => {
+  it('is wildflower.kinetic.solids once kinetic.25d.js loads after kinetic.wf.js, with its shapes: a box of 6 faces, and faces of your own', async () => {
     const solids = await solidsLoaded();
     expect(typeof solids).toBe('function');
     expect(solids.box({ size: 1 }).faces.length).toBe(6);
-    expect(solids.cage({ size: 2, beam: 0.3 }).faces.length).toBe(8 * 3 + 12 * 4);
+    expect(solids.faces(cageFaces(2, 0.3)).faces.length).toBe(8 * 3 + 12 * 4);
     const tri = solids.faces([{ pts: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] }]);
     expect(tri.faces[0].n).toEqual([0, 0, 1]);
   });
@@ -72,7 +72,7 @@ describe(`kinetic.25d.js: solids (${BUILD} extension, ${CORE_TIER} core)`, () =>
     const solids = await solidsLoaded();
     const g = canvas();
     const stage = solids(g, { camera: { distance: 6, focal: 400 }, glows: [{ dir: [-0.5, 0.5, 0.7], color: '#ff00aa', bleed: {} }] });
-    stage.add('a', solids.cage({ size: 2, beam: 0.3 })).add('b', solids.box({ size: 0.6 }));
+    stage.add('a', solids.faces(cageFaces(2, 0.3))).add('b', solids.box({ size: 0.6 }));
     const at = (p) => { stage.set('a', { rotate: [90 * p, 20 * p, 0] }).set('b', { rotate: [0, -90 * p, 10], opacity: 1 - p / 2 }); stage.draw(); return g.innerHTML; };
     const first = at(0.3);
     at(0.9); at(0); at(0.55);
@@ -87,7 +87,7 @@ describe(`kinetic.25d.js: solids (${BUILD} extension, ${CORE_TIER} core)`, () =>
     const solids = await solidsLoaded();
     const g = canvas();
     const stage = solids(g, { camera: { distance: 4, focal: 500, roll: 45 }, glows: [{ dir: [-0.85, 0.3, 0.45], color: '#ff5ce6', bleed: { size: 1.4, strength: 0.1, cap: 90 } }] });
-    stage.add('cage', solids.cage({ size: 2, beam: 0.26 }));
+    stage.add('cage', solids.faces(cageFaces(2, 0.26)));
     const frame = (deg) => { stage.set('cage', { rotate: [deg, 0, 0] }).draw(); return g.innerHTML.replace(/-0(?=[ ")])/g, '0'); };
     const start = frame(0);
     const end = frame(90);
@@ -136,11 +136,10 @@ describe(`kinetic.25d.js: solids (${BUILD} extension, ${CORE_TIER} core)`, () =>
     expect(rimOf(side)).toBeGreaterThan(rimOf(front));
   });
 
-  it('KN-100: a target that is no SVG element, a size or beam out of range, a ramp that is no colors, an unknown name in set(), a bad rotate', async () => {
+  it('KN-100: a target that is no SVG element, a size out of range, a ramp that is no colors, an unknown name in set(), a bad rotate', async () => {
     const solids = await solidsLoaded();
     expectKN(() => solids(document.createElement('div')), 'KN-100', 'solids(target)');
     expectKN(() => solids.box({ size: 0 }), 'KN-100', 'solids.box({ size })');
-    expectKN(() => solids.cage({ size: 1, beam: 2 }), 'KN-100', 'solids.cage({ beam })');
     const g = canvas();
     expectKN(() => solids(g, { light: { ramp: ['red', 'blue'] } }), 'KN-100', 'solids({ light: { ramp } })');
     const stage = solids(g).add('a', solids.box({ size: 1 }));

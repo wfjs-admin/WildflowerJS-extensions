@@ -179,7 +179,7 @@ describe(`check (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(t).toBeGreaterThanOrEqual(4);
     expect(t).toBeLessThan(4.5);
     // It plays on: its time moves within 2 s. Under load (the whole suite
-    // on a busy machine) 80 ms passed with no animation frame, 2026-10-28.
+    // on a busy machine) 80 ms can pass with no animation frame.
     for (let i = 0; i < 100 && !(store.time > t); i++) await tick(20);
     expect(store.time).toBeGreaterThan(t);
     expect(store.playing).toBe(true);

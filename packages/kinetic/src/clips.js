@@ -10,21 +10,21 @@
  * with data-hidden is taken out with display: none instead, and its own
  * inline display comes back when the attribute goes. script, style, link
  * and meta are never clips, and here an <audio> clip is not one either.
- * Without the runtime, nothing applied that rule,
- * so a scrub in a plain tab showed every clip at once. This applies the
+ * Without the runtime nothing else applies that rule, and a scrub in a
+ * plain tab would show every clip at once. This applies the
  * same rule on every seek when the page has no runtime, and once before the
  * page is shown. With the runtime present it does nothing, because the
  * runtime sets visibility itself.
  *
- * A hidden clip paints nothing at all. visibility: hidden alone let the
+ * A hidden clip paints nothing at all. visibility: hidden alone lets the
  * output of an SVG filter that makes its own pixels (feFlood, feImage,
- * feTurbulence) paint through, on the clip or on a descendant, and so did a
+ * feTurbulence) paint through, on the clip or on a descendant, and so does a
  * descendant with visibility: visible of its own (seen in Chrome 155).
  * So a hidden clip also carries data-kinetic-hidden, which one
  * style sheet Kinetic adopts clips to nothing with clip-path (adopted again
  * on the next seek when page code has replaced document.adoptedStyleSheets).
  * A clip-path changes no layout, and through the sheet it leaves the clip's
- * own style as it was; opacity and the other candidates either did not stop
+ * own style as it was; opacity and the other properties either do not stop
  * the filter or are written by transitions and authors. A runtime that
  * arrives later gets the clips back unmarked, and each data-hidden clip
  * with its own inline display.

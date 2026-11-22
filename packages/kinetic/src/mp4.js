@@ -18,6 +18,9 @@
  * In mdat the video samples come first, then the audio, one chunk each.
  * header() is the file up to the first sample's bytes, from the sizes alone.
  *
+ * createMov() writes the QuickTime file of PNG frames that render({ alpha })
+ * makes, with the same boxes and frame times.
+ *
  * Pure: no DOM, no WebCodecs; the unit tests feed it bytes and parse the
  * boxes back.
  */
@@ -173,13 +176,77 @@ export function mdatHeader(n) {
   return 8 + n <= 0xffffffff ? u8(u32(8 + n), str('mdat')) : u8(u32(1), str('mdat'), u64(16 + n));
 }
 
+// Frame i ends at round((i + 1) * TIMESCALE / fps), so each frame's delta
+// is whole and the file lasts frames / fps to a tick, as its sound does: a
+// single rounded delta would leave 59.94 fps 200 ms long over 10 minutes. At an
+// fps that divides 90000 that is one stts run; at 59.94 two deltas
+// alternate. The runs are [count, delta] pairs for stts.
+const TIMESCALE = 90000;
+function frameRuns(count, fps) {
+  const end = (i) => Math.round(i * TIMESCALE / fps);
+  const runs = [];
+  for (let i = 0; i < count; i++) {
+    const d = end(i + 1) - end(i), last = runs[runs.length - 1];
+    if (last && last[1] === d) last[0]++;
+    else runs.push([1, d]);
+  }
+  return { runs, duration: end(count) };
+}
+const sttsBox = (runs) => fullBox('stts', 0, 0, u32(runs.length), ...runs.map(([c, d]) => u8(u32(c), u32(d))));
+
+// ---- QuickTime: PNG frames with alpha ------------------------------------------
+
+// QuickTime's own names for a handler: a Pascal string, its length first.
+const pascal = (s, pad) => { const b = str(s); const out = zeros(pad || b.length + 1); out[0] = b.length; out.set(b, 1); return out; };
+
+/**
+ * The QuickTime file around PNG frames, for render({ alpha }): one video
+ * track whose image description is `png ` at depth 32 (color with alpha),
+ * no sound, ftyp `qt  `, mdat, then moov, the form After Effects and
+ * Premiere import with its alpha. Built from the frames' sizes alone and
+ * returned as the bytes before the first frame and after the last, so the
+ * frames stay Blobs: new Blob([head, ...frames, tail]). Every frame is a
+ * sync sample, so there is no stss. Version 0 boxes throughout, as
+ * QuickTime defines them; the length is in 90 kHz ticks, as the MP4's.
+ */
+export function createMov({ width, height, fps, sizes }) {
+  if (!sizes.length) throw new Error('mov: no frames');
+  const count = sizes.length;
+  let bytes = 0;
+  for (const s of sizes) bytes += s;
+  const { runs, duration } = frameRuns(count, fps);
+  const head = u8(box('ftyp', str('qt  '), u32(0x200), str('qt  ')), mdatHeader(bytes));
+  // The frames start right after mdat's header, so the offset fits stco.
+  const stbl = box('stbl',
+    fullBox('stsd', 0, 0, u32(1), box('png ',
+      zeros(6), u16(1),                      // reserved, data reference index
+      u16(0), u16(0), str('KNTC'),           // version, revision, vendor
+      u32(0x200), u32(0x200),                // temporal and spatial quality
+      u16(width), u16(height),
+      u32(0x00480000), u32(0x00480000),      // 72 dpi
+      u32(0), u16(1),                        // data size, frames per sample
+      pascal('PNG', 32),                     // compressor name
+      u16(32), u16(0xffff),                  // depth 32: alpha; no color table
+      box('fiel', new Uint8Array([1, 0])))), // progressive
+    sttsBox(runs),
+    fullBox('stsc', 0, 0, u32(1), u32(1), u32(count), u32(1)),
+    fullBox('stsz', 0, 0, u32(0), u32(count), ...sizes.map(u32)),
+    fullBox('stco', 0, 0, u32(1), u32(head.length)));
+  const handler = (kind, sub, name) => fullBox('hdlr', 0, 0, str(kind), str(sub), zeros(12), pascal(name));
+  const trak = box('trak',
+    fullBox('tkhd', 0, 3, u32(0), u32(0), u32(1), u32(0), u32(duration), zeros(8), u16(0), u16(0), u16(0), u16(0), MATRIX, fixed16(width), fixed16(height)),
+    box('edts', fullBox('elst', 0, 0, u32(1), u32(duration), u32(0), fixed16(1))),
+    box('mdia',
+      fullBox('mdhd', 0, 0, u32(0), u32(0), u32(TIMESCALE), u32(duration), u16(0x7fff), u16(0)),
+      handler('mhlr', 'vide', 'VideoHandler'),
+      box('minf', fullBox('vmhd', 0, 1, zeros(8)), handler('dhlr', 'url ', 'DataHandler'),
+        box('dinf', fullBox('dref', 0, 0, u32(1), fullBox('url ', 0, 1))), stbl)));
+  const mvhd = fullBox('mvhd', 0, 0, u32(0), u32(0), u32(TIMESCALE), u32(duration), fixed16(1), u16(0x0100), zeros(10), MATRIX, zeros(24), u32(2));
+  return { head, tail: box('moov', mvhd, trak) };
+}
+
 export function createMp4({ width, height, fps, codec, description, audio }) {
-  // Frame i ends at round((i + 1) * timescale / fps), so each frame's delta
-  // is whole and the file lasts frames / fps to a tick, as its sound does: a
-  // single rounded delta ran 59.94 fps 200 ms long over 10 minutes. At an
-  // fps that divides 90000 that is one stts run; at 59.94 two deltas alternate.
-  const timescale = 90000;
-  const end = (i) => Math.round(i * timescale / fps);
+  const timescale = TIMESCALE;
   const samples = [];                      // { bytes, key }
   let dataSize = 0;
 
@@ -202,7 +269,7 @@ export function createMp4({ width, height, fps, codec, description, audio }) {
     else config = vpcC(codec);
 
     const count = samples.length;
-    const duration = end(count);
+    const { runs, duration } = frameRuns(count, fps);
     // The sound lasts as long as the video, and an Opus track its pre-skip
     // more; the movie lasts as long as the longer.
     const heard = sound ? duration + (sound.codec === 'opus' ? Math.round(sound.priming * timescale / AUDIO_RATE) : 0) : 0;
@@ -216,14 +283,8 @@ export function createMp4({ width, height, fps, codec, description, audio }) {
     // bits; the sound's follows the video's.
     const soundSize = sound ? sound.samples.reduce((n, s) => n + s.bytes.length, 0) : 0;
     const head = mdatHeader(dataSize + soundSize);
-    const runs = [];                       // [count, delta] for stts
-    for (let i = 0; i < count; i++) {
-      const d = end(i + 1) - end(i), last = runs[runs.length - 1];
-      if (last && last[1] === d) last[0]++;
-      else runs.push([1, d]);
-    }
     const build = (mdatStart) => {
-      const stts = fullBox('stts', 0, 0, u32(runs.length), ...runs.map(([c, d]) => u8(u32(c), u32(d))));
+      const stts = sttsBox(runs);
       const keys = [];
       samples.forEach((s, i) => { if (s.key) keys.push(i + 1); });
       const stss = fullBox('stss', 0, 0, u32(keys.length), ...keys.map(u32));

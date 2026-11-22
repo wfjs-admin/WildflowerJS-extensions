@@ -24,7 +24,9 @@ https://www.wildflowerjs.com/docs/error-codes/.
 
 Serve `dist/kinetic.wf.min.js` (or `dist/kinetic.wf.js`, the development
 build) and load it after the framework, before the page's own scripts. On
-npm the package is `@wildflowerjs/kinetic`.
+npm the package is `@wildflowerjs/kinetic`. Serve `dist/kinetic.tools.js`
+and `dist/kinetic.tools.min.js` beside it: `check()` with its passes and
+`render.batch()` load them from there.
 
 ```html
 <script defer src="/js/wildflower.lite.min.js"></script>
@@ -149,8 +151,9 @@ The demo `www/demos/kinetic-sine/` is the running example.
 - Sound: an `<audio>` with `data-start` is an audio clip, played through Web
   Audio in the preview and mixed into the render. `data-tempo`,
   `data-downbeat`, `data-meter` and `data-markers` name the moments of a
-  song, read by `timeOf()` and `tempo()`, and `scripts/beatgrid.cjs` finds
-  them. `level()` and `spectrum()` read the mix.
+  song, read by `timeOf()` and `tempo()`, and the Beat grid page
+  (https://kinetic.wildflowerjs.com/docs/beat-grid/) finds them in the
+  browser. `level()` and `spectrum()` read the mix.
 - Footage: a `<video>` with `data-start` is a footage clip, sought to the
   frame for each seek. `data-remap` gives a footage or audio clip a speed
   ramp, its time as a track of file seconds, holds included.
@@ -200,40 +203,52 @@ when the page's CSS sets no size, so the CSS need not repeat them.
 
 `check()` seeks a sample of frames twice in different orders and compares
 what the root held, so a composition that depends on the order of seeks is
-caught before a render is. `render()` writes an MP4 from the page itself:
+caught before a render is. With other options, such as
+`check({ reading: true, layout: true, frames: 6 })`, it loads
+`kinetic.tools.js` from beside `kinetic.wf.js` and runs passes in the page:
+text that leaves before it can be read, text out of place or under its
+contrast floor, PNGs of frames, a lesson's steps, the pace, a loop's seam
+and sudden jumps. `render()` writes an MP4 from the page itself:
 each frame a seek, drawn with `drawElementImage`, encoded with WebCodecs and
 written by Kinetic's own MP4 writer, with the audio clips mixed into the
 sound track. `render({ shutter: 180 })` blurs motion, and
 `render({ finish })` gives every frame grain, a vignette, bloom, aberration,
 a grade, a soften or dust; set in `config()`, the finish also shows live in
-the page where the browser can carry it.
+the page where the browser can carry it. `render({ alpha: true })` writes a
+transparent video for editors such as After Effects and Premiere instead: a
+`.mov` of PNG frames, with the root's background cleared, no finish and no
+sound. It is large, about 6.7 GB for two minutes at 1080p.
 
 ## Many videos from one page
 
-`scripts/batch.cjs` renders a page once for each row of a JSON or CSV
-file, in Chrome through the page's own `render()`, with the row's values as
-the composition's variables (`data-composition-variables` on the root,
-`inputs` in a scene). It needs Playwright, `playwright-core` with Chrome
-installed or `playwright`, and passes HTML-in-Canvas to the browser itself.
+`render.batch(rows, options)` renders a page once for each row, in Chrome
+through the page's own `render()`, with the row's values as the
+composition's variables (`data-composition-variables` on the root, `inputs`
+in a scene). Each row renders in a hidden copy of the page. The rows are an
+array, `{ rows }`, or a JSON or CSV `File` (a header row of ids). On a page
+with variables the preview bar's Render batch button asks for the file and
+a folder.
 
-```bash
-node scripts/batch.cjs index.html rows.json --out renders
-node scripts/batch.cjs index.html people.csv --name name
+```js
+button.addEventListener('click', () =>
+  wildflower.kinetic.render.batch(input.files[0], { name: 'name' }));
 ```
 
-Files are named `<composition id>-<row number>.mp4`, or by `--name field`.
-A row whose input fails (KN-130) stops the batch with the KN line and exit
-code 1.
+Files are named `<composition id>-<row number>.mp4`, or by the `name`
+field, and end in `.mov` with `alpha: true`. From a click the files go into a folder the user picks; `save:
+'download'` downloads each and `save: false` returns the Blobs. A row whose
+input fails (KN-130) stops the batch and rejects with that row's error. The
+call loads `kinetic.tools.js` from beside `kinetic.wf.js` (KN-103 when it
+cannot).
 
-## Rendering through HyperFrames
+## HyperFrames compatibility
 
-The same page renders through `npx hyperframes render`, with
-`--batch rows.json` for the rows and parallel workers. That route needs the
-HyperFrames runtime, 0.8.0 or later, after Kinetic's tag and before the
-page's own script. `wildflower.kinetic.compat.hyperframes` is the runtime
-version Kinetic is tested against, and
-https://kinetic.wildflowerjs.com/docs/hyperframes/ has what changes on the
-page while the runtime is present.
+A Kinetic page uses the composition attributes HyperFrames reads, so the
+same page runs under HyperFrames with the HyperFrames runtime, 0.8.0 or
+later, after Kinetic's tag and before the page's own script.
+`wildflower.kinetic.compat.hyperframes` is the runtime version Kinetic is
+tested against, and https://kinetic.wildflowerjs.com/docs/hyperframes/ has
+what changes on the page while the runtime is present.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/@hyperframes/core@0.8.133/dist/hyperframe.runtime.iife.js"></script>
@@ -293,11 +308,11 @@ script tag, add
 ## The skill for Claude Code
 
 `skills/wildflower-kinetic/` is a skill in the Claude Code layout, shipped
-in the package: `SKILL.md`, the rules, the API, the patterns with their code,
-and `scripts/check.cjs`, which opens a composition in a headless browser
-(the installed Chrome, else Playwright's Chromium), runs `check()` and
-prints every KN line, saves frames to look at with `--frames 0,2.5,5` or
-`--frames 12`, and walks a lesson's steps with `--lesson`. Copy the folder into a project's
+in the package: `SKILL.md`, the rules, the API, and the patterns with their
+code. The assistant checks its work in the page with
+`check({ reading: true, layout: true, frames: 6 })`, in a browser it can
+drive, or asks you to press Check on the preview bar and paste the result.
+Copy the folder into a project's
 `.claude/skills/` (or `~/.claude/skills/` for every project). It applies to
 any brief that asks for a video: a title, motion graphics, a chart or
 captions from data, a lesson, or many videos from one page.
@@ -305,12 +320,12 @@ captions from data, a lesson, or many videos from one page.
 ## Tests
 
 ```
-node scripts/build-rollup.cjs kinetic.wf
+node scripts/build-extension.cjs kinetic
 node scripts/fetch-hyperframes.cjs          # once: the pinned runtime for test/runtime.test.js
 node scripts/fetch-lottie.cjs               # once: the pinned lottie-web for test/lottie.test.js
 npx vitest run --config packages/kinetic/vitest.config.js
 node scripts/test-extension.cjs kinetic   # every tier and build the manifest declares
-node --test packages/kinetic/test/coverage-skill-check.test.cjs   # the skill's check.cjs, in Node
+node --test packages/kinetic/test/coverage-skill-check.test.cjs   # scripts/check.cjs, in Node
 node packages/kinetic/test/fixtures/make-footage.cjs             # rewrites the committed footage fixtures, with FFmpeg
 node packages/kinetic/test/fixtures/make-images.cjs              # rewrites the committed animated images (GIF and APNG with FFmpeg)
 ```

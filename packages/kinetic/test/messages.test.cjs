@@ -195,10 +195,14 @@ const ALLOWED = [
   ' (KN-200): serve the page over https or localhost',
   'the production build prints no KN warnings; load the development build to see them',
   'seek 30 frames twice and compare them',
+  'a video per row, from a .json or .csv file',
   'sound on; click to turn it off',
   'sound off; click to turn it on',
   'drawing the frame as rendered…',
   'the paused frame as the render draws it, with the finish and the shutter (off when it plays)',
+  // The alpha dialog's sentence, built around the estimate.
+  'A video with transparency is a large file: about ',
+  '. That is an estimate for busy full-frame graphics; a lower third alone comes out far smaller. The file has no sound.',
 ];
 
 describe('the built files', () => {

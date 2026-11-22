@@ -375,9 +375,8 @@ describe(`draw() (${BUILD} extension, ${CORE_TIER} core)`, () => {
       const full = await ink(1280, tool);
       expect(full, tool).toBeGreaterThan(0);
       for (const w of [640, 320]) {
-        // Before the fix: pen 0.047 at 640 and 0 at 320, pencil 0 at 320.
-        // Spread by area the pen kept 0.27 at 320, washed out; by width it
-        // keeps 0.76, and the pencil 0.59.
+        // Spread by area the pen would keep 0.27 at 320, washed out; spread
+        // by width it keeps 0.76, and the pencil 0.59.
         const r = (await ink(w, tool)) / full;
         expect(r, tool + ' at ' + w).toBeGreaterThan(0.4);
         expect(r, tool + ' at ' + w).toBeLessThan(1.6);

@@ -473,7 +473,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     // Past it, the same curve as without depth, moved out by the band.
     for (const z of [150, 300, 700]) expect(focus(z, 0, o), 'z ' + z).toBe(focus(z - 100, 0, { range: 200, max: 12 }));
     expect(focus(-300, 0, o)).toBe(focus(300, 0, o));
-    // The default is 0: one sharp plane, as before.
+    // The default is 0: one sharp plane.
     expect(focus(50, 0, { range: 200, max: 12 })).toBe(focus(50, 0, { range: 200, max: 12, depth: 0 }));
     expect(focus(50, 0, { range: 200, max: 12 })).toBeGreaterThan(0);
     expectKN(() => focus(0, 0, { depth: -1 }), 'KN-100', 'focus(z, plane, { depth })', /^depth is a finite number, 0 or more/);
@@ -781,8 +781,8 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
 
   // The pin: a spec with only translateX, translateY, rotate and scale writes
   // these exact strings, whatever order its keys are in, and with explicit
-  // units. Written against the build before the transform keys were added.
-  it('styleAt: the four original transform keys write the same transform string in every combination, byte for byte', async () => {
+  // units.
+  it('styleAt: translateX, translateY, rotate and scale write the same transform string in every combination, byte for byte', async () => {
     const { wf } = await load();
     const { styleAt } = wf.kinetic;
     const TRACKS = {
@@ -844,7 +844,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
   // every browser; an empty string means the browser rejected the value.
   const cssOf = (prop, v) => { const i = document.createElement('i'); i.style[prop] = v; return i.style[prop]; };
 
-  it('styleAt: each of the eight new transform keys alone, with its default unit and with an explicit unit', async () => {
+  it('styleAt: each of the other eight transform keys alone, with its default unit and with an explicit unit', async () => {
     const { wf } = await load();
     const { styleAt } = wf.kinetic;
     const cases = [
@@ -901,7 +901,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(host.querySelector('b').style.transform).toBe(cssOf('transform', ALL));
   });
 
-  it('styleAt: a transform track beside any of the new transform keys is KN-120, at definition and in styleAt()', async () => {
+  it('styleAt: a transform track beside any of the other eight transform keys is KN-120, at definition and in styleAt()', async () => {
     const { wf } = await load();
     const { styleAt } = wf.kinetic;
     const tr = (a, b) => ({ at: [0, 1], to: [a, b] });
@@ -926,14 +926,14 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expectKN(() => styleAt(undefined, { scale: 1.5, rotate: { at: [0, 1], to: [0, 90] } }), 'KN-100', 'styleAt(t)');
   });
 
-  it('styleAt: an object of tracks gives a style object; one track is interpolate(t, track), and pose is gone', async () => {
+  it('styleAt: an object of tracks gives a style object; one track is interpolate(t, track), and there is no pose()', async () => {
     const { wf } = await load();
     const { styleAt, interpolate } = wf.kinetic;
     expect(wf.kinetic.pose).toBeUndefined();
     expect(styleAt(0.5, { scale: { at: [0, 1], to: [1, 2] }, opacity: 0.5 })).toEqual({ transform: 'scale(1.5)', opacity: 0.5 });
     // One track is no style: styleAt names the call that reads it.
     expectKN(() => styleAt(0.5, { at: [0, 1], to: [0, 10] }), 'KN-120', 'styleAt(t, track)', /^styleAt\(\) takes an object of tracks; read one track with interpolate\(t, track\)/);
-    // interpolate() takes a track as its at, with its own to and options, and a unit as the old one-track form did.
+    // interpolate() takes a track as its at, with its own to and options, and a unit.
     expect(interpolate(0.5, { at: [0, 1], to: [0, 10] })).toBe(5);
     expect(interpolate(0.5, { at: [0, 1], to: [0, 10], unit: 'px' })).toBe('5px');
     expect(interpolate(0.25, { at: [0, 1], to: [0, 100], ease: 'linear', round: true })).toBe(25);
@@ -1172,7 +1172,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(() => mix('inset(0%)', 4, 0.5)).toThrow(/KN-100/);
   });
 
-  it('KN-123 reads a spring cut short on a text track from its largest number change, and the new transform keys carry their default units', async () => {
+  it('KN-123 reads a spring cut short on a text track from its largest number change, and the other eight transform keys carry their default units', async () => {
     const { wf } = await load();
     const name = uniqueName('scene');
     const lines = await captureWarnings(async () => {
@@ -1204,7 +1204,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expectKN(() => random(-Infinity), 'KN-100', 'random(seed)', /not -Infinity/);
   });
 
-  // ---- the small helpers (KINETIC_SPEC_SMALL_HELPERS_2026-10-09) ----
+  // ---- the small helpers ----
 
   const close = (got, want, label) => {
     expect(got.length, label).toBe(want.length);
@@ -1335,7 +1335,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     const peak = (bounce) => Math.max(...Array.from({ length: 400 }, (_, i) => spring(i / 100, { duration: 0.8, bounce })));
     expect(peak(0.2)).toBeGreaterThan(1.005);
     expect(peak(0.6)).toBeGreaterThan(peak(0.2));
-    // from, to and overshootClamping work as before.
+    // from, to and overshootClamping apply with a duration too.
     expect(spring(0, { duration: 1, from: 10, to: 20 })).toBe(10);
     expect(spring(Infinity, { duration: 1, from: 10, to: 20 })).toBe(20);
     expect(spring(0.4, { duration: 1, bounce: 0.3, from: 10, to: 20 })).toBeCloseTo(10 + 10 * spring(0.4, { duration: 1, bounce: 0.3 }), 12);
@@ -1599,7 +1599,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(hueGap(bg.h, wantH)).toBeLessThan(1.5);
     expect(bg.C).toBeLessThan((blue.C + green.C) / 2 - 0.1);
     expect(bg.C).toBeGreaterThan(0.08);
-    // 'rgb' is the default, and the same as now.
+    // 'rgb' is the default.
     expect(mix('#0000ff', '#ffff00', 0.5, { space: 'rgb' })).toBe(rgbMid);
     expect(mix(0, 10, 0.5, OK)).toBe(5);
     // interpolate, a colour track and a text track with a colour in it take space.
@@ -1654,7 +1654,7 @@ describe(`motion (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expectKN(() => interpolate(0.5, [0, 1], [0, 1], { extrapolate: 'repeat' }), 'KN-120', 'interpolate.extrapolate', /^extrapolate is 'clamp', 'extend', 'identity', 'wrap' or 'mirror', not "repeat"/);
   });
 
-  // ---- the review of the small helpers ----
+  // ---- the small helpers at their edges ----
 
   const DURATIONS = [0.3, 0.5, 0.8, 1, 1.2, 1.5, 2, 3, 4.5];
   const BOUNCES = [0, 0.1, 0.3, 0.5, 0.7, 0.9];

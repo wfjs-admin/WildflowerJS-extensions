@@ -53,7 +53,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     wf.kinetic.config({ fps: 30 });
   });
 
-  it('defect 1: a seek(local) promise that rejects reaches onError, and the barrier still runs the after-seek hooks', async () => {
+  it('a seek(local) promise that rejects reaches onError, and the barrier still runs the after-seek hooks', async () => {
     const { wf } = await load();
     const errors = [];
     const unhandled = [];
@@ -89,7 +89,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     }
   });
 
-  it('defect 1: the init seek(local) that rejects reaches onError, not an unhandled rejection', async () => {
+  it('the init seek(local) that rejects reaches onError, not an unhandled rejection', async () => {
     const { wf } = await load();
     const errors = [];
     const unhandled = [];
@@ -112,7 +112,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     }
   });
 
-  it('defect 2: a scene that a data-render section mounts at a seek runs seek(local) and the after-seek hooks before that barrier resolves', async () => {
+  it('a scene that a data-render section mounts at a seek runs seek(local) and the after-seek hooks before that barrier resolves', async () => {
     const { wf } = await load();
     const outer = uniqueName('outer');
     const inner = uniqueName('inner');
@@ -146,7 +146,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect([anim.playState, anim.currentTime]).toEqual(['paused', 3000]);
   });
 
-  it('defect 7: a chain of data-end references resolves in linear time', async () => {
+  it('a chain of data-end references resolves in linear time', async () => {
     const { wf } = await load();
     const N = 20;
     let clips = '';
@@ -162,7 +162,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(['ch0', 'ch' + (N - 2), 'ch' + (N - 1)].map((id) => host.querySelector('#' + id).style.visibility)).toEqual(['hidden', 'hidden', 'visible']);
   });
 
-  it('defect 7: a clip window kept between seeks follows a changed attribute and a changed root duration', async () => {
+  it('a clip window kept between seeks follows a changed attribute and a changed root duration', async () => {
     const { wf } = await load();
     const host = await mount(`<div id="rl7b-root" data-composition-id="rl7b" data-start="0" data-duration="6">
       <div id="m" data-start="1" data-duration="1"></div>
@@ -202,7 +202,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect([el('h').style.display, el('h').style.visibility]).toEqual(['flex', 'visible']);
   });
 
-  it('defect 8: a config() call that throws changes nothing', async () => {
+  it('a config() call that throws changes nothing', async () => {
     const { wf } = await load();
     const store = wf.getStore('kinetic');
     const before = wf.kinetic.config();
@@ -217,7 +217,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(store.time).toBe(1.25);
   });
 
-  it('defect 9: pause() stops the standalone loop once a player has arrived', async () => {
+  it('pause() stops the standalone loop once a player has arrived', async () => {
     const { wf } = await load();
     const store = wf.getStore('kinetic');
     wf.kinetic.seek(0);
@@ -230,7 +230,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect([store.time, store.playing]).toEqual([at, false]);
   });
 
-  it('defect 9: the standalone loop stops when a runtime appears, whichever channel it drives', async () => {
+  it('the standalone loop stops when a runtime appears, whichever channel it drives', async () => {
     const { wf } = await load();
     const store = wf.getStore('kinetic');
     wf.kinetic.seek(0);
@@ -244,7 +244,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
   });
 
   if (BUILD === 'dev') {
-    it('defect 10: KN-154 (a scene inside a scene) skips store paths, members and string literals on a scene root (dev)', async () => {
+    it('KN-154 (a scene inside a scene) skips store paths, members and string literals on a scene root (dev)', async () => {
       const { wf } = await load();
       const outer = uniqueName('scene');
       wf.kinetic.scene(outer, {});
@@ -289,7 +289,7 @@ describe(`lifecycle (${BUILD} extension, ${CORE_TIER} core)`, () => {
     }
   });
 
-  it('defect 3: readiness waits on the waitFor of mounted scenes, not of every defined scene', async ({ skip }) => {
+  it('readiness waits on the waitFor of mounted scenes, not of every defined scene', async ({ skip }) => {
     const { wf } = await load();
     if (!wf.features || wf.features.query === false) skip();
     wf.kinetic.scene(uniqueName('unused'), { waitFor: ['only-on-other-pages'] });

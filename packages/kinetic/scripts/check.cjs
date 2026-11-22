@@ -57,7 +57,10 @@
  * its words, how long it held and from when. This is a floor: a calm piece
  * holds about twice as long. The list does not fail the run: a word that is meant to fly past is
  * the author's call, and everything else on it is a slide the viewer cannot
- * read. Words that come in one at a time count from the last one in. A
+ * read. Words that come in one at a time count from the last one in. Text
+ * that is typed counts from its first letter, since it is read as it types,
+ * and the whole line has then to hold for the 1.5 s floor, or it is listed
+ * as "whole for". A
  * lesson is read as its video, in video mode; on the page each step holds
  * for the learner, so the list is about the video alone.
  *
@@ -442,7 +445,7 @@ const ROOT_SELECTOR = () => (document.querySelector('[data-root="true"]') ? '[da
     if (!short.length) console.log('reading: every block of text stays on screen long enough to read');
     else {
       console.log('reading: ' + short.length + ' block' + (short.length === 1 ? '' : 's') + ' of text leave' + (short.length === 1 ? 's' : '') + ' before ' + (short.length === 1 ? 'it' : 'they') + ' can be read (fully on screen for at least 1.5 s, and 0.5 s plus 0.375 s a word, with 1 s more for a figure)');
-      for (const b of short) console.log('  "' + b.text + '" (' + b.words + ' word' + (b.words === 1 ? '' : 's') + '): ' + b.held.toFixed(1) + ' s from ' + b.from.toFixed(1) + ' s, needs ' + b.needs.toFixed(1) + ' s');
+      for (const b of short) console.log('  "' + b.text + '" (' + b.words + ' word' + (b.words === 1 ? '' : 's') + '): ' + (b.whole ? 'whole for ' : '') + b.held.toFixed(1) + ' s from ' + b.from.toFixed(1) + ' s, needs ' + b.needs.toFixed(1) + ' s');
     }
   }
 
@@ -544,9 +547,11 @@ async function readingPass(page, layout) {
     return { duration: s.duration, fps: s.fps, lesson, width, height: Number(root.getAttribute('data-height')) || R.height * width / R.width };
   });
   const last = Math.max(0, plan.duration - 1 / plan.fps);
-  const runs = new Map();   // key -> { text, words, start, best, bestFrom, from }
+  const runs = new Map();   // key -> { text, words, start, best, bestFrom, from, last, typed, whole, full, fullFrom }
   const place = layout ? placement(plan.width, plan.height, STEP) : null;
-  const close = (r, t) => { if (r.start !== null) { const held = t - r.start; if (held > r.best) { r.best = held; r.bestFrom = r.start; } r.start = null; } };
+  // The stretch a block's text was whole (its longest) ends; the longest such stretch is kept.
+  const part = (r, t) => { if (r.whole !== null) { if (t - r.whole > r.full) { r.full = t - r.whole; r.fullFrom = r.whole; } r.whole = null; } };
+  const close = (r, t) => { part(r, t); r.last = null; if (r.start !== null) { const held = t - r.start; if (held > r.best) { r.best = held; r.bestFrom = r.start; } r.start = null; } };
   for (let t = 0; t <= last + 1e-6; t += STEP) {
     const shown = await page.evaluate(async ([t, layout]) => {
       const pending = [];
@@ -579,16 +584,23 @@ async function readingPass(page, layout) {
         while (b !== root && /^(inline|contents)/.test(getComputedStyle(b).display)) b = b.parentElement;
         return b;
       };
-      const blocks = new Map();   // block -> { ok, nodes }
+      // A block's text is its own text nodes, in order: what a block inside it holds is that block's. Where
+      // another block's text, or white space between two elements, comes between two of its nodes, a space
+      // stands for it.
+      const blocks = new Map();   // block -> { ok, nodes, text }
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let at = null, gap = false;
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        if (!n.nodeValue.trim()) continue;
+        if (!n.nodeValue.trim()) { gap = true; continue; }
         const p = n.parentElement;
         if (!p || p.closest('[data-kinetic-finish], [data-kinetic-preview], script, style, template')) continue;
         const b = blockOf(p);
-        const e = blocks.get(b) || { ok: true, nodes: [] };
+        const e = blocks.get(b) || { ok: true, nodes: [], text: '' };
         e.ok = e.ok && visible(p);
         e.nodes.push(n);
+        e.text += (e.text && (gap || at !== b) ? ' ' : '') + n.nodeValue;
+        at = b;
+        gap = false;
         blocks.set(b, e);
       }
       // For the layout pass, each line of a block's own text as a box
@@ -701,7 +713,7 @@ async function readingPass(page, layout) {
         const rects = [].concat(...e.nodes.map(shownRects));
         if (!rects.length) continue;
         if (!keys.has(b)) { keys.set(b, (window.__readN = (window.__readN || 0) + 1)); els.set(keys.get(b), b); }
-        out.push([keys.get(b), b.textContent.replace(/\s+/g, ' ').trim(), layout ? linesOf(b, rects) : null]);
+        out.push([keys.get(b), e.text.replace(/\s+/g, ' ').trim(), layout ? linesOf(b, rects) : null]);
       }
       return out;
     }, [t, layout]);
@@ -710,9 +722,13 @@ async function readingPass(page, layout) {
     for (const [key, text] of shown) {
       now.add(key);
       let r = runs.get(key);
-      if (!r) runs.set(key, (r = { text, words: 0, start: null, best: 0, bestFrom: t, from: t }));
+      if (!r) runs.set(key, (r = { text, words: 0, start: null, best: 0, bestFrom: t, from: t, last: null, typed: false, whole: null, full: 0, fullFrom: t }));
       r.words = Math.max(r.words, text.split(' ').filter(Boolean).length);
-      if (text.length > r.text.length) r.text = text;
+      // Text that grows by what is added to its end is being typed.
+      if (r.last !== null && text.length > r.last.length && text.startsWith(r.last)) r.typed = true;
+      // Whole while it is its longest; a longer text than any before starts the count again.
+      if (text.length > r.text.length) { r.text = text; r.full = 0; r.whole = t; } else if (text !== r.text) part(r, t); else if (r.whole === null) r.whole = t;
+      r.last = text;
       if (r.start === null) r.start = t;
     }
     for (const [key, r] of runs) if (!now.has(key)) close(r, t);
@@ -733,6 +749,8 @@ async function readingPass(page, layout) {
     const needs = Math.max(1.5, 0.5 + 0.375 * r.words) + (FIGURE.test(r.text) ? 1 : 0);
     // Within half a sample of the time it needs counts as enough.
     if (r.best + STEP / 2 < needs) out.push({ text: clip(r.text), words: r.words, held: r.best, from: r.bestFrom, needs, first: r.from });
+    // Typed text is read as it types, so it counts from its first letter; whole, it still holds for the floor.
+    else if (r.typed && r.full + STEP / 2 < 1.5) out.push({ text: clip(r.text), words: r.words, held: r.full, from: r.fullFrom, needs: 1.5, whole: true, first: r.from });
   }
   return { short: out.sort((a, b) => a.first - b.first), layout: place ? place.findings(runs, low) : null };
 }

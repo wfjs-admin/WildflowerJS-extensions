@@ -80,7 +80,7 @@ function runs(row) {
 }
 
 describe(`effect() (${BUILD} extension, ${CORE_TIER} core)`, () => {
-  it('halftone: dots a cell apart, larger where the source is darker, larger again with tone', async () => {
+  it('halftone: dots a cell apart, larger where the source is darker, larger again with density', async () => {
     const { wf, host, canvas } = await stage('fx1', '<canvas id="fx2" style="position:absolute;left:0;top:100px;width:200px;height:100px"></canvas>');
     const fx = wf.kinetic.effect(canvas, { source: source(200, 100, gray(128)), kind: 'halftone', cell: 20, angle: 0, shape: 'square', ink: '#000000', paper: '#ffffff' });
     handles.push(fx);
@@ -151,8 +151,8 @@ describe(`effect() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     await dispatchSeek(0.1).done;
     const r = read(canvas);
     // Across the cells' edge at x = 100 on the dots' centre row: ink to the
-    // dot's radius, in the dot's own colour, and paper past it. Before, a
-    // dot was cut at its cell's edge, a square on a turned grid.
+    // dot's radius, in the dot's own colour, and paper past it. A dot cut
+    // at its cell's edge would be a square on a turned grid.
     expect(near(r.at(101, 10), [0x40, 0, 0]), 'past the edge, inside the dot: ' + r.at(101, 10)).toBe(true);
     expect(near(r.at(108, 10), [255, 255, 255]), 'past the dot: ' + r.at(108, 10)).toBe(true);
     // On the row between two dots, 5 px into the empty cell is 18 px from
@@ -161,7 +161,7 @@ describe(`effect() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     // The band 100 to 110 px holds each dot's overflow, the segment of a
     // 13.9 px circle past a chord 10 px from its centre, 51 px² in each
     // cell's 200: about a quarter, less the edge pixels anti-aliasing
-    // leaves lighter than ink. Before, none.
+    // leaves lighter than ink.
     expect(r.share(0.5, 0.55, ink)).toBeGreaterThan(0.15);
     expect(r.share(0.5, 0.55, ink)).toBeLessThan(0.35);
   });
@@ -432,7 +432,7 @@ describe(`effect() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expectKN(() => effect(canvas, { source: src, kind: 'dither', matrix: 3 }), 'KN-100', 'effect(canvas, { matrix })', /^matrix is 2, 4 or 8/);
     expectKN(() => effect(canvas, { source: src, kind: 'dither', levels: 17 }), 'KN-100', 'effect(canvas, { levels })', /^levels is a whole number from 2 to 16/);
     expectKN(() => effect(canvas, { source: src, kind: 'stipple', density: 2 }), 'KN-100', 'effect(canvas, { density })', /^density is a number from -1 to 1/);
-    // tone, the old name for density, is no parameter.
+    // tone is no parameter; the dots' darkness is density.
     expectKN(() => effect(canvas, { source: src, kind: 'halftone', tone: 0.2 }), 'KN-100', 'effect(canvas, { tone })', /^'tone' is not a parameter of halftone/);
     const flat = document.createElement('canvas');
     flat.getContext('2d');

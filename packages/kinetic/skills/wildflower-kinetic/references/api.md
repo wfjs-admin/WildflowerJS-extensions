@@ -3,8 +3,18 @@
 Everything is on `wildflower.kinetic`. The full reference, with every option
 and default, is https://kinetic.wildflowerjs.com/docs/reference/.
 
+The first part covers layers: every field a piece is written in. The rest
+covers the helpers and calls underneath, which a layer's fields name and a
+function in `fns` may call, and the scene written in code, for what no
+layer can describe.
+
 Contents, one entry for each `##` section below:
 
+- [Layers](#layers)
+- [A layer's keys](#a-layers-keys)
+- [Values](#values)
+- [Text, layer calls and copies](#text-layer-calls-and-copies)
+- [Solids, cameras and paths as layers](#solids-cameras-and-paths-as-layers)
 - [A scene](#a-scene)
 - [Transitions](#transitions)
 - [Effects](#effects)
@@ -19,6 +29,209 @@ Contents, one entry for each `##` section below:
 - [Footage](#footage)
 - [Interactive mode](#interactive-mode)
 - [Control, readiness, self-test and rendering](#control-readiness-self-test-and-rendering)
+
+## Layers
+
+```javascript
+// A scene that draws the layers, on the clip whose data-component is 'title-card':
+wildflower.kinetic.layers.scene('title-card', { layers: [...] }, { fns });
+// Without a scene, for a page that seeks it itself: returns { seek(seconds), refresh(), dispose(), stage }.
+wildflower.kinetic.layers({ layers: [...] }, { root, target, canvas, fns });
+```
+
+`fns` is an object of pure functions the layers call by name with
+`{ call: 'name', args }`. `root` is where `src` selectors look (the scene's
+composition root); `target` and `canvas` are a solids stage's SVG group and
+grain canvas, for solid layers (load `kinetic.25d.js` after
+`kinetic.wf.js`).
+
+The layers object is a plain object with the keys below. `layers.scene()`
+reads the defaults from the page; `layers()` needs `id`, `size` and
+`duration` written out.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | string | the scene's name | the piece's name |
+| `size` | `[width, height]` px | the root's `data-width` and `data-height` | the frame |
+| `duration` | number | the clip's `data-duration` | its length, in `unit` |
+| `fps` | number | the root's `data-fps`, else 30 | frames a second |
+| `unit` | `'second'` or `'frame'` | `'second'` | the unit of every time in the layers |
+| `snap` | `'frame'` | none | markers and beats land on their nearest frame |
+| `loop` | `true` or `{ wrap: true }` | none | time wraps at `duration`; with `wrap`, a placement running past the end shows again from the start |
+| `constants` | `{ name: number }` | `{}` | named numbers, read by name and in sums |
+| `shared` | `{ name: value }` | `{}` | named values several layers read: any value form |
+| `swatches` | `{ name: '#rrggbb' }` | `{}` | named colors |
+| `roles` | `{ role: name }` | `{}` | colors and looks by role; comps and placements override them |
+| `curves` | `{ name: curve }` | `{}` | named falloffs and eases: an ease name, `{ power }`, `{ from, ease, power }`, or points `[[x, y], ...]` |
+| `presets` | `{ name: { opacity, y, scale } }` | `{}` | animations an HTML layer plays from its own start |
+| `looks`, `bands` | | | solids (below) |
+| `stores` | `[name, ...]` | `[]` | the stores the layers read; the scene draws again when one changes while the clock is still |
+| `queries` | `[name, ...]` | `[]` | the `wildflower.query` queries the layers read; the first frame waits for their rows, and the layers are built once the queries have them |
+| `inputs` | `{ name: { type, default, required, validator } }` | none | the composition variables the layers read, as a scene's `inputs` declares them; read with `{ from: 'inputs.name' }`. One that fails its check is KN-130, once, and reads as undefined |
+| `props` | `{ name: { type, default } }` | none | the clip's own `data-prop-*` attributes, as a scene's `props` declares them; read with `{ from: 'props.name' }`, so one scene's layers serve several clips |
+| `steps` | `{ id: { wait, until, entry, script } }` | `{}` | a lesson's steps, as `step()` takes them; `steps` with `layers: []` gives a lesson steps where nothing moves |
+| `finish` | finish options | none | the finishing pass (`grain`, `vignette`, `bloom`, ...), as `config({ finish })` |
+| `shutter` | degrees, or `{ angle, samples }` | none | the render's motion blur, as `config({ shutter })` |
+| `layers` | `[layer, ...]` | required | the layers, in drawing order: a later layer draws over an earlier one |
+| `comps` | `{ name: { layers, params, roles, looks, marks } }` | `{}` | groups of layers a `kind: 'comp'` layer places; a `repeat.over` row's fields are its params, except `i` and `n` (its index and the count; KN-162 for a row that names them) |
+| `stage` | `{ src, grain, view, light, rim, glows, dropShadow }` | | the solids stage (below) |
+
+Times count from the start of the clip the scene is on, markers and beats
+too: a marker at 3 s of the composition is 1 s in a clip that starts at
+2 s.
+
+`layers()` checks the layers when it is called. `layers.scene()` checks them
+when a clip of the scene starts, and gives the error again at each seek, so
+`check()` fails. Each error (KN-161 to KN-169) gives the layer and the field
+and lists what is allowed.
+
+## A layer's keys
+
+Every layer has an `id` (unique in its comp) and a `kind`.
+
+| Key | Kinds | Meaning |
+|---|---|---|
+| `kind` | all | `html`, `svg`, `text`, `lottie`, `comp`, `camera`, `path`, `solid`, `null` |
+| `src` | html, svg, text, lottie | the element it draws, a selector searched in the scene's clip first, then the whole composition, so one scene's layers on several clips draw each clip's own element. One that finds several draws each with its own `i` of `n`; `':scope'` is a repeated copy's own element, or at the top the clip itself |
+| `life` | all | `[start, end)`: alive from start until end, else `display: none` |
+| `delay` | html, svg, text | its time starts that much later, worked out per element: `{ stagger: { each: 0.08 } }` |
+| `place` | all but comp, camera, path | `translate` (`[x, y]` px, or `[x, y, z]`), `rotate` (degrees, or `[x, y, z]` about each axis), `scale` (a number, or `[x, y]`), `shift` (`[a, b]`, a share of its own size: CSS lengths such as `'-50%'`, or tracks with a `unit`), `perspective` (px, for its own 3D turn), `position` and `pivot` (solids and the 3D world) |
+| `look` | all but null, comp, camera | `opacity`, `blur` (px), `style` (`{ cssProperty: value }`, a value with `unit: 'px'` written with it), `preset`, and the layer calls below |
+| `content` | solid, html, svg, path, text, lottie | html: `text`. svg: any attribute by name (`d`, `cx`, `fill`, ...; numbers written to a tenth). text, lottie, solid and path: below |
+| `repeat` | html | copies from the element's `<template>`: `{ count }` at the layer's time, each reading `i` of `n`, or `{ every, life }`, one born every `every` and shown while its `age` is under `life` |
+| `animate` | html with `repeat`, text | each copy's or part's tracks: `place: { translate, rotate, scale }`, `look: { opacity, blur, color, class, style }` |
+| `parent` | all but camera | the layer it moves with (below) |
+| `band` | solid, html | its place in the scene's stated draw order (below) |
+| `size`, `group` | html | the 3D world (below) |
+
+**A comp placed** (`kind: 'comp'`): `comp` (its name), `start` (where its
+time 0 falls: a time, a marker, `{ startOf: 'clipId' }`, or a value worked
+out in each copy such as `{ stagger: { each: 0.15 } }`), `params` (values
+its layers read by name), `roles`, and `repeat`: `{ over: [rows] }`,
+`{ over: 'query.path' }`, `{ over: { call, args } }` or `{ count }`. Each
+copy is its own placement, reading `i`, `n` and its row's fields
+(`{ from: 'params.label' }`; a row that is not an object is read as `item`). With
+`src`, each copy is a clone of that container's `<template>`, and its
+layers find their elements inside it. A comp lists its layers in their
+stacking order.
+
+**A lottie layer**: `content: { path, renderer, start, rate, loop }`, its
+animation loaded into the element by the page's lottie-web and played by
+`lottie()`.
+
+## Values
+
+Every field takes a value:
+
+| Form | Meaning |
+|---|---|
+| a number | itself |
+| a string | a name, or a sum of names and numbers joined by ` + ` or ` - ` (spaces round the sign), a number before a name multiplying it: `'OUT + R'`, `'0.6R'`, `'hit1 - beat 1'`. Any other string stays a string (a color, an ease, a class), so a name holding text is read with a link, `{ from: 'params.label' }` |
+| a list | each part a value: `[0, { at: [0, 1], to: [40, 0] }]` |
+| `{ at: [t...], to: [v...], ease, extrapolate }` | a track on time, as `interpolate()` reads it; `'smooth'` threads one curve through three keys or more |
+| `{ keys: [[x, v], ...], by, ease, match }` | straight between keys (or eased), held past both ends; `x` is the time, or the value of `by`. A key `[x, ['hold', v]]` holds until the next. Colors blend; path keys morph with `match`, `matchPaths()`'s options (`{}` for its defaults, or `{ segments, align }`) |
+| `{ from: 'id.path', scale, add, time }` | a link: another layer's field or what it reports, a parameter (`'params.name'`), an input (`'inputs.name'`), a store's or a query's field (`'dial.angle'`, `'sales.rows'`); read `time` later or earlier. What it reads is data, used as it is: a row's `'1.10'` stays that text and a label that is also a layer's name stays the label; a number written as text (a slider's value) is a number wherever a form takes one, and with `scale` or `add`. A path written as a key's value (`'params.w'`) is KN-165: read it with a link |
+| `{ follow: 'store.path', ease }` | a spring easing toward a store's value, drawn on each step, also while a lesson holds |
+| `{ call: 'name', args, scale, add }` | a function handed in `fns`, called with its arguments' values; one that returns `NaN` is KN-165 |
+| `{ multiply: [...] }`, `{ add: [...] }`, `{ min: [...] }`, `{ max: [...] }`, `{ floor: v }` | values combined |
+| `{ rate: n }` | n a second from time 0; `{ rate: 1 }` is the time itself |
+| `{ stagger: {...} }`, `{ sweep: { p, ... } }` | `stagger(i, n, ...)` and `sweep(i, n, p, ...)` for this copy, element or part |
+| `{ level: 'bass' }`, `{ spectrum: { bins } }`, `{ beat: { beats, decay } }` | the music now: a band's level, this copy's bin, a pulse on the beats |
+| `{ wiggle: { frequency, amplitude, seed } }` | `wiggle()`; as a key beside another form, added to it |
+| `{ startOf: 'clipId' }` | where a clip starts (a clip's id alone is where it ends) |
+| `{ focus: { depth, max } }` | the blur for a world layer's distance from the camera's focus plane |
+
+Any form also takes `on` (a posterize rate, or `'twos'`), `loop: [from,
+to]` or `hold: [at, length]`, which change the time it is read at.
+
+Names resolve in this order: the placement's parameters and a copy's row,
+the scene's `constants`, its `shared` values, the composition's markers
+and beats (`timeOf()`'s names), `'end'` (the duration) and `'last'` (the
+last frame a render captures, a frame before the end, where a fade out
+lands). Colors resolve through roles to swatches.
+
+Layers report values for links to read: a text layer its `'id.text'` and
+`'id.length'` (with captions, `'id.index'` and `'id.empty'`), an SVG layer
+its drawn `'id.d'`, a `look.repeat` layer its `'id.count'` and last copy's
+`'id.transform'`. A layer that reads them is listed after the one it reads.
+
+## Text, layer calls and copies
+
+A `kind: 'text'` layer writes its element's text:
+
+| Key | Meaning |
+|---|---|
+| `content.text` | the text: a string is the text itself; read a name or a store's field with `{ from }` |
+| `content.split` | `'letter'` or `'word'`: one part per letter or word, whitespace kept as parts of its own |
+| `content.typewriter` | `{ start, cps }`, as `typewriter()` |
+| `content.scramble` | `{ start, duration, fps, chars, seed }`, as `scramble()` |
+| `content.captions` | `{ srt \| cues, maxWords, maxChars, maxGap, sentences, hold }`, the line current now as `captions()` gives it, one part per word; `look.words: { active, past, future }` styles each word by its state |
+| `animate` | `start`, the stagger's `each`, `total`, `from`, `ease`, `grid`, `seed`, `spaces`, and each part's `place` and `look` tracks in its own time |
+| `content.font` | on a `<canvas>`: the baked outlines' global, drawn by `text()`, with `at`, `size`, `align`, `valign`, `tracking`, `spacing`, `color` as the line's options and `animate.axes` (`wght`, ...) per letter |
+
+Each part is a copy of the element's own `<template>`, or an
+`inline-block` span.
+
+Kinetic's layer calls run on an HTML layer's element, one per element,
+every option a value, made at its first frame with the scene and `set()`
+when an option changes:
+
+| Look | The call | Options |
+|---|---|---|
+| `effect` | `effect(canvas)` | `kind`, `source` (a selector), the kind's parameters |
+| `shade` | `shade(canvas)` | `kind`, `marks` (`[{ glow: { at, radius, invert }, ink, clip }, { band }, { edge }, { fill, clip }]`), `move` (a function's name in `fns`), the rest of `shade()`'s options |
+| `backdrop` | `blur(element)` | `radius`, `marks`, `fps`, `delay`, `freeze` |
+| `draw` | `draw(canvas)` | `inks`, `start`, `end`, `strokes` (`[{ contour: { d }, ink }, { hatch: { clip, angle, spacing } }, { pause: s }]`), the hand's options |
+| `boil` | `boil(d)` on an SVG layer's `content.d` | `amount`, `scale`, `fps`, `delay`, `seed`, `detail` |
+| `transition` | `transition(kind, p)` | `kind`, `p`, `direction`, `side` (`'in'` or `'out'`) |
+
+`options` on a call is a value giving several options at once (a `call`
+that picks a kind's own parameters).
+
+Copies: `look.smear: { samples, angle, fps }` draws the layer's own motion
+as copies beside it; `look.trails` is `{ kind: 'ghosts', of, count, lag,
+fade, scale }`, `{ kind: 'ribbon', u, d, length }` on an SVG path, or
+`{ kind: 'dots', u, d, count, past, future }`; `look.repeat: { count,
+translate, rotate, scale, opacity, offset, origin, each: { scale } }` is
+`repeat()`'s copies of the element's template, each the last one's step
+again.
+
+## Solids, cameras and paths as layers
+
+- The scene's `stage` sets up the solids stage, worked out once: `src` (the
+  SVG element it draws into, in the clip first; default the clip's first
+  `<svg>`), `grain` (the canvas a solid's shading paints on), `view`
+  (`solids()`' camera: `distance`, `focal`, `roll`, `near`, `fade`,
+  `center`), and `light`, `rim` (or `false`), `glows` and `dropShadow` as `solids()` takes
+  them. KN-162 for another key, KN-168 when `src` or `grain` finds nothing.
+- `kind: 'solid'` layers draw on the solids stage (`kinetic.25d.js`):
+  `content.shape` (`'disc'`, `'plane'`, `'sector'`, `'capsule'`,
+  `'box'` with `size`, `'faces'` with
+  `faces: [{ pts, n }]` (as a value form, read every frame; `[]` draws nothing), `'polygon'` (`sides`, `radius`), `'prism'` (`sides`,
+  `radius`, `depth`, `taper`), `'pyramid'` (`sides`, `radius`, `height`),
+  `'sphere'` (`radius`, `wedges` and `around`, or `bands` and `along`)) and
+  its numbers; `place.position`, `rotate`,
+  `scale` and `pivot` in the stage's units; `look.albedo` and `look.glow`
+  (`add()`'s options); `look.casts` (0 to 1, a value) and `look.accepts` (`false`: no shadows on it);
+  `look.color` (a color, a ramp, or `{ gradient: [stops], angle }` / `{ gradient, from, to }`);
+  `look.side` (`set()`'s `side`: by side name, a list for a sphere's parts, each a color or `{ color, shade }`);
+  `look.shade`, a list of `{ look, marks }` groups
+  whose marks are `{ glow | edge, falloff, ink, amount, within }`; `band`
+  (one of the scene's `bands`, bottom to top; with `bands`, solids draw in
+  band order and then as listed, and without them every face is sorted by
+  depth); `look.clip` (drawn only
+  inside another layer's outline; `{ layer, invert: true }` only outside); `hidden`. A `kind: 'null'` layer moves
+  its children and holds `controls`, values other layers read by name.
+- `kind: 'camera'`: `perspective`, `moves` (`moves()`'s list, with names for
+  times and places; `{ behavior: 'ride', path, ... }` follows a path's head)
+  and `focus`. The camera in use is the last one listed whose `life`
+  includes the time. It moves the composition's `.world` element; layers in it take
+  `band: 'world'`, `size` and `place.position: [x, y, z]` (and of `look`,
+  `opacity`, `blur` and `style`), or stand in a `group` parent.
+- `kind: 'path'`: `content.points` (anchors on other layers), `between`
+  (the ribbon for each stretch), `head`, and `look.trim.end`, a track of
+  distances or stop names (`'P.start'`, `'P.end'`); other layers read
+  `'id.head'` and `'id.P'`.
 
 ## A scene
 
@@ -56,7 +269,7 @@ Every scene has these computeds, which a definition must not redefine:
 | `remaining` | Seconds to the clip's end, `Infinity` without one. |
 | `enter`, `exit` | 0 to 1 over the first `edges.enter` seconds, and over the `edges.exit` seconds that end on the last captured frame. A render captures frames 0 to `duration * fps - 1`, so `exit` is 1 on the last frame in the file. |
 | `presence` | `enter * (1 - exit)`: 0 at both ends of the clip, 1 between. 1 without `edges`. For a value the scene's code needs, such as a stagger; a clip's plain fade is `data-clip-enter`/`data-clip-exit`. |
-| `vars` | The composition variables: the root's declared defaults with `window.__hfVariables` over them, which the batch script sets per row, or the values a renderer's runtime resolved. |
+| `vars` | The composition variables: the root's declared defaults with `window.__hfVariables` (or the row, in a `render.batch()` render) over them, or the values a renderer's runtime resolved. |
 | `inputs` | The declared values from `vars`, checked before `init()`. A default in `data-composition-variables` wins over the input's own (KN-134 when they differ). |
 
 Twelve keys fold into one `transform`, written in this order, each only
@@ -691,7 +904,7 @@ wait to that scene, so an image only a scene that has left the page asked
 for is passed over. A fetch or decode that fails is KN-181, a console error on every
 build that holds readiness, marks the page failed and rejects `ready()` and `render()`, with the
 file in the message and, in development, the CORS and file: notes. No
-`ImageDecoder` (Safari at the time of writing): KN-100 from
+`ImageDecoder` (Safari, for one): KN-100 from
 `animatedImage()`; show the file in a plain `<img>` there (patterns.md).
 KN-100 also for a `src` that is empty or not a string, a `draw()` target that
 is not a canvas or has a WebGL context, a t that is not finite, options not
@@ -855,7 +1068,7 @@ less. KN-120: a malformed track, a track of text or colors, a track with a
 ## Solids in 2.5D: kinetic.25d.js
 
 A second file, loaded after kinetic.wf.js (beside it on the CDN, as
-`…/@wildflowerjs/kinetic@0.2/dist/kinetic.25d.js`), adds `solids()`: solids in 3D only
+`…/@wildflowerjs/kinetic@0.3/dist/kinetic.25d.js`), adds `solids()`: solids in 3D only
 as numbers, drawn as SVG paths (patterns.md, "Solids in 2.5D").
 
 ```javascript
@@ -869,31 +1082,70 @@ const stage = solids(svgGroup, {                         // an SVG element to dr
     // tone = floor + gain * (n . dir)^gamma, times the shape's albedo, plus bounce * (how far it faces down),
     // read through the ramp (#rrggbb, dark to lit); a gradient across the face from tone + across[0] to tone - across[1]
   rim: { color: '#ffffff', width: 1.5, base: 0.12, edge: 0.5, power: 2 },   // or false; opacity base + edge * (1 - |n . eye|)^power
-  glows: [{ dir, color, size: 0.85, strength: 1, sharp: 1.5, bleed: { size: 1.7, strength: 0.2, cap: 0 } }],
+  glows: [{ dir, color, size: 0.85, strength: 1, sharp: 1.5, spread: 0, bleed: { size: 1.7, strength: 0.2, cap: 0 } }],
+    // spread: degrees; at the face's middle when it mirrors the light, at its edge `spread` degrees from that (below 0 the other way)
     // soft color where the light would reflect into the eye, clipped to the face; `gradient` / `bleed.gradient`
     // name a radialGradient of the page's own; the bleed spills past the edge, fainter past `cap` px wide
+  dropShadow: { blur: 24, color: '#000000', opacity: 0.35, offset: [0, 0] },   // optional: each outline, blurred, on the shapes behind
+    // a flat effect: the light and the distance to what it falls on change nothing, and many shapes play slowly
+    // with it on (a render is the same either way); shadows a light casts are three.js through Trillium
+  shade: { canvas, scene: this, kind: 'stipple', fps: 0 },  // optional: the canvas over the stage, and shade()'s options, for grain
 });
-stage.add('cage', solids.cage({ size: 2, beam: 0.26 }), { albedo: 0.42, glow: 0.85 });
-stage.add('core', solids.box({ size: 0.8 }));            // size: the edge, or [x, y, z]
-stage.add('tri', solids.faces([{ pts: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] }]));   // n from the first three corners when left out
-stage.set('cage', { rotate: [90 * p, 0, 0], scale: 1, position: [0, 0, 0], opacity: 1 });   // degrees about x, then y, then z
-stage.draw();                                            // in seek(): culled, clipped, sorted far to near, shaded
+stage.add('core', solids.box({ size: 0.8 }), { albedo: 0.42, glow: 0.85 });   // size: the edge, or [x, y, z]; sides front, back, left, right, top, bottom
+stage.add('tri', solids.faces([{ pts: [[0, 0, 0], [1, 0, 0], [0, 1, 0]], side: 'lid' }]));   // n from the first three corners when left out
+// Flat shapes: one face in z = 0, facing +z, sides front and back (the back drawn only when side.back has a color).
+stage.add('card', solids.plane({ size: [2, 1] }));       // size: the edge, or [x, y]
+stage.add('dot', solids.disc({ radius: 0.5 }));
+stage.add('arc', solids.sector({ radius: 1, from: 0, to: 90, inner: 0.6 }));   // degrees clockwise from straight up; inner: a ring's part
+stage.add('pill', solids.capsule({ radius: 0.25, length: 1 }));   // radius, or [left, right]; length between the ends' middles
+stage.add('hex', solids.polygon({ sides: 6, radius: 0.5 }));   // flat, regular, first corner straight up
+stage.add('slab', solids.prism({ sides: 3, radius: 0.5, depth: 0.2, taper: 1 }));   // carried back along z, depth about the center;
+                                                         // back taper times the front (0: a point); sides front, back, side
+stage.add('peak', solids.pyramid({ sides: 4, radius: 0.5, height: 0.8 }));   // on its base, a corner toward the front; sides base, side
+stage.add('ball', solids.sphere({ radius: 0.5, wedges: 4, around: 'y' }), { side: [{ color: '#ff0000' }, {}, { color: '#0000ff' }] });
+  // drawn from its outline; wedges around an axis (side 0 centered on the front, on the top around z), or
+  // bands: n, or heights between 1 and -1, along: 'y' (side 0 at the far end); its side is a list, in order
+stage.add('rig', solids.null());                         // a transform with nothing to draw
+stage.add('lid', solids.plane({ size: 1 }), {
+  parent: 'rig',                                         // inside rig's transform (only the transform passes down)
+  pivot: [-0.5, 0, 0],                                   // the point position places, and it turns and scales about
+  color: '#E2E0FF',                                      // a paint as it is; ['#04040F', '#E2E0FF'] a ramp read through the light;
+                                                         // { gradient: ['#ff0000', '#0000ff80'], angle } or { gradient, from, to } in its own space;
+                                                         // set({ color: null }) takes it off, and a side's color: null gives the side the shape's
+  side: { back: { color: '#7F6CF5' } },                  // { color, shade } per side, by name
+  shade: { glow: { at: { point: 'center' }, radius: 0.4 }, ink: '#04040F' },   // marks as shade() takes them as data, in its own units;
+                                                         // or { marks, travel: false, ...a look }, or a list of those
+  order: 1,                                              // over every shape of a lower order, whatever the depth
+  rim: 1, casts: 1, accepts: true,                       // its share of the rim; its drop shadow; false keeps shadows off it
+  clip: 'dot',                                           // drawn only inside dot's outline; { shape: 'dot', invert: true } outside
+  hidden: false,                                         // true: worked out, not drawn, a clip for others
+});
+stage.set('core', { rotate: [90 * p, 0, 0], scale: 1, position: [0, 0, 0], opacity: 1 });   // degrees about x, then y, then z
+stage.set('pill', { shape: { length: 2 } });             // some of its numbers, or a whole shape; also parent, pivot, color, shade, side, casts, order
+stage.draw();                                            // in seek(): culled, clipped, sorted by order, then far to near, shaded
 stage.project([x, y, z]);                                // a point's place in the frame, to put 2D things on a solid
-stage.remove('tri'); stage.dispose();
+stage.remove('tri'); stage.dispose();                    // after dispose() the stage has no shapes: draw() draws nothing, set() of one it had is KN-100
 ```
 
 `draw()` sorts faces by their distance from the eye and a tie by place on
-screen, never by which shape or face; every path runs clockwise on screen
+screen, never by which shape or face; of two that overlap on screen, one
+wholly in front of the other's plane is then drawn after it, so a shape in
+front of a wall or on a floor is over it wherever it stands; every path runs clockwise on screen
 from its leftmost corner; and every face's elements are made when its shape is
 added. So the same values draw the same SVG whatever was drawn before, and a
-shape turned onto itself (a cube or cage a quarter turn on) draws the frame it
-started from. KN-100 for a target that is no SVG element, a size or beam out
-of range, a ramp that is not #rrggbb colors, a camera, light, rim or glow
+shape turned onto itself (a cube a quarter turn on) draws the frame it
+started from. KN-100 for a target that is no SVG element, a size out of
+range, a ramp that is not #rrggbb colors, a camera, light, rim or glow
 number that is not one (the message names it, `solids({ light: { gamma } })`),
 a `center` or `across` that is not two numbers, an `albedo` or `glow` in
 `add()` that is not a number, an unknown name or key in `set()`, and a
-rotate, scale, position or opacity of the wrong kind. A shape scaled to 0 on
-an axis draws nothing.
+rotate, scale, position or opacity of the wrong kind; also for each new
+shape's numbers (a sphere with both wedges and bands, an axis not 'x', 'y'
+or 'z'), a glow's spread, a parent that is not a name or leads back to the shape, a
+pivot, color, side, shade, order, casts or clip of the wrong kind, a side the
+shape does not have, `set({ shape })` with numbers on a shape made from a
+list, and a shape with a shade on a stage with no `shade.canvas` (at
+`draw()`). A shape scaled to 0 on an axis draws nothing.
 
 ## Motion blur
 
@@ -1168,11 +1420,11 @@ no number, `tempo()` with no clip or two and
 no id, a missing or wrong `data-tempo` or `data-downbeat`, and a wrong
 `data-meter` (a missing one is 4).
 
-To find the values, run `node node_modules/@wildflowerjs/kinetic/scripts/beatgrid.cjs track.mp3`
-(Node, and ffmpeg for anything but a WAV; `--json` for JSON). Without the
-package installed, download it first, from
-https://kinetic.wildflowerjs.com/scripts/beatgrid.cjs, and run it from
-where it is. It prints the
+To find the values, the Beat grid page
+(https://kinetic.wildflowerjs.com/docs/beat-grid/) reads a music file in the
+browser (MP3, AAC or M4A, WAV, Ogg, FLAC: whatever the browser decodes); the
+file never leaves the browser, so ask the user to drop the track on it and
+paste what it gives. It shows the
 tempo, the meter, the first downbeat and the bar lines where a section
 changes, with the attributes to paste, and a double-time or half-time
 reading beside the first when the music can be counted either way. Check
@@ -1319,8 +1571,9 @@ Kinetic) or with both, a
 `data-playback-rate` outside 0.1 to 10 (clamped), and a media start at or
 past the file's end with no length written (the clip is never shown); and about a `data-start`
 that refers to no element (KN-113). Footage with keyframes far apart renders
-correctly but more slowly; `ffmpeg -i in.mp4 -c:v libx264 -g 30 -crf 18 -c:a copy out.mp4`
-re-encodes it with a keyframe every second.
+correctly but more slowly; re-encoding it with a keyframe every second
+fixes that, in any video tool, for example
+`ffmpeg -i in.mp4 -c:v libx264 -g 30 -crf 18 -c:a copy out.mp4`.
 
 ## Interactive mode
 
@@ -1423,8 +1676,8 @@ development builds name such a scene once when it is part of a `render()`, or
 the page is in video mode (KN-151); `check()` makes no video and an
 interactive page using `tick()` hears nothing.
 
-A lesson is read in video mode by `scripts/check.cjs` and by a render, so
-a scene's `tick()` on a lesson prints KN-151 there, and the script fails.
+A lesson is in video mode during a render and during `check()`'s reading
+and layout passes, so a scene's `tick()` on a lesson prints KN-151 there.
 Put a lesson's frame-loop work on a store instead. A store's `tick()` runs
 in both modes, so it checks the mode and the hold itself:
 
@@ -1474,6 +1727,24 @@ const report = await wildflower.kinetic.check({ samples: 30, seed: 1 });   // sa
 // { ok: false, reason: 'readiness failed', code, where, frames, samples, ready, errors, firstError? }
 // { ok: false, reason: 'a seek threw', frames, samples, ready, errors, firstError }
 // { ok: false, frame, time, element, property, first, second, ready, errors }
+// Any other option loads kinetic.tools.js from beside kinetic.wf.js (KN-103 when it cannot) and runs that pass after the self-test:
+const r = await wildflower.kinetic.check({
+    reading: true,          // r.reading.short: [{ text, words, held, from, needs }], text that leaves before it can be read
+    layout: true,           // r.layout.found: [{ kind: 'safe' | 'cut' | 'over' | 'contrast', text, from, ... }]
+    frames: 6,              // or [0, 2.5, 5] seconds; r.images: [{ t, frame, png: Blob }], each frame as a render draws it
+    strip: true,            // r.strip: the frames tiled into one PNG Blob (needs frames)
+    lesson: true,           // r.lesson: { ok, steps: [{ index, id, held, playsOn, waits, png, lines, ok }] }
+    pace: 'lively',         // or 'calm', 'bold'; r.pace: the measures, their target ranges, misses
+    seam: true,             // r.seam: { wrap, before, after, jump }, the last frame to frame 0
+    jumps: true,            // r.jumps: [{ a, b, mean, box, usual }], pops and cuts
+    diff: [16, 17],         // r.diff: { a, b, mean, box }
+    isolate: ['#bleed'],    // r.isolate: each selector hidden over the diff pair or the worst jump, with the share of the change it takes away
+    view: 'render',         // or 'live', or 'both' (r.live holds the live view's report)
+});
+// r.console: [{ kind: 'kn' | 'note' | 'error' | 'page error', text, count }], printed during the run
+// r.skipped: the pixel passes that could not run (KN-201 without HTML-in-Canvas); the others still run
+// A failed lesson walk makes r.ok false; reading, layout, pace and jumps never do.
+open(URL.createObjectURL(r.images[0].png));   // look at a frame in a new tab
 const { blob, name, frames, width, height, fps, codec, audioCodec, ms } = await wildflower.kinetic.render({
     fps: 30, from: 0, to: 6, codec: 'avc1.640028', bitrate: 16e6, source: root, width: 1280, height: 720,
     audio: true, audioCodec: 'mp4a.40.2', audioBitrate: 192000,   // audioCodec in the result: null with no sound
@@ -1481,9 +1752,11 @@ const { blob, name, frames, width, height, fps, codec, audioCodec, ms } = await 
     name: 'main', download: true, onProgress: (frame, frames) => {},
     signal: controller.signal   // an AbortSignal, as fetch() takes: abort() stops the render, puts the page back, rejects with signal.reason
 });                             // already aborted: rejects at once; not an AbortSignal: KN-100; the preview bar's Render is Cancel while one runs
+await wildflower.kinetic.render({ alpha: true });   // a transparent .mov (PNG frames) for video editors; config({ alpha: true }) for the bar's Render
+   // The finish is off, the root's background is cleared, there is no sound, and the file is large; <html> carries data-kinetic-alpha while it renders
 wildflower.kinetic.seek(1.5);  wildflower.kinetic.play();  wildflower.kinetic.pause();
 wildflower.kinetic.play({ from: 0, to: 9 });   // plays 0 to 9 s and holds the last frame, 9 - 1/fps
-wildflower.kinetic.config({ fps: 30, channel: 'event', autoplay: true, preview: false, frameNotice: true, loop: true /* or false, or { hold: 3 } */, fit: false, sound: true, shutter: false, mode: 'auto' });
+wildflower.kinetic.config({ fps: 30, channel: 'event', autoplay: true, preview: false, frameNotice: true, loop: true /* or false, or { hold: 3 } */, fit: false, sound: true, shutter: false, alpha: false, mode: 'auto' });
    // frameNotice: in a page inside a frame, the bar's Render first says the site around it may block the download (Render anyway, Close; once a page load)
 wildflower.kinetic.config({ encode: { bitrate: 20e6 } });   // the default for every render(), the Render button's too: codec, bitrate (16e6 unless set),
    // audioCodec, audioBitrate, any of them; a field render() is given wins; false or null: off; a wrong field or value is KN-100 naming it.
@@ -1502,8 +1775,8 @@ Two views of one piece: the video a render makes, and the page as it plays.
 An element marked `data-viewmode="render"` adds depth and detail to the
 video and costs the playing page nothing, so a layer too heavy to draw live
 (a large grid, a dense texture) can still be in the video. The page must
-make sense without it. The skill's `check.cjs` checks the render view; `--view live`
-checks the playing page, and `--view both` checks each.
+make sense without it. `check()` checks the render view; `check({ view: 'live' })`
+checks the playing page, and `view: 'both'` checks each.
 
 Readiness keeps nothing from one run to the next. The registered entry is
 one run, `ready()` another, and `check()` and `render()` each begin with
@@ -1576,6 +1849,11 @@ warnings and errors printed since the page loaded sits beside the time, amber
 above 0, and reads "production build, no diagnostics" on the production build.
 A Check button calls `check({ samples: 30 })` and shows "check ok, 180 frames"
 or the first differing frame, and does not run while a render does.
+On a composition with variables (declared on the root, or a scene's
+`inputs`), a Render batch button asks for a `.json` or `.csv` file of rows,
+then a folder (reading Choose folder for a second click when the file
+chooser used up the first), and runs `render.batch()` into it; while the
+batch runs the button reads Cancel.
 On a piece with a finish or a shutter, an As Rendered button pauses and lays
 the frame over the stage as the render draws it: the same seeks, shutter
 samples and finish, so the bloom, the diffusion, the aberration and the motion
@@ -1638,10 +1916,20 @@ composition root after load calls `ready()` once it is in the page.
 Every canvas in the composition is drawn through a 2D copy laid over it
 after each seek, wherever it sits and whatever its drawing size; a
 `visibility` that a CSS animation moves on a canvas is not copied, only its
-inline one. `scripts/batch.cjs` in the package renders the page once per
-row of a JSON or CSV file, through `render()` in Chrome, with each row as
-the composition's variables (`window.__hfVariables`), or the page renders
-through HyperFrames (https://kinetic.wildflowerjs.com/docs/hyperframes/).
+inline one. `render.batch(rows, options)` renders the page once per row,
+each in a hidden copy of the page through its `render()`, with the row as
+the composition's variables: rows are an array, `{ rows }`, or a JSON or
+CSV File (a header row of ids, values converted to each input's type);
+`name` is the row field that names each file (`<composition id>-<row
+number>.mp4` without it), `save` is `'folder'` (the default from a click),
+`'download'` or `false` (Blobs in the result), `timeout` is each row's
+seconds to get ready (60), `signal` is an `AbortSignal` that stops the
+batch (it rejects with the signal's reason, the rows done on it as
+`results`), `onRow(info)` reports progress, and render()'s options pass
+through. A failing row stops the batch with its code (KN-104 for a
+timeout, a page that goes away or stops answering, or a file that cannot
+be written). Rows do not reach the
+HyperFrames runtime, so leave its tag off.
 
 With the HyperFrames runtime on the page, `render()` seeks through the
 runtime's player, so the render's fps has to divide the root's `data-fps`,

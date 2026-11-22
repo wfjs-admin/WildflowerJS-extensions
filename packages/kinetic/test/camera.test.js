@@ -19,8 +19,8 @@ afterEach(async () => {
 
 const REST = 'perspective(1000px) scale(1) translateZ(1000px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) translateZ(-1000px) translate3d(0px, 0px, 0px)';
 
-// The spec's formula, written out from the public noise(): what shake()
-// gives for a number seed.
+// The formula shake() uses, written out from the public noise(): what
+// shake() gives for a number seed.
 function fbmRef(noise, u, seed, octaves) {
   let sum = 0, norm = 0;
   for (let i = 0; i < octaves; i++) { sum += Math.pow(0.5, i) * noise(u * Math.pow(2.03, i) + 17.37 * i, seed + i); norm += Math.pow(0.5, i); }
@@ -220,7 +220,7 @@ describe(`camera, depth and shake (${BUILD} extension, ${CORE_TIER} core)`, () =
     }
   });
 
-  it('shake(): the spec formula for a number seed, deterministic, different per seed and per axis', async () => {
+  it('shake(): its noise formula for a number seed, deterministic, different per seed and per axis', async () => {
     const { wf } = await load();
     const { shake, noise } = wf.kinetic;
     for (const name of ['handheld', 'rumble', 'impact']) {
@@ -256,7 +256,7 @@ describe(`camera, depth and shake (${BUILD} extension, ${CORE_TIER} core)`, () =
       let whole = 0, all = 0;
       for (let n = 1; n <= 20; n++) whole += size(n) / 20;
       for (let k = 1; k <= 2000; k++) all += size(k / 100 + 0.003) / 2000;
-      // With offsets of 50 and 90 this ratio was 0.44 to 0.63.
+      // With whole-number offsets such as 50 and 90 this ratio is 0.44 to 0.63.
       expect(whole / all, 'seed ' + seed).toBeGreaterThan(0.8);
     }
   });

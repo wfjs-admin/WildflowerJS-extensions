@@ -16,7 +16,6 @@ kind alone, and `style.md` the default look.
 - Time
 - Motion and structure
 - Judging a frame
-- Still to come
 
 ## The bar
 
@@ -190,7 +189,7 @@ its one thing instead of labeling it, chosen in the plan before any layout.
 - **The floor.** Each block of text is fully on screen, still and readable,
   for at least 1.5 s, and at least 0.5 s plus 0.375 s a word, counted from
   the moment its last word is legible, with 1 s more for a figure (BBC
-  Subtitle Guidelines; Karamitroglou 1998). The check script's reading pass
+  Subtitle Guidelines; Karamitroglou 1998). `check({ reading: true })`
   lists every block that falls short.
 - **The target.** A calm piece holds about twice the floor, and a headline
   card at least 3 s, as finished studio work does (studio films, measured).
@@ -240,7 +239,7 @@ its one thing instead of labeling it, chosen in the plan before any layout.
 
 ## Judging a frame
 
-Look at each still from `--frames` and answer these. A frame that fails one
+Look at each still from `check({ frames })` and answer these. A frame that fails one
 is redesigned before motion is added.
 
 1. What is this frame's one thing? Would a viewer who sees only this frame

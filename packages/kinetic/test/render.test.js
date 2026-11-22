@@ -332,10 +332,10 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(offBy, 'red per frame: ' + reds.join(',')).toEqual(new Array(10).fill(0));
   });
 
-  // Chrome's drawElementImage drew a canvas that was already on screen when
-  // the render wrapped the page from its last composited image, so a WebGL
-  // view redrawn on every seek came out frozen at the moment Render was
-  // pressed (Empty Docks, 2026-10-08). The canvas here is on screen first,
+  // Chrome's drawElementImage draws a canvas that is already on screen when
+  // the render wraps the page from its last composited image, so a WebGL
+  // view redrawn on every seek would come out frozen at the moment Render is
+  // pressed. The canvas here is on screen first,
   // is cleared on each seek to a red that encodes the frame, and has a white
   // square over it that must stay on top.
   it('a WebGL canvas already on screen when the render starts is captured fresh on every frame, under what covers it', async () => {
@@ -374,8 +374,8 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
   });
 
   // Chrome clips a canvas inside the render's canvas to its drawing size at
-  // the origin its layout offsets would give it (probed 2026-10-10), so a
-  // canvas away from the top left, or drawn smaller than its box, came out
+  // the origin its layout offsets would give it, so a
+  // canvas away from the top left, or drawn smaller than its box, would come out
   // cut off or missing. Each one here is whole in the file, where it is on the page.
   it('a canvas anywhere in the composition, in normal flow or positioned, inside an offset box, or drawn smaller than its box, is in the file whole', async () => {
     const { wf } = await load();
@@ -799,6 +799,42 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
     expect(root.parentElement).toBe(host.firstElementChild);
   });
 
+  // A transform on the root places the stage on the author's page. The frame is the composition at its own size.
+  it("a root with a transform of its own, inline or from a style sheet, renders at the composition's size, filled to the corners, and has it back after", async () => {
+    const { wf } = await load();
+    const sheet = document.createElement('style');
+    sheet.textContent = '.rv-moved{translate:40px 30px;scale:0.5;rotate:3deg}';
+    document.head.appendChild(sheet);
+    cleanup.push(sheet);
+    for (const [id, cls, own] of [['rv10a', '', 'transform:scale(0.5);transform-origin:0 0;'], ['rv10b', 'rv-moved', '']]) {
+      const name = uniqueName('scene');
+      wf.kinetic.scene(name, {});
+      const host = await mount(`<div data-composition-id="${id}" class="${cls}" data-start="0" data-duration="0.5" data-width="320" data-height="180" data-fps="10" style="${own}width:320px;height:180px;position:relative;overflow:hidden;background:#000">
+        <div data-component="${name}" style="position:absolute;inset:0"><div style="position:absolute;left:0;top:0;width:160px;height:180px;background:#20c040"></div><div style="position:absolute;left:160px;top:0;width:160px;height:180px;background:#2040c0"></div></div>
+      </div>`);
+      cleanup.push(host);
+      const root = host.querySelector('[data-composition-id]');
+      const turned = () => [root.style.transform, getComputedStyle(root).transform, getComputedStyle(root).translate, getComputedStyle(root).scale, getComputedStyle(root).rotate, getComputedStyle(root).transformOrigin];
+      const styled = turned(), placed = JSON.stringify(root.getBoundingClientRect());
+      let during = null;
+      const r = await wf.kinetic.render({ download: false, bitrate: 1e6, onProgress: (i) => {
+        // The canvas stands where the root stood, and the root draws in it at its own size.
+        if (i === 1) during = { canvas: JSON.stringify(root.parentElement.getBoundingClientRect()), root: getComputedStyle(root).transform + ' ' + getComputedStyle(root).translate + ' ' + getComputedStyle(root).scale + ' ' + getComputedStyle(root).rotate };
+      } });
+      expect(during, id).toEqual({ canvas: placed, root: 'none none none none' });
+      expect([r.width, r.height]).toEqual([320, 180]);
+      const right = await probeVideo(r.blob, 0.15, 300, 170);
+      expect(near(right.px, [0x20, 0x40, 0xc0]), id + ' bottom right ' + right.px.join(',')).toBe(true);
+      const left = await probeVideo(r.blob, 0.15, 20, 10);
+      expect(near(left.px, [0x20, 0xc0, 0x40]), id + ' top left ' + left.px.join(',')).toBe(true);
+      // The page is as it was: the root's transform its own again, the root where it stood, no canvas left.
+      expect(turned()).toEqual(styled);
+      expect(JSON.stringify(root.getBoundingClientRect())).toBe(placed);
+      expect(document.querySelector('[data-kinetic-render]')).toBeNull();
+      host.remove();
+    }
+  });
+
   it('a canvas source is captured as it is, with no wrapper', async () => {
     const { wf } = await load();
     const name = uniqueName('scene');
@@ -1124,8 +1160,8 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
   // A ::before or ::after image and content: url() are CSS images; a poster,
   // an <input type=image> and an <img> in an open shadow root are drawn
   // black from another origin, and a frame or an object from another origin
-  // is drawn empty (probed 2026-10-14 in Chrome: the stage's white where the
-  // same-origin twin showed the PNG).
+  // is drawn empty (in Chrome, the stage's white where the same-origin twin
+  // shows the PNG).
   it('KN-204 covers a ::before or ::after image, content: url(), a poster, an input type=image, an open shadow root, a frame and an object; each same-origin twin renders', async () => {
     const { wf } = await load();
     const name = uniqueName('scene');
@@ -1195,8 +1231,8 @@ describe(`render() (${BUILD} extension, ${CORE_TIER} core)`, () => {
 
   // A frame sandboxed without allow-same-origin has an opaque origin, so
   // drawElementImage draws an image from the page's own host black there
-  // (probed 2026-10-08 in Chrome 155: no pixel lit, against 1,724 in an
-  // unsandboxed frame), and KN-204 is right to stop the render.
+  // (in Chrome 155 no pixel is lit, against 1,724 in an unsandboxed frame),
+  // and KN-204 is right to stop the render.
   it('in a frame sandboxed without allow-same-origin, media from the page\'s own host is KN-204, since it would be drawn black', async () => {
     const img = location.origin + '/packages/devtools/extension/icons/icon48.png';
     const frame = document.createElement('iframe');
@@ -1734,9 +1770,9 @@ describe(`render({ shutter }) (${BUILD} extension, ${CORE_TIER} core)`, () => {
 
   // The encoder takes a canvas's colour weighted by its alpha, so a
   // transparent pixel is black in the file. An average of the samples'
-  // colours that left their alpha out darkened a pixel the square covered in
-  // m of 8 samples to (m / 8)^2 of white on a transparent root (measured:
-  // 195, 143, 99, 64 where the black stage gives 223, 191, 159, 128).
+  // colours that left their alpha out would darken a pixel the square covers
+  // in m of 8 samples to (m / 8)^2 of white on a transparent root (195, 143,
+  // 99, 64 where the black stage gives 223, 191, 159, 128).
   it('on a transparent root the streak is the one over black: the ramp is as light as on a black stage', async () => {
     const { wf } = await load();
     const name = uniqueName('scene');

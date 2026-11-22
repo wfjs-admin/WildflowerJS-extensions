@@ -1,5 +1,5 @@
 /**
- * Draft tests for the skill's check.cjs: the layout and pace passes on pages
+ * Tests for check.cjs: the layout and pace passes on pages
  * where what the window shows, what a mask clips and what an overlay covers
  * differ from what the elements' boxes say. Kept beside
  * coverage-skill-check.test.cjs, in its style; run with
@@ -18,7 +18,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
-const SCRIPT = path.join(ROOT, 'packages', 'kinetic', 'skills', 'wildflower-kinetic', 'scripts', 'check.cjs');
+const SCRIPT = path.join(ROOT, 'packages', 'kinetic', 'scripts', 'check.cjs');
 const CORE = [path.join(ROOT, 'www', 'js', 'dist', 'wildflower.lite.dev.js'), path.join(ROOT, 'node_modules', 'wildflowerjs', 'dist', 'wildflower.lite.dev.js')]
   .find((f) => fs.existsSync(f)) || path.join(ROOT, 'www', 'js', 'dist', 'wildflower.lite.dev.js');
 const KINETIC = path.join(ROOT, 'packages', 'kinetic', 'dist', 'kinetic.wf.js');

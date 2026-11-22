@@ -37,29 +37,57 @@ the error-codes page. To finish the page, swap the two script lines for the
   and no bar sets `config({ fit: true })`. Do not scale the stage with a
   component of your own, since a scene inside a component reads that
   component on its root tag (WF-521).
-- For many videos from one page, run the batch script, `scripts/batch.cjs`
-  in the package: `node batch.cjs index.html rows.json --out renders`
-  renders the page once per row of a JSON or CSV file in Chrome, each row
-  as the composition's variables, named `<composition id>-<row>.mp4` or by
-  `--name field`, and stops at a row whose input fails (KN-130). The page
-  needs no runtime tag. Rendering through HyperFrames instead (its
-  runtime's tag after Kinetic's and before the scenes, then
-  `npx hyperframes render --batch rows.json`) is at
-  https://kinetic.wildflowerjs.com/docs/hyperframes/: the runtime then owns
+- For many videos from one page, the preview bar's Render batch button, or
+  `render.batch(rows, { name })`, renders the page once per row of a JSON
+  or CSV file in Chrome, each row as the composition's variables, named
+  `<composition id>-<row>.mp4` or by the `name` field, and stops at a row
+  whose input fails (KN-130). The page carries no runtime tag, since rows
+  do not reach it. With the HyperFrames runtime's tag on the page (after
+  Kinetic's and before the scenes;
+  https://kinetic.wildflowerjs.com/docs/hyperframes/), the runtime owns
   the clock and the media, its player seeks on the root's `data-fps` only
   when Kinetic's tag comes first and the root is in the page as the runtime
   starts (30 otherwise; `config({ fps })` comes too late), and a `render()`
-  whose fps does not divide that rate throws KN-206. In either render's
-  capture Kinetic hides everything beside the composition and puts it at
+  whose fps does not divide that rate throws KN-206. In a render's
+  capture, with the runtime or without it, Kinetic hides everything beside the composition and puts it at
   the window's top left, so a page with a toolbar or text around the stage
   needs no CSS for it.
 - Queries and `waitFor` exist on the full tier only (KN-101 elsewhere).
   Rows from `data-list` need a tier with lists, so not nano or mini-pool.
   Pools need a tier with pools, so not nano or mini.
 
-## Scenes
+## Layers
 
-- A scene's element is a clip: it carries `data-start` and `data-duration`
+- `layers.scene(name, { layers: [...] })` draws its layers on the clip whose
+  `data-component` is that name, and their times count from the clip's start.
+  The HTML and CSS lay each element out at rest; the layers move it from
+  there. Give each element a layer moves a class or an id: a layer's `src` is
+  searched in the scene's clip first, then the whole composition, so an
+  `h1` that is not in the clip finds every heading on the page (select it
+  with `#title h1`).
+- `layers.scene()` checks the layers when a clip of the scene starts, not at
+  the call: a key the layer's kind does not take, a misspelled field, an
+  unknown kind or a comp placed inside itself is an error in the console
+  then (KN-161, KN-162, KN-167) and again at every seek, so `check()` fails.
+  `layers()` throws the same errors at the call. The error gives the layer
+  and the field and lists what is allowed. A name nothing defines, a
+  link to nothing and a value of no known form throw at the first frame that
+  reads them (KN-163 to KN-165).
+- A value on a length property in `look.style` (`width`, `left`,
+  `fontSize`) carries its unit: `{ at: [0, 1], to: [0, 480], unit: 'px' }`.
+  The browser drops a number with no unit there, and a development build
+  warns once (KN-122) for a number or a track of numbers.
+  `place.translate` is in px and `place.rotate` in degrees already.
+- What the fields cannot say (a model's numbers, a shape's geometry, a
+  label's formatting) goes in a small function in `fns`, called with `{ call,
+  args }`. Keep each pure: the same arguments give the same result, and the
+  function reads no clock of its own; pass the time in as `{ rate: 1 }`.
+- Name a time or a value several layers use once, in `constants` or
+  `shared`, and read it by name; a beat or a marker reads by name too.
+- A row of things is one comp repeated (`repeat: { over }` or
+  `{ count }`), each copy reading `i`, `n` and its row's fields. Write the
+  comp once.
+- The scene's element is a clip: it carries `data-start` and `data-duration`
   (or `data-end`). `data-start` is seconds, or another clip's `id`, which
   means after that clip ends (chaining scenes), or `"intro + 0.5"`;
   `"intro.end"` is the same as `"intro"`. `"voice.start"` starts with the
@@ -77,51 +105,12 @@ the error-codes page. To finish the page, swap the two script lines for the
   any other edge as a frame time, `n / fps` to 8 decimals: frame 331 at 30
   fps is `11.03333333`. To put an edge on a beat, round the beat's time to
   its frame (`Math.round(t * fps) / fps`).
-- `local` holds at the clip's edges: 0 before the clip starts and the clip's
-  duration after it ends, where the scene is hidden. So a hidden scene's
-  computeds stop running and its `seek(local)` is not called again until
-  its clip comes round, and a page of many scenes pays only for those on
-  screen.
-- No function calls in bindings. Motion goes in computeds (`styleAt(this.local,
-  tracks)`), and the binding reads the result by name.
-- Bind style objects by path: `data-bind-style="style"`, where `style` is a
-  computed or a `keyframes` entry that returns the object.
-- Tracks go in a `keyframes` block. A `keyframes` entry becomes a computed
-  of `local`. When a
-  `keyframes` entry and a `computed` entry share a name, the scene reads the
-  `keyframes` entry (KN-153). An entry of several tracks is a style object
-  that folds its transform keys into `transform`, so `this.rise.translateY`
-  is undefined (KN-159); for the number, give `translateY` its own entry or
-  call `styleAt()`.
-  A scene does not define
-  `time`, `local`, `clipFrame`, `frame`, `progress`,
-  `remaining`, `enter`, `exit`, `presence`, `vars` or `inputs` (KN-152).
-  A scene's `tick(dt)` runs only in interactive mode, on the page's frame
-  loop: never in video mode, `check()` or `render()`. Use it for what the
-  interactive page does on its own, such as physics while a step holds, and
-  keep what the video shows a function of `local`. A scene with `tick()` in
-  a render or video mode is KN-151, since what it changes is missing from
-  the video; `check()` makes no video, so it says nothing. On a lesson,
-  which `check.cjs` and a render read in video mode, put that work on a
-  store's `tick()` instead, which runs in both modes, and start it with
-  `if (k.mode !== 'interactive' || !k.waiting) return;`, where `k` is
-  `wildflower.getStore('kinetic')` (api.md, "Interactive mode").
+- A clip holds its time at its edges: 0 before it starts and its duration
+  after it ends, where it is hidden. So a hidden clip's layers are not drawn
+  again until the clip is on screen again, and a page of many clips spends
+  time drawing only those on screen.
 - Fade a clip in and out with its attributes, `data-clip-enter="fade 0.5"`
-  and `data-clip-exit="fade 0.5"`, which need no scene code. Use `edges`
-  and `presence` (`enter * (1 - exit)`) only when the scene's own code needs
-  to know how far in or out it is, such as to stagger its children by it.
-  `exit` and `progress` reach 1 on the clip's last captured frame,
-  `duration - 1/fps` after its start, so a fade from `presence` is complete
-  in the file.
-- Take a progress over a window of time with `ramp(t, from, to, ease)` and a
-  value between two numbers or colors with `mix(a, b, p)`, rather than a
-  scene's own `clamp`, `lerp` or `ramp`. `ramp` throws (KN-100) unless `to`
-  is after `from`.
-- A track on a length property (`width`, `height`, `top`, `left`,
-  `fontSize`, `borderRadius`, margins, paddings, `gap`) carries a `unit`,
-  usually `'px'`. The browser drops a number with no unit there, so the
-  inline property stays unset and nothing prints an error (KN-122). The translates and
-  `blur` default to `px` and `rotate` to `deg`.
+  and `data-clip-exit="fade 0.5"`, which need no layer field.
 - A spring ends on the last two keyframes of its track, where it runs on
   past the last one, or on a segment long enough for it to come to rest. A
   keyframe that arrives while the spring is still moving cuts it off and the
@@ -131,10 +120,10 @@ the error-codes page. To finish the page, swap the two script lines for the
   `{ spring: { duration: 0.6, bounce: 0.2 } }`, comes to rest 0.6 s into its
   segment, so a segment of 0.6 s or more holds it; `settle(options)` gives
   any spring's time.
-- Stagger with `stagger(i, n, options)`: subtract `stagger()` from the time
-  you pass to any helper (styleAt, ramp, interpolate); never a delay of your
-  own arithmetic. `styleAt(this.local - stagger(i, n, { each: 0.05 }), tracks)`
-  and `ramp(this.local - stagger(i, n, { each: 0.05 }), 0.2, 0.8)` alike. Keep the step shorter than the motion it
+- Stagger with Kinetic's `stagger()`, never a delay of your own arithmetic:
+  a repeated comp's `start: { stagger: { each: 0.05 } }`, a layer's
+  `delay: { stagger: {...} }` over the elements its `src` finds, or a text
+  layer's `animate.each`. Keep the step shorter than the motion it
   staggers, so the items move at the same time for most of it: a 0.5 s rise
   takes a step of 0.03 to 0.1 s, and a step as long as the rise plays the
   items one after another. Start with the item the viewer should look at
@@ -143,6 +132,30 @@ the error-codes page. To finish the page, swap the two script lines for the
   event, such as an entrance, an exit or a change of value, and let the items
   move together, or hold still, once it is over; a list that is only on
   screen needs no stagger.
+
+### A scene in code
+
+Write a scene in code, `scene(name, { keyframes, computed, seek })`
+(api.md, "A scene"), only for a picture no layer can describe. Its rules:
+
+- No function calls in bindings. Motion goes in computeds (`styleAt(this.local,
+  tracks)`), and the binding reads the result by name, a style object by
+  path (`data-bind-style="style"`).
+- A `keyframes` entry becomes a computed of `local`; when it and a
+  `computed` entry share a name, the scene reads the `keyframes` entry
+  (KN-153). An entry of several tracks folds its transform keys into
+  `transform`, so `this.rise.translateY` is undefined (KN-159). A scene does
+  not define `time`, `local`, `clipFrame`, `frame`, `progress`,
+  `remaining`, `enter`, `exit`, `presence`, `vars` or `inputs` (KN-152).
+- A track on a length property carries a `unit` (KN-122). Take a progress
+  with `ramp(t, from, to, ease)` and a blend with `mix(a, b, p)`, not a
+  `clamp`, `lerp` or `ramp` of your own; stagger by subtracting
+  `stagger(i, n, options)` from the time you pass to a helper.
+- A scene's `tick(dt)` runs only in interactive mode, never in video mode,
+  `check()` or `render()` (KN-151 in a render). On a lesson, put physics
+  that runs while a step holds on a store's `tick()`, starting with
+  `if (k.mode !== 'interactive' || !k.waiting) return;`, where `k` is
+  `wildflower.getStore('kinetic')`.
 - A binding on the scene's own root tag reads the scene's values, unless the
   scene sits inside a component of your own, which happens only when the
   composition is put inside a component or one scene inside another. The
@@ -169,8 +182,8 @@ the error-codes page. To finish the page, swap the two script lines for the
 
 ## Motion habits
 
-These are the habits a motion designer keeps without thinking, written
-down because the model does not supply them on its own.
+A motion designer keeps these habits without thinking. Follow each of them
+unless the brief asks for something else.
 
 - Nothing moves linearly except what turns at a constant rate: a wheel, a
   clock hand, a conveyor. Position, scale and opacity take an ease.
@@ -190,8 +203,8 @@ down because the model does not supply them on its own.
 - Between moves, things hold, and one thing moves at a time.
 - A move at the scale of a title takes 0.3 to 0.6 s. A camera move takes
   seconds and eases over its whole length, `power2.inOut`.
-- The shutter is on (`config({ shutter: 180 })`); for blur in the preview,
-  `smear()`.
+- The shutter is on (`shutter: 180` in `layers.scene()`); for blur in the
+  preview, `look.smear`.
 - A color change mixes in oklch (`space: 'oklch'`). A number that counts
   up rounds with the track's `round` and prints through `format()`.
 - With music, cuts and the main entrances land on the beat: `tempo().at(n)`
@@ -205,8 +218,8 @@ down because the model does not supply them on its own.
   on a whole frame: `tempo().frame(n)` (patterns.md, "Cutting to a track").
 - With a move on every beat, each beat ends on a pose of its own. A
   symmetrical shape looks unmoved after a turn of its symmetry (a disc's
-  half turn, a square's quarter turn), so two beats can end alike though the
-  move between them showed. Scrub the end of each beat and change the angle,
+  half turn, a square's quarter turn), so two beats can end on the same
+  picture even though the shape moved between them. Scrub the end of each beat and change the angle,
   distance or tilt where two match.
 - A little anticipation before a big move: a few frames the other way,
   small, as a key before the move's first key.
@@ -221,8 +234,8 @@ Blur:
 
 | What you want | The route |
 |---|---|
-| An element that blurs in or out | A `blur` track in `keyframes`, px: `blur: { at: [0, 0.6], to: [12, 0] }` |
-| A part of the frame (tilt-shift, a soft patch) | `blur(el, { scene: this, radius, marks })` on an empty element over it |
+| An element that blurs in or out | A `look.blur` track, px: `blur: { at: [0, 0.6], to: [12, 0] }` |
+| A part of the frame (tilt-shift, a soft patch) | `look.backdrop: { radius, marks }` on an empty element over it |
 | A cut between two clips | `data-clip-transition="blur"`, or `blur` with a length in `data-clip-enter`/`data-clip-exit` |
 | Depth of field from z | `filter: 'blur(' + focus(z, plane) + 'px)'` |
 | Single letters | `text()`'s per-letter `blur` from `letter(i, ch)` |
@@ -234,7 +247,7 @@ Grain:
 
 | What you want | The route |
 |---|---|
-| Grain over the whole frame (the default) | The finish's `grain`: `config({ finish: { grain: 0.08 } })`, the default style's light finish (style.md, "Finish"), still by default, a paper's tooth |
+| Grain over the whole frame (the default) | The finish's `grain`: `config({ finish: { grain: 0.08 } })`, the default style's light finish (style.md, "Finish"), still by default, a paper texture |
 | Film grain that changes every frame | The finish's `grain` with `fps` at the frame rate: `{ grain: { amount: 0.15, fps: 30 } }` |
 | Grain heavier in places, such as at the edges | `shade(canvas, { scene: this, kind: 'grain', fps: 30, marks })` |
 | Specks of dust | The finish's `dust`, which is specks, not grain |
@@ -246,8 +259,8 @@ Music:
 
 | What you want | The route |
 |---|---|
-| The beat of steady music, most music made in a DAW (the default) | `data-tempo`, `data-downbeat`, and `data-meter` on the audio clip, read with `tempo()`: `.at(n)`, `.of(t)`; `scripts/beatgrid.cjs` finds the values |
-| The beat of music whose tempo drifts (live playing, old recordings) | A beat file read by `beat(t, beats)`; HyperFrames' beat detection writes one |
+| The beat of steady music, most music made in a DAW (the default) | `data-tempo`, `data-downbeat`, and `data-meter` on the audio clip, read with `tempo()`: `.at(n)`, `.of(t)`; the Beat grid page (https://kinetic.wildflowerjs.com/docs/beat-grid/) finds the values |
+| The beat of music whose tempo drifts (live playing, old recordings) | A beat file read by `beat(t, beats)` |
 | Loudness | `level(t, band)` or `spectrum(t, bins)` |
 | A named moment | `data-markers="{ drop: 14.28 }"` on the clip and `timeOf('drop')` |
 
@@ -257,29 +270,28 @@ Fading a clip:
 |---|---|
 | One clip fading in or out (the default) | `data-clip-enter="fade 0.5"` and `data-clip-exit="fade 0.5"`: markup only |
 | A fade from one clip into the next | The overlap, with `data-clip-transition="fade"` on the incoming clip |
-| A scene whose code needs how far in or out it is (to stagger its children) | `edges: { enter, exit }`, then `this.enter`, `this.exit`, `this.presence` |
-| A fade with a move or a scale on one element | An `opacity` track in `keyframes` beside the move |
-| Something inside a scene that is no clip | `ramp(t, from, to, ease)` as its opacity, or `transition('fade', p)` |
+| A fade with a move or a scale on one element | A `look.opacity` track beside the `place` track |
+| Something inside a clip that is no clip | A `look.opacity` track, or `look.transition: { kind: 'fade', p }` |
 
 ## Transitions
 
 - A transition between two clips is their overlap: start the incoming clip
   before the other ends (`data-start="intro - 0.5"`) and put
   `data-clip-transition="push from-right"` on it. Do not build it from
-  `presence`, `edges` or keyframes on both clips, and do not give it a length;
+  tracks on both clips, and do not give it a length;
   the overlap is the length (KN-115 for a length on `data-clip-transition`).
 - The incoming clip overlaps exactly one sibling with `data-start` at its
   start, among those that end before it does. None, or two, leaves the clip
   without the transition (KN-116). A backdrop that runs past the clip's end
   does not count, so it can sit beside the clips.
 - Give each clip in a transition a background of its own (the paper, or its
-  scene's ground). A wipe or a push shows both clips at once over the
+  scene's background color). A wipe or a push shows both clips at once over the
   overlap, and a clip with no background lets the other clip's text show
   through its own; nothing checks for it, so look at a frame from the middle
   of the overlap.
 - What a push brings in is what the incoming clip shows at its start. Put
-  the scene's hero in from the clip's first frame and let it ride in with
-  the push; an entrance that starts after the push has the push bring in
+  the scene's hero on screen from the clip's first frame, so the push brings
+  it in; with an entrance that starts after the push, the push brings in
   empty paper.
 - A clip that comes in over nothing, or leaves to nothing, takes
   `data-clip-enter="wipe from-left 0.6"` or `data-clip-exit="fade 12f"`, which need a
@@ -289,8 +301,9 @@ Fading a clip:
   whole frame, and lengths in frames (`18f`) or multiples of `1/fps`.
 - A transition writes `opacity`, `translate`, `scale`, `rotate`, `clip-path`,
   `filter` and, for `reveal`, `z-index` on the clip's own tag. A scene's
-  `root:` block or a binding on that tag that writes one of them fights the
-  transition (KN-156): put the scene's own styling on an element inside it.
+  `root:` block or a binding on that tag that writes one of them overwrites
+  the transition's value (KN-156): put the scene's own styling on an element
+  inside it.
   A `transform` on the clip composes with the transition.
 - `flip` needs `perspective` on the clips' common parent; `reveal` and
   `cover` need positioned clips, the incoming one later in the markup.
@@ -303,7 +316,7 @@ Fading a clip:
   without one), and its map from another origin needs CORS (KN-117 holds the
   render when a map fails to load). These kinds write `filter`, so a `blur`
   transition, a binding or a `root:` block writing `filter` on the same clip
-  fights them (KN-156).
+  conflicts with them (KN-156).
 
 ## Effects
 
@@ -321,17 +334,17 @@ Fading a clip:
   depth-bands pattern does. A mask or a blend on a layer inside the world
   is fine; on the world itself it flattens it.
 - A halftone, stipple, dither or duotone look on an image, footage or a
-  canvas is `effect(canvas, { scene: this, source, kind })`, made once in
-  `init()` and moved with `this.fx.set({ ... })` in `seek(local)`. Do not
-  draw it yourself in a `requestAnimationFrame` loop:
-  Kinetic draws it after each seek, after the footage has landed.
+  canvas is a layer on a `<canvas>` with `look.effect: { kind, source, ...
+  }`, its parameters values that may move. Do not draw it yourself in a
+  `requestAnimationFrame` loop: Kinetic draws it after each seek, after the
+  footage has landed.
 - Give the canvas the source's shape; the source is stretched over it.
-- A layer made in a scene (`effect()`, `shade()`, `blur()`, `text()`,
-  `lottie()`) takes `scene: this`: it runs on that scene's local time and
-  is disposed with the scene, wherever and whenever it was made, after an
-  `await` too. Without it, a layer runs on composition time and lasts until
-  its `dispose()`. `scene` is the scene's own component, never its element
-  or its name (KN-100).
+- A layer makes each of its calls (`look.effect`, `shade`, `backdrop`,
+  `draw`, a lottie layer, canvas lettering) with its scene, so the call runs
+  on the clip's time and is disposed with the scene. In a scene written in code, pass
+  `scene: this` to `effect()`, `shade()`, `blur()`, `text()` and `lottie()`
+  for the same; without it, a layer runs on composition time until its
+  `dispose()`.
 - HTML is no source. For HTML that does not change, use an SVG filter (the
   patterns' halftone and stipple) with two rules: nothing in the filtered
   element or the filter changes while it runs, since any change runs the
@@ -347,8 +360,8 @@ Fading a clip:
 - A Lottie animation is made with lottie-web's `loadAnimation()`, with
   `autoplay: false`, in a scene's `init()` and handed to
   `lottie(anim, { scene: this, start, rate, loop })` in the same task, so
-  its time is the scene's local time and a failed load is heard (an event
-  before `lottie()` is missed). Keep it as `this.anim` and call
+  its time is the scene's local time and Kinetic sees a failed load (an
+  event before `lottie()` is missed). Keep it as `this.anim` and call
   `this.anim.destroy()` in the scene's `destroy()`: lottie-web keeps every
   animation until then, and Kinetic lets go of it too. Do not call `play()`,
   `goToAndStop()` or `setSpeed()` on it yourself: Kinetic seeks it on every
@@ -356,9 +369,11 @@ Fading a clip:
   seeks it itself (https://kinetic.wildflowerjs.com/docs/hyperframes/#on-the-page).
   The page loads lottie-web; Kinetic does not include it.
   Export the animation as one file, not in segments.
+- In layers, a Lottie animation is a `kind: 'lottie'` layer, `content: {
+  path, start, rate, loop }`.
 - An animated GIF, WebP or APNG in a composition is `animatedImage(src)`,
-  made once at the top of the file, drawn with `draw(canvas, local)` in
-  `seek(local)` onto a canvas with the image's own width and height. Not a
+  made once at the top of a scene in code, drawn with `draw(canvas, local)`
+  in its `seek(local)` onto a canvas with the image's own width and height. Not a
   plain `<img>`, which plays on the browser's clock and renders wherever it
   had got to; keep the `<img>` for a browser without `ImageDecoder`, where
   `animatedImage()` throws KN-100 (the patterns' looping sticker). Every
@@ -390,8 +405,9 @@ Fading a clip:
   at its rate.
 - A file that fails to load or decode is KN-135 and holds the render. A
   file on another origin needs CORS headers.
-- Visuals that follow the sound read `level(this.time, band)` or
-  `spectrum(this.time, bins)` in a computed, never an analyser of your own.
+- Visuals that follow the sound read `{ level: 'bass' }`, `{ spectrum: {}
+  }` (a copy's bin) or `{ beat: { beats } }` in a layer, as a value or
+  as a track's `by`, never an analyser of your own.
   They read 0 with no audio clip (KN-137). The beat of steady music is the
   clip's `data-tempo` read with `tempo()`; `beat()` is for a beat file, for
   music whose tempo drifts.
@@ -410,7 +426,7 @@ come out the same whichever frames came before it.
   `requestAnimationFrame()` started during a seek (KN-142).
 - No CSS transitions under the root (KN-143). Kinetic positions every CSS
   animation in a scene on every seek, one on an element created after load
-  too, but a computed is the plainer form.
+  too, but a layer's track is the plainer form.
 - Format numbers with `wildflower.kinetic.format()`, which uses `en-US`
   unless given a locale. `toLocaleString()` with no locale differs on another
   render machine (KN-145).
@@ -430,8 +446,9 @@ come out the same whichever frames came before it.
   `renderer.compile(scene, camera)` in `init()`.
 - A Trillium view in a scene needs a renderer created with
   `preserveDrawingBuffer: true` (KN-190), or the captured frame can be blank.
-- A camera move binds `camera(this.local, tracks)` on a world element inside
-  the scene, and each layer in the world binds `depth(z)`. Every element
+- A camera move is a `kind: 'camera'` layer, which moves the
+  composition's `.world` element; each layer in the world takes `band:
+  'world'` and a `place.position` of `[x, y, z]`. Every element
   between the world and a layer needs `transform-style: preserve-3d`, since it
   is not inherited, and none of them, nor the world itself, takes `opacity`
   below 1, a `filter`, `overflow` other than `visible`, `clip-path`, a mask,
@@ -479,10 +496,10 @@ scripts. A frame is the same in both for the same time and values.
   0 with the value before (`{ at: [0, 2], set: [null, 270] }`), or that
   value shows from the start of the video (KN-157).
 - In video mode a write to a scripted path by anything but the script is
-  undone before the next paint (KN-146), a watcher that writes one inside
-  the script's own write included, once per path between two seeks: a
-  watcher that writes the path again every time keeps its value, so keep
-  watchers from writing scripted paths. Disable every control that writes a
+  undone before the next paint (KN-146). That includes a watcher that writes
+  the path inside the script's own write, but only once per path between two
+  seeks: a watcher that writes the path again every time keeps its value. So
+  keep watchers from writing scripted paths. Disable every control that writes a
   scripted path, and every quiz button, in video mode:
   `data-bind-attr="{ disabled: $kinetic.mode === 'video' }"`, or a row
   field set from `this.stores.kinetic.mode` for buttons in a `data-list`.
@@ -505,18 +522,18 @@ scripts. A frame is the same in both for the same time and values.
   try.
 - Kinetic never moves to the next step by itself; the learner does, with
   Next. Bind the Next button to `$kinetic.canAdvance`, which follows `until`
-  (true with none), while the step plays as much as at its hold. `next()`
-  does nothing while `until` is false. Otherwise it enters the next step at
-  once, wherever the step is, and the rest of the step does not play (it is
-  the video's: a step's script writes only there). Back always
-  works.
+  (true when there is none) while the step plays as well as at its hold.
+  `next()` does nothing while `until` is false. Otherwise it enters the next
+  step at once, wherever the step is, and the rest of the step does not play
+  (that part plays only in the video, where the step's script writes). Back
+  always works.
 - At a hold the clock stands still, and so does `local`. What the learner
   changes there moves only through a `follow` spring or a binding to the
   store, never through the time, so design the hold around a control and
   what follows it, and keep the motion that plays by the time before the
   hold or after it.
 - The last step offers a "Start again" button that calls `go(0)`, so the
-  learner never steps back through every step.
+  learner does not have to step back through every step.
 - An answer the learner may come back to is cleared by the step's `entry`,
   or an `until` that is already true plays the rest of the question's step at
   once.
@@ -524,9 +541,9 @@ scripts. A frame is the same in both for the same time and values.
   the store's mode, `data-show="$kinetic.mode === 'interactive'"` or a
   computed reading `this.stores.kinetic.mode` (with `kinetic` in
   `subscribe`), so the video has none of them.
-- Walk a lesson with `scripts/check.cjs <page> --lesson`: it enters each
+- Walk a lesson with `check({ lesson: true })` in the page: it enters each
   step, reports whether it held (on the last frame before its `wait`) and
-  the `until` it waits on, and saves a still of each hold.
+  the `until` it waits on, and takes a still of each hold.
 - `wait` is seconds from the step's start, where the step holds for the
   learner before the rest of its range plays. Give it to a step that waits
   on an `until` (a question, a task), placed where the content before the
@@ -534,15 +551,15 @@ scripts. A frame is the same in both for the same time and values.
   with nothing to answer needs no `wait`: it plays its range and holds on
   the last frame, and Next is ready the whole time. A step with an optional
   control (a slider to try) may hold at a `wait` for it, and what follows the
-  wait is the video's alone: Next from the hold goes straight to the next
-  step. Keep each step's range as long as its content: the hold at the end
-  is the learner's, and still seconds of an empty clip before it are dead
-  time. A `wait` past the range is clamped (KN-157),
+  wait plays only in the video: Next from the hold goes straight to the next
+  step. Keep each step's range as long as its content: the learner already
+  gets the hold at the end, and seconds of a still, empty clip before it
+  only make them wait. A `wait` past the range is clamped (KN-157),
   and `wait: false` with `until` is KN-100. `wait: false` plays on into the
   next step with no hold between, so a run of such steps plays as video does.
-- `follow` takes springs only (KN-100 for another ease or
-  `overshootClamping`), and follows a store path, not a scene's computed:
-  follow the control and derive the rest from the followed value.
+- `{ follow }` takes springs only (KN-100 for another ease or
+  `overshootClamping`), and follows a store path: follow the control and
+  derive the rest from the followed value, by name in `shared`.
 - A style the script changes in video mode, such as an answer's class,
   takes no CSS transition: the transition runs on the page's clock, so a
   render captures it part-way and `check()` fails on it. A hover or focus
@@ -558,17 +575,18 @@ scripts. A frame is the same in both for the same time and values.
 
 ## Data and inputs
 
-- A scene that reads a query names it in `waitFor`, and frame 0 waits for
-  the rows. A failed query is KN-131, a name that matches no query is
+- List each query the layers read in `queries`, and frame 0 waits for the
+  rows. The layers are built once the rows are in, so a repeat `over:
+  'sales.rows'` places one copy per row. A failed query is KN-131, a name that matches no query is
   KN-133; both print on every build, and `render()` rejects with the error
   (a HyperFrames render waits at its readiness timeout) instead of
   producing a wrong video.
 - Load the data once. A refresh interval, `invalidate()` or `refresh()`
   after frame 0 lets a render capture frames before the new rows arrive
   (KN-132).
-- `inputs` are typed like props (`String`, `Number`, `Boolean`, or
-  `{ type, required, default, validator }`), read from the composition's
-  variables, coerced and validated before `init()`. A missing required
+- The `inputs` in `layers.scene()` are typed like props (`String`, `Number`, `Boolean`,
+  or `{ type, required, default, validator }`), read from the composition's
+  variables with `{ from: 'inputs.title' }`, coerced and validated. A missing required
   value, a wrong type or a rejected value is KN-130, printed on every build,
   and the render stops at its timeout. The variables are declared on the
   root in `data-composition-variables`.
@@ -576,9 +594,9 @@ scripts. A frame is the same in both for the same time and values.
   own `default`, in a render and in a plain tab, since both read the
   declared defaults as variables (KN-134 when the two differ). Declare a
   default in one place.
-- `inputs` are composition-wide: every clip of a scene reads the same
-  values. For a scene used on several clips with different text or colors,
-  see "One scene, several clips" in patterns.md.
+- `inputs` are composition-wide: every clip reads the same values. For one
+  design on several clips with different text or colors, write it as a
+  comp and place it with different `params`.
 - A text prop is always quoted, one word or many:
   `data-prop-role="'Director'"`, `data-prop-color="'#892dbf'"`,
   `data-prop-title="'Our year in review'"`. A bare word names a value of
@@ -599,10 +617,11 @@ scripts. A frame is the same in both for the same time and values.
 ## What you write yourself
 
 Kinetic has no chart, physics or particle module. When a brief asks for one,
-you write it, inside the same model as every other scene. Anything that
-depends on earlier frames is worked out once, in `init()` or beside the
-scene, into plain arrays, and the computed or `seek(local)` turns the time
-into an index and reads from them. A frame then comes out the same whichever
+you write it as small pure functions handed over in `fns`, read with
+`{ call }` and the time passed in as `{ rate: 1 }`. Anything that depends
+on earlier frames is worked out once at load, beside the layers, into plain
+arrays, and the function turns the time into an index and reads from
+them. A frame then comes out the same whichever
 frames came before it, which a render needs (see "Every frame the same").
 
 - Charts are a few lines of arithmetic over the data. A linear scale is
@@ -624,17 +643,17 @@ frames came before it, which a render needs (see "Every frame the same").
   way, its randomness from `random(seed)`. Put a contact that must be seen
   on a whole frame ("A landing on a whole frame"). When a learner's setting
   changes the result, bake again from a watcher on that store field.
-  `tick()` runs only in interactive mode, so a live world there is extra
-  to the video, never a part of it.
+  `tick()` runs only in interactive mode, so a simulation run live from
+  `tick()` is never part of the video.
 - Particles are a pool of a fixed number of slots, each particle a function
   of its age. Make every particle the clip will have at load, with its
   birth time and its values from `random(seed)`; at time t its age is
   `t - born`, and it shows while the age is between 0 and its life. Its
   place comes from a closed form of the age (`x0 + vx * age`, plus
   `0.5 * g * age * age` for gravity) or from `noise()` read at the age.
-  Particle i lives in slot `i % SLOTS`, with `SLOTS` the rate times the
-  life, rounded up, plus one, which a rounding error at a slot's change
-  needs (patterns.md, "Particles from an emitter"). A hidden slot writes
+  Particle i goes in slot `i % SLOTS`, with `SLOTS` the rate times the
+  life, rounded up, plus one, so a rounding error when a slot changes
+  particles has room (patterns.md, "Particles from an emitter"). A hidden slot writes
   every style property a shown one does, since `update()` leaves the rest
   as the last particle set them. For hundreds, write
   `style` in one static pool from `seek(local)` and use no filters

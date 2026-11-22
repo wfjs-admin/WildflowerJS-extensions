@@ -135,8 +135,7 @@ export function createFollow(wf, clock, lesson) {
   // The target's own field: a subscription to the whole store would make
   // every computed of the store run on every change. A target that is a
   // computed is heard through the store's notice of that computed, which
-  // can miss a change made in the same task as this subscription (a
-  // framework issue with that notice's first value, fixed separately). A
+  // can miss a change made in the same task as this subscription. A
   // store registered again under the target's name (unregister, then
   // store()) is listened to in its place, as it arrives, and a value it
   // holds that differs is a change of the target; the dead store's notices

@@ -54,11 +54,31 @@
  * preserveDrawingBuffer reads back blank in both
  * passes and so cannot fail here; its check is the frame hashes of a real
  * render.
+ *
+ * Any option besides samples and seed (reading, layout, frames, pace and the
+ * rest) is a pass of kinetic.tools.js, which check() loads once, from beside
+ * the file this one was loaded from (kinetic.tools.min.js beside a .min.js),
+ * and hands the call to; a page that has it on already uses that one. A file
+ * that does not load rejects with KN-103, its address the where.
+ * render.batch() (batch.js) loads it through the same loadTools().
  */
 
 import { CODES, warn, fail, show } from './diagnostics.js';
 import { compositionRoot } from './timing.js';
 import { random } from './motion.js';
+import { GLOBAL_NAME } from './names.js';
+
+// kinetic.tools.js's address, beside the script this file runs in, and that
+// script's nonce, which a page's Content-Security-Policy may ask of every
+// script. Read while that script is the current one.
+const SCRIPT = document.currentScript;
+const TOOLS = (() => {
+  const s = SCRIPT;
+  if (!s || !s.src) return '';
+  const u = new URL(s.src);
+  u.pathname = u.pathname.replace(/[^/]*$/, /\.min\.js$/.test(u.pathname) ? 'kinetic.tools.min.js' : 'kinetic.tools.js');
+  return u.href;
+})();
 
 // FNV-1a over a string: enough to tell two canvases apart.
 function hash(s) {
@@ -170,8 +190,39 @@ function firstDifference(a, b, root) {
   return null;
 }
 
+// The tools, once loaded or loading; a load that failed is tried again at
+// the next call. `call` is the where of the KN-103 a failed load rejects
+// with: the call that asked for the file, check() or render.batch().
+let tools = null;
+export function loadTools(call) {
+  const api = self.wildflower[GLOBAL_NAME];
+  if (api.tools) return Promise.resolve(api.tools);
+  return tools || (tools = new Promise((ok, no) => {
+    const s = document.createElement('script');
+    const failed = () => {
+      tools = null;
+      s.remove();
+      no(fail(CODES.NO_TOOLS, call + ': ' + (TOOLS || 'kinetic.tools.js'), __DEV__ && (TOOLS
+        ? 'the file did not load; put kinetic.tools.js beside kinetic.wf.js (kinetic.tools.min.js beside kinetic.wf.min.js), or load it with its own script tag after kinetic.wf.js; a Content-Security-Policy on the page has to allow it too'
+        : 'kinetic.wf.js was not loaded by a script tag with a src, so the address of kinetic.tools.js is not known; load it with its own script tag after kinetic.wf.js')));
+    };
+    if (!TOOLS) return failed();
+    if (SCRIPT.nonce) s.nonce = SCRIPT.nonce;
+    s.src = TOOLS;
+    s.onload = () => (api.tools ? ok(api.tools) : failed());
+    s.onerror = failed;
+    document.head.appendChild(s);
+  }));
+}
+
 export function createCheck(clock, readiness, lesson) {
-  return async function check(opts) {
+  return function check(opts) {
+    const o = opts || {};
+    // Anything asked for beyond the self-test is the tools' to do; an option left out or set to false asks for nothing.
+    for (const k in o) if (k !== 'samples' && k !== 'seed' && o[k] !== undefined && o[k] !== false) return loadTools('check()').then((t) => t.check(o));
+    return selfTest(o);
+  };
+  async function selfTest(opts) {
     const o = opts || {};
     const samples = o.samples === undefined ? 30 : o.samples;
     if (!(typeof samples === 'number' && samples >= 1)) throw fail(CODES.BAD_CALL, 'check({ samples })', __DEV__ && 'samples is a number of frames, 1 or more, not ' + show(o.samples));
@@ -248,5 +299,5 @@ export function createCheck(clock, readiness, lesson) {
       }
     }
     return Object.assign({ ok: true }, counts);
-  };
+  }
 }

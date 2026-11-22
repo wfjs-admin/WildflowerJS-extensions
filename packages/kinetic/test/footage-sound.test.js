@@ -7,7 +7,7 @@
  * Kinetic's speaker over the stage so the context may start.
  *
  * Also: level() and spectrum() read the footage's sound by its id, and
- * KN-136 no longer lists data-playback-rate, which audio clips now apply.
+ * KN-136 does not list data-playback-rate, which audio clips apply.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { userEvent } from 'vitest/browser';

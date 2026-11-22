@@ -131,7 +131,7 @@ and a generated piece does not do unless told.
   mark). Two dense shots in a row blur into one.
 - **Few words, large.** One to three words on screen at once, set large,
   added a word at a time. `craft.md`'s reading floor still holds for every
-  word meant to be read (the check script lists them); a word that flies
+  word meant to be read (`check({ reading: true })` lists them); a word that flies
   past on purpose is marked so in the plan.
 - **Cut to the music.** With a track, a scene change lands across a bar line
   and a snap lands on a beat or a hit in the track, from `tempo().at(n)` or a
@@ -218,7 +218,7 @@ effects. (Two measured reels, and a looping piece built to a track.)
   the first starts from (the protagonist lays down the opening's lines, or
   returns to where it first falls from), so the seam is the system closing,
   not a last frame matched to a first.
-- **A loop can close on a symmetry.** A cube or a cage turned a quarter
+- **A loop can close on a symmetry.** A cube turned a quarter
   turn, or a nest of shapes zoomed by one step of its nesting, is its first
   frame again, so the seam is exact with nothing matched by hand. In a nest,
   set each shape's visibility from its size on screen (in as it grows from
@@ -237,7 +237,7 @@ Making it:
     resolution.
   - **2.5D** (`solids()` from kinetic.25d.js: solids in 3D only as numbers,
     each face drawn as an SVG path, shaded by its angle to one light, with a
-    rim and glows) for a few simple solids (boxes, cages, prisms) in a
+    rim and glows) for a few simple solids (boxes, prisms, spheres) in a
     graphic, flat-shaded look (patterns.md, "Solids in 2.5D"). It is sharp at
     any size, costs no WebGL context, and the finish works on it as on
     anything else. Faces that cross each other sort wrong; that is 3D's job.
@@ -324,13 +324,14 @@ reels and five studies.)
 
 ## Checking the pace
 
-Before rendering, run the check script with the dial: `node
-<this skill's folder>/scripts/check.cjs <page> --pace lively` (or `bold`).
-It seeks every frame and prints the share of frames near still, the snaps
+Before rendering, run the check in the page with the dial:
+`const r = await wildflower.kinetic.check({ pace: 'lively' })` (or
+`'bold'`). It captures every frame and reports, in `r.pace`, the share of
+frames near still, the snaps
 a minute, the longest stretch near still (the end card aside), the
 brightness range, the share of each frame in smooth ramps (light and
 shading) and the tones each frame uses, each beside the dial's target,
-marking each one that misses. Fix every miss before rendering: more scene
+listing each one that misses in `r.pace.misses`. Fix every miss before rendering: more scene
 changes, shorter holds, faster drift, denser shots, a darker ground, light
 and shading, layers. Never meet a target with clutter (accents, soft discs,
 particles added for the number): the measure counts change, and the eye

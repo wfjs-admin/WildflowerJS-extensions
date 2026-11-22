@@ -4,6 +4,61 @@ Notable changes to Kinetic (`@wildflowerjs/kinetic`). The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-21
+
+### Added
+
+- `layers.scene(name, record, { fns })` draws a piece written as a plain
+  object on each clip of that name, and `layers(record, options)` draws one
+  without a scene, returning `{ seek, refresh, dispose, stage }`.
+- KN-161 to KN-169 report what is wrong in a layers record, with the layer
+  and the field.
+- `kinetic.tools.js`, a third file beside `kinetic.wf.js`, loaded the first
+  time `check()` is given a tool option or `render.batch()` is called;
+  KN-103 when it does not load.
+- `check()` options `reading`, `layout`, `frames`, `strip`, `lesson`, `pace`,
+  `seam`, `jumps`, `diff`, `isolate`, and `view` run in the page.
+- `render.batch(rows, options)` renders the page once per row of variables,
+  one file per row, from an array or a JSON or CSV file; `signal` cancels it,
+  and a row that fails or stops answering rejects with its code or KN-104.
+- The preview bar's Render batch button, on a page with variables or a scene
+  with `inputs`.
+- `render({ alpha: true })` and `config({ alpha: true })` write a QuickTime
+  `.mov` of PNG frames with their transparency.
+- `solids` shapes `plane`, `disc`, `sector`, `capsule`, `polygon`, `prism`,
+  `pyramid`, `sphere`, and `null`.
+- `solids` parents and pivots, a shape's own color and side colors, shading,
+  clips, and drop shadows, through `add()`, `set()`, and the stage's options.
+
+### Fixed
+
+- `render()`, `render.still()`, and the frames `check()` captures draw a root
+  that has a CSS `transform`, `translate`, `rotate`, or `scale` of its own at
+  the composition's size. The frame was drawn with the transform on it,
+  scaled or moved inside the file, and `check({ layout })` listed no text
+  under its contrast floor.
+- `solids` draws a shape in front of a large face, such as a wall or a
+  floor, after that face wherever it stands. Off to the side, or at the far
+  end, it was drawn first and hidden.
+- `solids.faces()` draws a face whose first three corners lie on one line,
+  facing the way its corners wind, and reports corners that all lie on one
+  line (KN-100). Such a face drew nothing, with no error.
+
+### Changed
+
+- The examples in the docs and the patterns have been rewritten to the new
+  `layers()` format, where appropriate. `scene()` has not changed.
+- The guide checks a page with `check()` in the page and batches with
+  `render.batch()`, in place of the Node scripts `check.cjs` and `batch.cjs`.
+- The guide's script tags load `@wildflowerjs/kinetic@0.3`.
+
+### Removed
+
+- `solids.cage()`. A cage is built from `solids.faces()`.
+- The Node scripts `check.cjs`, `batch.cjs`, and `beatgrid.cjs` from the
+  package. `check()` and `render.batch()` do their work in the page, and the
+  Beat grid page reads a music file's tempo in the browser.
+
 ## [0.2.0] - 2026-11-13
 
 ### Added

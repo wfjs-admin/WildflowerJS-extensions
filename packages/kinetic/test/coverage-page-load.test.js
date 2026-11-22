@@ -6,15 +6,15 @@
  * wildflower.scan(), which is the path test/helpers.js mounts through and
  * the one every other file drives.
  *
- * Until a core fix on 2026-10-07 the batched scanner did not fire
- * component:afterInit for a component with no init(), so a page-load scene
- * with no init() never went live: no seek(local), no CSS catch-up, no
- * readiness wait for its waitFor. The framework's own suite pins the hook
+ * The batched scanner fires component:afterInit for a component with no
+ * init(); without it a page-load scene with no init() would never go live:
+ * no seek(local), no CSS catch-up, no readiness wait for its waitFor. The
+ * framework's own suite pins the hook
  * itself; this file pins what Kinetic does with it, on every tier and build (wildflower._scanForComponents
  * is mangled in the min builds, so a real page is the only way to reach the
  * path there).
  *
- * Where the scripts sit decides the path. Probed in Chromium on 2026-10-07:
+ * Where the scripts sit decides the path. In Chromium,
  * a framework loaded in <head> before the markup sees the markup through its
  * mutation observer, starts init early, and the scenes registered later go
  * through the incremental path (late registration). The batched scanner

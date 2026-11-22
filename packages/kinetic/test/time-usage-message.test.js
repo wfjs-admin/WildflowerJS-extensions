@@ -1,9 +1,9 @@
 /**
  * KN-100 for a time that is an object (diagnostics.js checkTime): the
  * development message names the call as Kinetic takes it, and for a
- * function whose only argument is the time, that is name(t). onFrame() used
- * to print "Kinetic's is onFrame(t, )", with a stray comma. The production
- * build has the code, the where and the link only.
+ * function whose only argument is the time, that is name(t), with no stray
+ * comma: onFrame() prints "onFrame(t)". The production build has the code,
+ * the where and the link only.
  */
 import { describe, it, expect } from 'vitest';
 import { load, expectKN, BUILD, CORE_TIER } from './helpers.js';

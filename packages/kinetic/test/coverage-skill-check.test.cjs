@@ -1,6 +1,6 @@
 /**
- * The skill's scripts/check.cjs, run as the skill tells an assistant to run
- * it: a composition file is served from its folder, opened in headless
+ * check.cjs, the Node script, started from a command line: a
+ * composition file is served from its folder, opened in headless
  * Chrome (Playwright's Chromium without it), waited on for readiness and
  * checked, its frames saved (--frames) and its lesson walked (--lesson), and
  * the script's exit code and output are what the assistant acts on.
@@ -23,7 +23,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
-const SCRIPT = path.join(ROOT, 'packages', 'kinetic', 'skills', 'wildflower-kinetic', 'scripts', 'check.cjs');
+const SCRIPT = path.join(ROOT, 'packages', 'kinetic', 'scripts', 'check.cjs');
 // The core from this repository's build, or, in the extensions repository,
 // the published one its CI installs.
 const CORE = [path.join(ROOT, 'www', 'js', 'dist', 'wildflower.lite.dev.js'), path.join(ROOT, 'node_modules', 'wildflowerjs', 'dist', 'wildflower.lite.dev.js')]
@@ -60,6 +60,12 @@ const PAGES = {
     + '<p data-start="0" data-duration="0.6" style="position:absolute;left:10px;top:10px;margin:0">Too quick for anyone to read this line</p>'
     + '<p data-start="0" data-duration="4" style="position:absolute;left:10px;top:80px;margin:0">Held <b>with</b> <i>its words</i></p>'
     + '<p data-start="1" data-duration="3" style="position:absolute;left:10px;top:130px;margin:0;opacity:0.5">Faint</p></div>', ''),
+  // Two lines typed from 1 s and whole at 3 s: one is gone at 4 s, the other
+  // stays to 5 s.
+  'typed.html': page('<div data-composition-id="main" data-start="0" data-duration="5" data-fps="10" data-width="320" data-height="180" style="position:relative;width:320px;height:180px">'
+    + '<div data-component="typed" data-start="1" data-duration="3" style="position:absolute;left:10px;top:30px"><p style="margin:0;white-space:nowrap" data-bind="line"></p></div>'
+    + '<div data-component="typed" data-start="1" data-duration="4" style="position:absolute;left:10px;top:100px"><p style="margin:0;white-space:nowrap" data-bind="line"></p></div></div>',
+    "wildflower.kinetic.scene('typed', { computed: { line() { return wildflower.kinetic.typewriter(this.local, 'one two three four', 9); } } });"),
   // The layout pass: a line in the margin, one past the edge, two titles
   // over each other for 1 s and two for 0.2 s, gray text under 4.5:1 and
   // the same gray at 50 px over 3:1, white over a ramp to light gray, and a
@@ -176,6 +182,13 @@ describe('the skill\'s check.cjs', () => {
     const off = check('reading.html', '--no-reading');
     assert.equal(off.code, 0, off.out);
     assert.doesNotMatch(off.out, /^reading:/m);
+  });
+
+  it('the reading pass counts typed text from its first letter, and lists a line that is whole for under 1.5 s as whole for that long; one whole for longer is not listed', () => {
+    const r = check('typed.html', '--no-layout');
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^reading: 1 block of text leaves before it can be read/m);
+    assert.match(r.out, /^ {2}"one two three four" \(4 words\): whole for 1\.0 s from 3\.0 s, needs 1\.5 s$/m);
   });
 
   it('the layout pass lists text outside the safe area at rest, text cut off, text over text for 0.2 s or more, and text under its contrast floor; text covered by a card and a brief crossing are not listed; exit 0; --no-layout skips it', () => {

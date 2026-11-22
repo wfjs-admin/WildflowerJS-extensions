@@ -1,6 +1,6 @@
 {
   "name": "@wildflowerjs/kinetic",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Kinetic turns a WildflowerJS page into a video, previewed, checked and rendered in the browser. HyperFrames-compatible; not affiliated with HeyGen.",
   "main": "dist/kinetic.wf.js",
   "types": "types.d.ts",
@@ -28,7 +28,9 @@
       { "entry": "src/wf.js", "file": "dist/kinetic.wf.js",     "dev": true,  "minify": false },
       { "entry": "src/wf.js", "file": "dist/kinetic.wf.min.js", "dev": false, "minify": true },
       { "entry": "src/solids-wf.js", "file": "dist/kinetic.25d.js",     "dev": true,  "minify": false, "budget": "kinetic.25d" },
-      { "entry": "src/solids-wf.js", "file": "dist/kinetic.25d.min.js", "dev": false, "minify": true,  "budget": "kinetic.25d" }
+      { "entry": "src/solids-wf.js", "file": "dist/kinetic.25d.min.js", "dev": false, "minify": true,  "budget": "kinetic.25d" },
+      { "entry": "src/tools/wf.js", "file": "dist/kinetic.tools.js",     "dev": true,  "minify": false, "budget": "kinetic.tools" },
+      { "entry": "src/tools/wf.js", "file": "dist/kinetic.tools.min.js", "dev": false, "minify": true,  "budget": "kinetic.tools" }
     ]
   },
   "files": [
@@ -37,10 +39,11 @@
     "dist/kinetic.wf.min.js",
     "dist/kinetic.25d.js",
     "dist/kinetic.25d.min.js",
+    "dist/kinetic.tools.js",
+    "dist/kinetic.tools.min.js",
     "types.d.ts",
     "types.global.d.ts",
-    "skills",
-    "scripts"
+    "skills"
   ],
   "scripts": {
     "build": "node ../../scripts/build-rollup.cjs kinetic.",

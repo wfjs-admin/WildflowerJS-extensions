@@ -17,10 +17,13 @@
  *     layoutsubtree to content="drawable" in 155 or 156), and the root
  *     itself is marked `drawable` for the render, which Chrome 157 requires
  *     of an element it draws.
- *     Components and the runtime's timing survive the move (probed). A stage
+ *     Components and the runtime's timing survive the move. A stage
  *     fitted to the window (fit.js) has its scale moved onto the canvas for
  *     the render, so the root draws at the composition's own size while the
- *     canvas shows at the fitted one.
+ *     canvas shows at the fitted one. A transform the page gave the root
+ *     (transform, translate, rotate, scale) places the stage on that page and
+ *     is no part of the frame: the canvas takes it for the render, so the
+ *     page looks the same, and the root draws without it.
  *
  * Before the page is touched, render() runs readiness (readiness.js), as
  * check() does, and rejects with its failure: an input or a query in any
@@ -79,6 +82,24 @@
  * runtime's player put off the frame's time, KN-207 for a video encoder
  * that reports an error or stalls, or output mp4.js cannot write.
  *
+ * Transparency: render({ alpha: true }), or config({ alpha: true }) by
+ * default (the preview bar's Render follows it), makes a QuickTime file of
+ * PNG frames with their alpha (mp4.js, createMov()), the form video editors
+ * import with transparency, since WebCodecs encodes no alpha. Each frame is
+ * taken as a PNG with canvas.toBlob(), a few at a time, and kept as a Blob,
+ * so the frames stay out of the script's memory; the file is a Blob of
+ * them, and before it is offered a byte of each frame and of the file's
+ * start, middle and end is read back, since a Chrome just started can hand
+ * back a large Blob it cannot read (KN-207). For the render's duration the
+ * drawn element's background is cleared (data-kinetic-clear, through a
+ * sheet of Kinetic's own, so its style is never written) and <html> carries
+ * data-kinetic-alpha for a page's CSS to answer; both go again after, on a
+ * failure too. The finish is off and there is no sound; no video encoder is
+ * used, so codec and bitrate do not apply. The shutter weights each
+ * sample's color by its alpha and sums the alphas too, so a blurred edge
+ * comes out as straight color with its coverage as alpha. render.still(t)
+ * follows config({ alpha }) as a render would.
+ *
  * render({ signal }) takes an AbortSignal, as fetch() does. One already
  * aborted rejects at once with its reason; one aborted during the render
  * stops it at the next frame, sample, encoder wait or sound segment (a wait
@@ -99,10 +120,10 @@
 import { CODES, fail, warn, show, liveContexts } from './diagnostics.js';
 import { compositionRoot } from './timing.js';
 import { clipName, adopter } from './clips.js';
-import { createMp4 } from './mp4.js';
+import { createMp4, createMov } from './mp4.js';
 import { RATE } from './mix.js';
 import { soundConfig, encodeSound } from './soundtrack.js';
-import { readShutter, checkEncoding } from './clock.js';
+import { readShutter, checkEncoding, checkAlpha } from './clock.js';
 import { readFinish, createFinish } from './finish.js';
 
 const DEFAULT_CODEC = 'avc1.640028';   // H.264 High 4.0: 1080p30 and below
@@ -178,7 +199,10 @@ const MIRRORED = ['transform', 'rotate', 'scale', 'transform-origin', 'opacity',
 // Keyframe keys that are no property, or that the copy works out itself.
 const NOT_MIRRORED = ['offset', 'easing', 'composite', 'computedOffset', 'translate', 'visibility'];
 // Adopted at every frame, so page code that replaced the list gets it back.
-const adopt = adopter('[' + COPIED + ']{visibility:hidden!important}[' + COPIED + '],[' + STILL + ']{transition:none!important}');
+// The last rule: the root in the render's canvas draws without a transform of its own, whatever rule gave it one.
+const PLACED = ['transform', 'translate', 'rotate', 'scale'];
+const adopt = adopter('[' + COPIED + ']{visibility:hidden!important}[' + COPIED + '],[' + STILL + ']{transition:none!important}'
+  + '[data-kinetic-render]>:not(#kinetic-clear#kinetic-clear){' + PLACED.map((p) => p + ':none!important').join(';') + '}');
 // The box a copy, absolutely positioned beside its canvas, is positioned in:
 // the canvas's offset parent, past a table or cell that is not positioned.
 function boxOf(canvas) {
@@ -217,10 +241,10 @@ function offsetOf(el) {
   return [x, y];
 }
 // How Chrome paints a canvas's bitmap inside the render's canvas. Until 156
-// (probed in 154 and 156): at one drawing px to the CSS px from its border
+// (seen in 154 and 156): at one drawing px to the CSS px from its border
 // box's corner, clipped to its content box, whatever its border, padding and
 // object-fit, so a copy's bitmap is the border box with the drawing placed
-// inside it. From 158 (probed in 158.0.8127.18): as CSS paints any canvas,
+// inside it. From 158 (seen in 158.0.8127.18): as CSS paints any canvas,
 // into its content box, so the bitmap is the content box. Another browser
 // cannot render the DOM at all.
 //
@@ -337,6 +361,45 @@ function removeCopies(pairs) {
   pairs.clear();
 }
 
+// An alpha render's stage: the drawn element's background cleared by an
+// attribute and a sheet of Kinetic's own (the two ids that cannot both
+// match lift the rule over a page's own rule by id), and <html> marked for
+// the page's CSS. Returns what puts both back; a mark the page set itself
+// stays.
+const CLEAR = 'data-kinetic-clear', MARK = 'data-kinetic-alpha';
+const adoptClear = adopter('[' + CLEAR + ']:not(#kinetic-clear#kinetic-clear){background:none!important}');
+function clearStage(el) {
+  const html = document.documentElement, marked = html.hasAttribute(MARK), own = el.hasAttribute(CLEAR);
+  if (!marked) html.setAttribute(MARK, '');
+  el.setAttribute(CLEAR, '');
+  adoptClear();
+  return () => {
+    if (!marked) html.removeAttribute(MARK);
+    if (!own) el.removeAttribute(CLEAR);
+  };
+}
+
+// A frame as a PNG Blob. The canvas's pixels are copied as toBlob() is
+// called, so the next frame can be drawn while this one encodes. A canvas
+// source, or a canvas of another size, is drawn into one of the render's
+// size first.
+function png(shown, source, width, height, i) {
+  let c = shown;
+  if (c === source || c.width !== width || c.height !== height) {
+    c = document.createElement('canvas');
+    c.width = width; c.height = height;
+    c.getContext('2d').drawImage(shown, 0, 0, width, height);
+  }
+  return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(fail(CODES.ENCODER_FAILED, 'render(): frame ' + i, __DEV__ && 'the browser could not make the frame a PNG; a smaller size may'))), 'image/png'));
+}
+
+// A byte from the end of each frame, a few at a time, then from the start,
+// middle and end of the file: a Blob Chrome cannot read fails here.
+async function readBack(blob, parts) {
+  for (let i = 0; i < parts.length; i += 32) await Promise.all(parts.slice(i, i + 32).map((b) => b.slice(b.size - 1).arrayBuffer()));
+  for (const at of [0, Math.floor(blob.size / 2), Math.max(0, blob.size - 16)]) await blob.slice(at, at + 16).arrayBuffer();
+}
+
 // Media from another origin. drawElementImage draws an <img>, <video> or
 // SVG <image> from another origin black unless it was fetched with CORS
 // (a crossorigin attribute, and Access-Control-Allow-Origin from its
@@ -434,7 +497,10 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
   // `still`, a time, makes the one frame render.still() returns.
   async function run(o, G, stop, until, still) {
     const one = still !== undefined;
-    if (!one && typeof G.VideoEncoder !== 'function') {
+    // A MOV of PNG frames, with no video encoder: config({ alpha }) when the
+    // call gives none.
+    const alpha = o.alpha === undefined ? clock.alpha() : checkAlpha(o.alpha, 'render');
+    if (!one && !alpha && typeof G.VideoEncoder !== 'function') {
       throw fail(CODES.NO_WEBCODECS, 'render()', __DEV__ && 'this page has no VideoEncoder; WebCodecs needs a secure context (https or localhost) and a browser that has it (Chrome 94 and later)');
     }
     clock.resolveComposition();
@@ -478,7 +544,9 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     const isCanvas = source instanceof HTMLCanvasElement;
     // The finishing pass (finish.js), on each frame after the shutter's
     // average and before it is encoded; config({ finish }) when none is given.
-    const finish = o.finish === undefined ? clock.finish() : readFinish(o.finish, 'render');
+    // Checked, and off, in an alpha render.
+    const finishing = o.finish === undefined ? clock.finish() : readFinish(o.finish, 'render');
+    const finish = alpha ? null : finishing;
     // A size passed for a DOM source scales its box to that size, as the
     // encoder scales a canvas source's frames.
     const sized = !!(o.width || o.height);
@@ -491,7 +559,7 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     // size is rounded up. The wrapper around a DOM source leaves the extra
     // row or column blank; Chrome's encoder scales a canvas source's frames
     // to the even size.
-    const even = codec.startsWith('avc1');
+    const even = !alpha && codec.startsWith('avc1');
     const width = even ? Math.ceil(asked.width / 2) * 2 : asked.width;
     const height = even ? Math.ceil(asked.height / 2) * 2 : asked.height;
     if (!isCanvas && typeof CanvasRenderingContext2D.prototype.drawElementImage !== 'function') {
@@ -504,7 +572,7 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
         + 'Give an <img>, <video> or SVG <image> crossorigin="anonymous", with Access-Control-Allow-Origin from its server; a CSS image, an <input type=image>, a frame or an <object> (drawn empty) has to come from this origin or a data: URL');
     }
 
-    const support = one ? { supported: true } : await G.VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps });
+    const support = one || alpha ? { supported: true } : await G.VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps });
     if (!support.supported) {
       const rounded = width !== asked.width || height !== asked.height ? ' (' + asked.width + 'x' + asked.height + ' rounded up to even, which H.264 needs)' : '';
       throw fail(CODES.BAD_CALL, 'render(): ' + codec + ' at ' + width + 'x' + height, __DEV__ && 'this browser cannot encode ' + codec + ' at ' + width + 'x' + height + rounded);
@@ -519,7 +587,7 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     await until(readiness.ready());
     const since = readiness.watch();
     let clips = [], sound = null;
-    if (withAudio) {
+    if (withAudio && !alpha) {
       clips = await until(audio.load());
       if (clips.length) sound = await until(soundConfig(audioCodec, audioBitrate));
     }
@@ -531,6 +599,10 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     // read from, its context, their sums and the average written back.
     const samples = shutter ? shutter.samples : 1, angle = shutter ? shutter.angle : 0;
     let pane = null, pctx = null, sum = null, avg = null;
+    // An alpha render's PNG Blobs, as promises in frame order, how many of
+    // them are known done, and what puts the stage back.
+    const pngs = [];
+    let taken = 0, cleared = null;
     const mp4 = createMp4({ width, height, fps, codec, description: null });
     let description = null;
     let failure = null;
@@ -566,7 +638,8 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
       // The live finish's overlays sit in the root; the pass finishes the file.
       if (finishLive) finishLive.hide();
       for (const c of laid) c.style.display = 'none';
-      if (!one) {
+      if (alpha) cleared = clearStage(source);
+      if (!one && !alpha) {
         encoder = new G.VideoEncoder({
           output(chunk, meta) {
             if (meta && meta.decoderConfig && meta.decoderConfig.description && !description) description = meta.decoderConfig.description;
@@ -597,6 +670,9 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
         c.setAttribute('content', 'drawable');
         c.setAttribute('data-kinetic-render', '');
         c.style.display = 'block';
+        // The canvas stands where the root stood: it takes the transform the page gave the root.
+        const placed = getComputedStyle(source);
+        for (const p of PLACED.concat('transformOrigin')) c.style[p] = placed[p];
         source.parentNode.insertBefore(c, source);
         wrap = c;
         // Chrome 157 draws only an element marked `drawable` (the canvas's
@@ -642,6 +718,7 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
               + (i ? 'a render at ' + fps + ' fps would repeat or skip frames' : 'from (' + s(from) + ') is not on those frames')
               + '. Give the root a data-fps that is a whole multiple of ' + fps + " (config({ fps }) comes too late for the runtime), with Kinetic's script tag before the runtime's and the root in the page when the runtime starts; or set window.__HF_EXPORT_RENDER_SEEK_CONFIG = { fps: " + fps + " } in a script before the runtime's; or remove the runtime's script tag for an in-browser render");
           }
+          if (cleared) adoptClear();
           if (ctx) {
             updateCopies(copies, source, wrap);
             await painted();
@@ -654,21 +731,38 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
             const d = pctx.getImageData(0, 0, pane.width, pane.height).data;
             for (let j = 0; j < d.length; j += 4) {
               const a = d[j + 3];
-              sum[j] += d[j] * a; sum[j + 1] += d[j + 1] * a; sum[j + 2] += d[j + 2] * a;
+              sum[j] += d[j] * a; sum[j + 1] += d[j + 1] * a; sum[j + 2] += d[j + 2] * a; sum[j + 3] += a;
             }
           }
         }
         if (sum) {
           // Each colour weighted by its alpha, so the average is over black,
           // as the file shows a transparent pixel: an unweighted average
-          // darkened a pixel covered by m of n samples to (m / n)^2 of its
+          // would darken a pixel covered by m of n samples to (m / n)^2 of its
           // colour on a transparent root. The frame is
           // written opaque (avg's alpha is 255 throughout), and
-          // Uint8ClampedArray rounds each level.
-          for (let j = 0; j < sum.length; j++) if ((j & 3) < 3) { avg.data[j] = sum[j] / (255 * samples); sum[j] = 0; }
+          // Uint8ClampedArray rounds each level. With alpha the colour is
+          // divided by the alphas' sum instead, which gives it straight, and
+          // the alpha is their average, the coverage.
+          for (let j = 0; j < sum.length; j += 4) {
+            const a = sum[j + 3], k = alpha ? a : 255 * samples;
+            for (let c = j; c < j + 3; c++) { avg.data[c] = k ? sum[c] / k : 0; sum[c] = 0; }
+            if (alpha) avg.data[j + 3] = a / samples;
+            sum[j + 3] = 0;
+          }
           pctx.putImageData(avg, 0, 0);
         }
         const shown = pane || canvas || source;
+        if (alpha && !one) {
+          const p = png(shown, source, width, height, i);
+          p.catch(() => {});
+          pngs.push(p);
+          // A few frames encode at once; the next waits for the oldest.
+          while (pngs.length - taken > 4) { await until(pngs[taken]); taken++; }
+          stop();
+          if (typeof o.onProgress === 'function') o.onProgress(i + 1, frames);
+          continue;
+        }
         if (one) {
           // A copy, since the pass's canvas and the wrapper go at the end.
           kept = document.createElement('canvas');
@@ -696,11 +790,13 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
       }
       stop();
       if (one) return kept;
-      await until(encoder.flush()).catch((e) => { stop(); throw failure || broke(codec + ' encoder', __DEV__ && "the browser's video encoder failed (" + (e && e.message || e) + ')'); });
+      if (alpha) await until(Promise.all(pngs));
+      else await until(encoder.flush()).catch((e) => { stop(); throw failure || broke(codec + ' encoder', __DEV__ && "the browser's video encoder failed (" + (e && e.message || e) + ')'); });
       if (failure) throw failure;
     } finally {
       if (encoder) try { encoder.close(); } catch (_) { /* already closed */ }
       unwrap();
+      if (cleared) cleared();
       if (finishLive) finishLive.show();
       for (const c of laid) c.style.display = '';
       if (clock.store.fps !== clockFps) clock.setFps(clockFps, before);
@@ -708,6 +804,26 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
       if (fin) fin.dispose();
       // The time is put back at once; an abort stops waiting for its media.
       try { await until(clock.seekSettled(before)); } finally { try { if (release) release(); } finally { resume(); } }
+    }
+    const base = o.name || (root && root.getAttribute('data-composition-id')) || 'composition';
+    const offer = (blob, name, made, track) => {
+      if (o.download !== false) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      }
+      return { blob, name, frames, width, height, fps, codec: made, audioCodec: track ? track.codec : null, ms: Math.round(performance.now() - started) };
+    };
+    if (alpha) {
+      const parts = await Promise.all(pngs);
+      const { head, tail } = createMov({ width, height, fps, sizes: parts.map((b) => b.size) });
+      const blob = new Blob([head, ...parts, tail], { type: 'video/quicktime' });
+      try { await readBack(blob, parts); } catch (e) {
+        throw fail(CODES.ENCODER_FAILED, 'render(): the MOV', __DEV__ && 'the file could not be read back (' + (e && e.message || e) + '); a Chrome started moments ago holds less, so render again in a minute, or a shorter range');
+      }
+      return offer(blob, base + '.mov', 'png', null);
     }
     // The sound over the render's range, as long as its frames.
     const track = sound ? await encodeSound(clips, sound, Math.round(from * RATE), Math.round(frames / fps * RATE), stop) : null;
@@ -718,15 +834,6 @@ export function createRender(clock, fit, audio, readiness, lesson, finishLive) {
     for (let i = 0; i < mp4.count; i++) file.addSample(mp4.sampleAt(i).bytes, mp4.sampleAt(i).key);
     let bytes;
     try { bytes = file.finish(); } catch (e) { throw broke('MP4', __DEV__ && "the browser's video encoder gave output the MP4 cannot hold (" + e.message + ')'); }
-    const blob = new Blob([bytes], { type: 'video/mp4' });
-    const name = (o.name || (root && root.getAttribute('data-composition-id')) || 'composition') + '.mp4';
-    if (o.download !== false) {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    }
-    return { blob, name, frames, width, height, fps, codec, audioCodec: track ? track.codec : null, ms: Math.round(performance.now() - started) };
+    return offer(new Blob([bytes], { type: 'video/mp4' }), base + '.mp4', codec, track);
   }
 }

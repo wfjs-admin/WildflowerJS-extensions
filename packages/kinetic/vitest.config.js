@@ -4,10 +4,10 @@ import path from 'path'
 import { flakyRoute } from './test/flaky-route.js'
 
 // Behaviour suite for the Kinetic extension, against the built artifact, in a
-// real browser. Outside the framework's 21-lane matrix on purpose: an
-// extension is built and tested on its own.
+// real browser. An extension is built and tested on its own, apart from the
+// framework's suite.
 //
-//   node scripts/build-rollup.cjs kinetic.wf
+//   node scripts/build-extension.cjs kinetic
 //   npx vitest run --config packages/kinetic/vitest.config.js
 //   EXT_BUILD=min npx vitest run --config packages/kinetic/vitest.config.js
 //   node scripts/test-extension.cjs kinetic  (every tier and build the manifest declares)
@@ -50,7 +50,7 @@ export default defineConfig({
     include: ['packages/kinetic/test/**/*.test.js'],
     // render() needs the installed Chrome (WebCodecs, HTML in canvas):
     // vitest.render.config.js runs those.
-    exclude: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js', 'packages/kinetic/test/still-end.test.js'],
+    exclude: ['packages/kinetic/test/render.test.js', 'packages/kinetic/test/footage-render.test.js', 'packages/kinetic/test/lottie-render.test.js', 'packages/kinetic/test/lesson-render.test.js', 'packages/kinetic/test/still-end.test.js', 'packages/kinetic/test/tools-pixels.test.js', 'packages/kinetic/test/batch-render.test.js', 'packages/kinetic/test/alpha-render.test.js'],
     testTimeout: 30000,
     // On CI (two cores) the files run one at a time: the live-playback tests
     // time a playing <video> against the clock, and with every file's tab

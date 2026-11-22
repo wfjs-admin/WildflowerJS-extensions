@@ -21,6 +21,8 @@ export const CODES = {
   BAD_CALL:      'KN-100',   // a Kinetic call with a wrong argument (thrown)
   NO_QUERIES:    'KN-101',   // waitFor used on a tier without queries
   LOADED_TWICE:  'KN-102',   // the extension file was loaded a second time
+  NO_TOOLS:      'KN-103',   // check() with a tool's option, or render.batch(), could not load kinetic.tools.js (rejected, every build)
+  BATCH:         'KN-104',   // render.batch(): a row's frame did not get ready in time or failed with no code of its own, or its file could not be read back or saved (rejected by kinetic.tools.js); a batch frame's name that holds no row (development warning)
   NO_DURATION:   'KN-110',   // the composition root has no data-duration
   NO_TIMELINE:   'KN-111',   // the HyperFrames runtime is on the page, and the root has neither data-no-timeline nor a registered timeline
   NO_TIMING:     'KN-112',   // a scene element has no timing ancestor; local equals time
@@ -74,7 +76,7 @@ export const CODES = {
   FOREIGN_MEDIA: 'KN-204',   // render(): media from another origin in a DOM source would be drawn black; effect(): a source WebGL cannot read (thrown)
   RUNTIME_SHUTTER: 'KN-205', // render(): a shutter with the HyperFrames runtime on the page, whose player rounds seeks down to its own frames; not applied
   RUNTIME_FPS:   'KN-206',   // render(): the HyperFrames runtime's player seeks on a grid that misses this render's frames, so frames would repeat or skip (thrown)
-  ENCODER_FAILED:'KN-207',   // render(): the video encoder reported an error, stopped taking frames for 10 s, or gave output the MP4 cannot hold (thrown)
+  ENCODER_FAILED:'KN-207',   // render(): the video encoder reported an error, stopped taking frames for 10 s, or gave output the MP4 cannot hold; with alpha, a frame that would not make a PNG or a MOV that cannot be read back (thrown)
 };
 
 // Readiness's report() (readiness.js fills it in), for a failure a source

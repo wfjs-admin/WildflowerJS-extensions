@@ -38,7 +38,7 @@ describe(`the fit and a root sized by its container (${BUILD} extension, ${CORE_
     expect(await fitted(' #stage { width: 100%; aspect-ratio: 16 / 9; }')).toEqual([320, 180]);
   });
 
-  it('a root at data-width, from the page or from Kinetic, is fitted as before', async () => {
+  it('a root at data-width, from the page or from Kinetic, is fitted by that width', async () => {
     expect(await fitted(' #stage { width: 640px; height: 360px; }')).toEqual([320, 180]);
     expect(await fitted('')).toEqual([320, 180]);
     expect(await fitted(' #stage { width: 640px; height: 360px; }', 800)).toEqual([640, 360]);

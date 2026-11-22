@@ -861,6 +861,13 @@ export interface KineticConfig {
    */
   encode?: EncodeOptions | false | null;
   /**
+   * Whether every render() that gives none makes a transparent video (see
+   * RenderOptions.alpha), the preview bar's Render included, which then asks
+   * first in a dialog with the file's estimated size. Default false; KN-100
+   * for a value that is not a boolean. config() reports it.
+   */
+  alpha?: boolean;
+  /**
    * 'auto' (the default): video mode with the preview bar up, interactive mode
    * otherwise. 'interactive' or 'video' sets it. The HyperFrames runtime on the page,
    * a render capturing, check() and render() put the page in video mode
@@ -912,7 +919,7 @@ export interface RenderOptions {
   /** Pixel size; the root's data-width and data-height, or a canvas's own, by default. */
   width?: number;
   height?: number;
-  /** The file name without .mp4; the root's data-composition-id by default. */
+  /** The file name without .mp4 (or .mov); the root's data-composition-id by default. */
   name?: string;
   /** false keeps the file in the result only. */
   download?: boolean;
@@ -950,6 +957,19 @@ export interface RenderOptions {
   shutter?: number | false | null | ShutterOptions;
   /** The finishing pass for this file (FinishOptions); config({ finish }) by default; 0, false or null for none. */
   finish?: FinishOptions | 0 | false | null;
+  /**
+   * true: a QuickTime file (.mov, video/quicktime) of PNG frames with their
+   * transparency, which After Effects and Premiere import with alpha.
+   * config({ alpha }) by default. For the render the drawn element's
+   * background is cleared and <html> carries data-kinetic-alpha for the
+   * page's CSS; both go again after, on a failure too. The finish is off,
+   * there is no sound, and codec and bitrate do not apply; the shutter
+   * applies, its blurred edges in the alpha. Large: about 6.7 GB for two
+   * minutes of busy 1080p graphics. KN-100 for a value that is not a
+   * boolean, KN-201 where the browser cannot draw the page, KN-207 for a
+   * file the browser cannot read back.
+   */
+  alpha?: boolean;
 }
 
 export interface RenderResult {
@@ -959,11 +979,55 @@ export interface RenderResult {
   width: number;
   height: number;
   fps: number;
+  /** The video codec, or 'png' for a render with alpha. */
   codec: string;
   /** The sound track's codec, or null for a file with no sound. */
   audioCodec: 'mp4a.40.2' | 'opus' | null;
   /** Wall-clock milliseconds the render took. */
   ms: number;
+}
+
+/** render.batch()'s options: its own, and render()'s that pass to each row's render. */
+export interface BatchOptions extends Pick<RenderOptions, 'fps' | 'from' | 'to' | 'codec' | 'bitrate' | 'width' | 'height' | 'audio' | 'audioCodec' | 'audioBitrate' | 'shutter' | 'finish' | 'alpha'> {
+  /** The row field that names each file; `<composition id>-<row number>` by default. Names are made unique within the batch. */
+  name?: string;
+  /**
+   * 'folder': one file per row into a folder picked with showDirectoryPicker();
+   * 'download': one download per row; false: the Blobs in the result. Default
+   * 'folder' where the browser has the picker and the call comes from a click,
+   * else 'download'.
+   */
+  save?: 'folder' | 'download' | false;
+  /** Seconds for each row's page to get ready; 60 by default. KN-104 past it. */
+  timeout?: number;
+  /** Called as each row loads, at each of its frames, and once it is saved. */
+  onRow?: (info: { index: number; count: number; row: Record<string, unknown>; name: string; phase: 'loading' | 'rendering' | 'saved'; frame?: number; frames?: number }) => void;
+  /** Cancels the batch, as render({ signal }) cancels a render. */
+  signal?: AbortSignal;
+}
+
+export interface BatchResult {
+  row: Record<string, unknown>;
+  index: number;
+  /** The file's name, with .mp4, or .mov when alpha (or this page's config({ alpha })) is on. */
+  name: string;
+  /** With save: false only. */
+  blob?: Blob;
+}
+
+export interface KineticRender {
+  (options?: RenderOptions): Promise<RenderResult>;
+  /**
+   * The page rendered once per row, each row's fields the composition's
+   * variables, one MP4 per row, each in a hidden frame of this page. `rows` is
+   * an array of objects, an object with a `rows` array, or a File or Blob of
+   * JSON or CSV (a header row of ids; every value text, converted to each
+   * input's declared type). Loads kinetic.tools.js (KN-103 when it does not
+   * load). A row that fails rejects with its code, its where led by the row's
+   * number, and `index`, `row`, `lines` (what its page printed) and `results`
+   * (the rows saved before it) on the error.
+   */
+  batch(rows: Record<string, unknown>[] | { rows: Record<string, unknown>[] } | Blob, options?: BatchOptions): Promise<BatchResult[]>;
 }
 
 /** What every check() report carries: the root's data-kinetic-ready, and the errors printed or thrown during the seeks. */
@@ -978,6 +1042,63 @@ export type CheckReport =
   | ({ ok: true; frames: number; samples: number } & CheckState)
   | ({ ok: false; reason: 'readiness failed' | 'a seek threw'; frames: number; samples: number } & CheckState)
   | ({ ok: false; frame: number; time: number; element: string; property: string; first: string; second: string } & CheckState);
+
+/** check()'s options beyond the self-test; any of them loads kinetic.tools.js. */
+export interface CheckToolOptions {
+  /** Blocks of text that leave before they can be read (at least 1.5 s, and 0.5 s plus 0.375 s a word, 1 s more for a figure). */
+  reading?: boolean;
+  /** Text outside the safe area (5%) at rest, cut off, over other text (each lasting 0.2 s), or under its contrast floor (4.5:1, 3:1 at 48 px). */
+  layout?: boolean;
+  /** PNGs of frames: a count evenly spaced from 0 to the last frame, or a list of seconds. */
+  frames?: number | number[];
+  /** The frames tiled into one PNG, each labelled with its number. Needs frames. */
+  strip?: boolean;
+  /** Each step entered in interactive mode and waited on to its hold. */
+  lesson?: boolean;
+  /** The pace measured against the dial. */
+  pace?: 'calm' | 'lively' | 'bold';
+  /** The last frame to frame 0, as a loop plays them. */
+  seam?: boolean;
+  /** Every pair of frames, for a sudden pop. */
+  jumps?: boolean;
+  /** The change between two frames, by number. */
+  diff?: [number, number];
+  /** Each selector hidden in turn over the diff's pair, else the largest jump. */
+  isolate?: string[];
+  /** The view checked: the render's (the default), the live page's, or both in turn. */
+  view?: 'render' | 'live' | 'both';
+}
+
+/** A change between two frames: the mean change in brightness, 0 to 255, and the box of the pixels that changed by more than 24 levels, in the composition's pixels. */
+export interface FrameChange { mean: number; box: { x: number; y: number; width: number; height: number } | null }
+
+export type LayoutFinding =
+  | { kind: 'cut' | 'safe'; text: string; edge: 'left' | 'top' | 'right' | 'bottom'; px: number; margin: number; from: number; held: number }
+  | { kind: 'over'; text: string; other: string; w: number; h: number; from: number; held: number }
+  | { kind: 'contrast'; text: string; ratio: number; needs: 3 | 4.5; size: number; from: number };
+
+/** The fields a report gains from kinetic.tools.js: one for each pass that ran. */
+export interface CheckToolReport {
+  view: 'render' | 'live';
+  /** The KN lines and errors printed during the run, each once with its count. */
+  console: { kind: 'kn' | 'note' | 'error' | 'page error'; text: string; count: number }[];
+  /** The passes that read pixels and could not run, with the error that stopped them (KN-201 without drawElementImage). */
+  skipped?: Partial<Record<'images' | 'strip' | 'contrast' | 'pace' | 'seam' | 'jumps' | 'diff' | 'isolate' | 'stills', { code: string | null; message: string }>>;
+  reading?: { short: { text: string; words: number; held: number; from: number; needs: number; whole?: true }[] };
+  layout?: { found: LayoutFinding[] };
+  images?: { t: number; frame: number; png: Blob }[];
+  strip?: Blob;
+  lesson?: { ok: boolean; reason?: 'video mode' | 'no steps'; steps: { index: number; id: string; held: boolean; playsOn: boolean; waited: number; time?: number; waits?: boolean; png?: Blob; lines: string[]; ok: boolean }[] };
+  pace?: { dial: 'calm' | 'lively' | 'bold'; secs: number; still: number; snaps: number; longest: number; longestFrom: number; range: number; ramps: number; tones: number;
+    target: Record<'still' | 'snaps' | 'longest' | 'range' | 'ramps' | 'tones', [number, number]>; misses: string[] };
+  /** null when the composition has fewer than three frames. */
+  seam?: { wrap: FrameChange; before: number; after: number; jump: boolean } | null;
+  jumps?: (FrameChange & { a: number; b: number; usual: number })[];
+  diff?: FrameChange & { a: number; b: number };
+  isolate?: { none: true } | { a: number; b: number; mean: number; rows: { selector: string; found: number; mean: number | null; gone: number | null }[] };
+  /** With view 'both', the live view's report. */
+  live?: CheckReport & CheckToolReport;
+}
 
 export interface WildflowerKinetic {
   readonly version: string;
@@ -1004,6 +1125,17 @@ export interface WildflowerKinetic {
    */
   check(options?: { samples?: number; seed?: number | string }): Promise<CheckReport>;
   /**
+   * With any other option, check() loads kinetic.tools.js once, from beside
+   * kinetic.wf.js, and runs those passes after the self-test (KN-103 when
+   * the file does not load). A failed lesson walk makes `ok` false.
+   */
+  check(options: { samples?: number; seed?: number | string } & CheckToolOptions): Promise<CheckReport & CheckToolReport>;
+  /** kinetic.tools.js, once it is on the page: check() hands its tool options here, and render.batch() its call. */
+  tools?: {
+    check(options: { samples?: number; seed?: number | string } & CheckToolOptions): Promise<CheckReport & CheckToolReport>;
+    batch: KineticRender['batch'];
+  };
+  /**
    * An MP4 from the page through WebCodecs, every frame a settled seek. A
    * canvas source works in any Chrome; the composition's DOM needs
    * drawElementImage (Chrome 154 behind --enable-blink-features=CanvasDrawElement).
@@ -1012,7 +1144,7 @@ export interface WildflowerKinetic {
    * HyperFrames runtime on the page, the fps has to divide the root's
    * data-fps: KN-206 rejects when a frame's seek lands off the frame's time.
    */
-  render(options?: RenderOptions): Promise<RenderResult>;
+  render: KineticRender;
   /** Moves the clock: the HyperFrames player's renderSeek when a runtime is on the page, else the store directly. */
   seek(seconds: number): void;
   /**
@@ -1510,6 +1642,8 @@ export interface WildflowerKinetic {
   tempo(id?: string): Tempo;
   /** Solids in 2.5D, drawn as SVG paths: present when kinetic.25d.js is loaded after kinetic.wf.js. */
   solids?: SolidsFactory;
+  /** Layers: a piece written as a plain object, drawn each frame. A record with solid layers needs kinetic.25d.js. */
+  layers: KineticLayers;
 
   /**
    * The level of the audio clips' mix (or of one clip, by id) in a band at
@@ -2120,8 +2254,179 @@ export interface BeatFile {
 
 export type Vec3 = [number, number, number];
 
-/** A shape for a solids stage: from solids.box(), solids.cage() or solids.faces(). */
+/** A shape for a solids stage: from solids.box(), solids.faces() or another of solids' shapes. */
 export interface SolidShape { readonly faces: ReadonlyArray<{ pts: Vec3[]; n: Vec3 }>; }
+
+/** solids.box()'s options. Its sides: front, back, left, right, top, bottom. */
+export interface SolidBoxOptions {
+  /** The edge, a number above 0, or [x, y, z]. */
+  size: number | Vec3;
+}
+/** One of solids.faces()' faces. */
+export interface SolidFace {
+  /** 3 or more corners, each [x, y, z]. */
+  pts: Vec3[];
+  /** The outward normal; from the first three corners when left out. */
+  n?: Vec3;
+  /** A name for the face, to color it by through `side`. */
+  side?: string;
+}
+/** solids.plane()'s options: a flat rectangle in the plane z = 0, facing +z, with sides front and back. */
+export interface SolidPlaneOptions {
+  /** The edge, a number above 0, or [x, y]. */
+  size: number | [number, number];
+}
+/** solids.disc()'s options: a flat circle, with sides front and back. */
+export interface SolidDiscOptions {
+  /** Above 0. */
+  radius: number;
+}
+/** solids.sector()'s options: a flat slice of a circle, in degrees clockwise from straight up; with inner, a ring's part. */
+export interface SolidSectorOptions {
+  /** Above 0. */
+  radius: number;
+  /** Degrees (0). */
+  from?: number;
+  /** Degrees, no less than from (360). */
+  to?: number;
+  /** A radius from 0 up to `radius` (0). */
+  inner?: number;
+}
+/** solids.capsule()'s options: two circles `length` apart along x and the lines that touch both. */
+export interface SolidCapsuleOptions {
+  /** Above 0, or [left, right] for ends of two sizes. */
+  radius: number | [number, number];
+  /** How far apart the two ends' middles are, 0 or more. */
+  length: number;
+}
+/** solids.polygon()'s options: a flat regular polygon, its first corner straight up. */
+export interface SolidPolygonOptions {
+  /** A whole number, 3 or more. */
+  sides: number;
+  /** Above 0. */
+  radius: number;
+}
+/** solids.prism()'s options: a regular polygon carried back along z. Its sides: front, back (with a taper above 0), side. */
+export interface SolidPrismOptions extends SolidPolygonOptions {
+  /** How deep it is about the center, above 0. */
+  depth: number;
+  /** The back's size as a share of the front's, 0 or more (1); 0 brings it to a point. */
+  taper?: number;
+}
+/** solids.pyramid()'s options: standing on its base, a corner of the base toward the front. Its sides: base, side. */
+export interface SolidPyramidOptions extends SolidPolygonOptions {
+  /** How tall it is about the center, above 0. */
+  height: number;
+}
+/**
+ * solids.sphere()'s options: a sphere, drawn from its outline each draw.
+ * Divided into wedges or into bands, not both; its sides are numbered, so
+ * its `side` is a list.
+ */
+export interface SolidSphereOptions {
+  /** Above 0. */
+  radius: number;
+  /** That many equal segments around an axis, a whole number, 2 or more; side 0 centered on the front (on the top, around z). */
+  wedges?: number;
+  /** The axis the wedges go around ('y'). */
+  around?: 'x' | 'y' | 'z';
+  /** That many slices of equal height along an axis (a whole number, 2 or more), or the heights to cut at, each between -1 and 1; side 0 at the axis' far end. */
+  bands?: number | number[];
+  /** The axis the bands go along ('y'). */
+  along?: 'x' | 'y' | 'z';
+}
+/** Some of a made shape's numbers, for set()'s `shape`: the rest stay as they were. */
+export type SolidShapeNumbers = Partial<SolidBoxOptions> | Partial<SolidPlaneOptions> | Partial<SolidDiscOptions> | Partial<SolidSectorOptions> | Partial<SolidCapsuleOptions> | Partial<SolidPrismOptions> | Partial<SolidPyramidOptions> | Partial<SolidSphereOptions>;
+
+/**
+ * A shape's own color: a ramp of two or more #rrggbb colors, dark to lit,
+ * read through the light as the stage's is; a paint of the page's ('#f00',
+ * 'url(#id)') drawn as it is; or a gradient in the shape's own space, its
+ * stops #rrggbb or #rrggbbaa (evenly spaced) or [offset, color], along a line
+ * at `angle` degrees from its x axis through its middle, or between two of
+ * its points.
+ */
+export type SolidColor = string | string[]
+  | { gradient: Array<string | [number, string]>; angle?: number }
+  | { gradient: Array<string | [number, string]>; from: [number, number] | Vec3; to: [number, number] | Vec3 };
+/** A named point of a shape (every shape's center; a capsule's left and right), moved by offset, in the shape's own space. */
+export interface SolidPoint { point: 'center' | 'left' | 'right'; offset?: [number, number] | Vec3 }
+/** A mark of grain on a shape, as shade() takes marks as data, in the shape's own space and units, cut to the side it is on. */
+export type SolidShadeMark = Omit<ShadeMarkOptions, 'clip'> & {
+  /** Kept inside a circle about a point of the shape. */
+  within?: SolidPoint & { radius: number };
+} & (
+  { edge: { width: number } }
+  | { glow: { at: [number, number] | Vec3 | SolidPoint; radius: number; invert?: boolean } }
+  | { band: { from: [number, number] | Vec3; to: [number, number] | Vec3; width: number; side?: 'both' | 'left' | 'right' } }
+  | { fill: number }
+);
+/** Marks with a look of their own: shade()'s layer options (kind, scale, ...) beside them, and `travel: false` to leave the specks where they are on the frame. */
+export interface SolidShadeGroup {
+  marks: SolidShadeMark | SolidShadeMark[];
+  /** The specks go where the shape goes (true); false leaves them on the frame, and such shapes share one canvas. */
+  travel?: boolean;
+  kind?: ShadeKind;
+  [option: string]: unknown;
+}
+/** Grain on a shape or a side: marks, one or a list; a group; or a list of groups, for several looks on one shape. null takes it off. */
+export type SolidShade = SolidShadeMark | SolidShadeMark[] | SolidShadeGroup | SolidShadeGroup[];
+/** What is said of one side, over what is said of the whole shape. */
+export interface SolidSide { color?: SolidColor | null; shade?: SolidShade | null }
+/** Each side by its name (front, back, ...), or for a sphere a list, one for each of its wedges or bands in order. A flat shape's back is drawn only when side.back has a color. */
+export type SolidSides = Record<string, SolidSide | null | undefined> | Array<SolidSide | null | undefined>;
+
+/** add()'s options: the shape's material and how it sits on the stage. */
+export interface SolidAddOptions {
+  /** How much light it returns (1). */
+  albedo?: number;
+  /** How much of the stage's glows it takes (1). */
+  glow?: number;
+  /** How much of the stage's rim it takes (1). */
+  rim?: number;
+  /** How strong a drop shadow it casts, 0 to 1 (1). */
+  casts?: number;
+  /** false keeps drop shadows off it. */
+  accepts?: boolean;
+  color?: SolidColor;
+  side?: SolidSides;
+  /** Grain on it, drawn on the stage's shade canvas. */
+  shade?: SolidShade | null;
+  /** The name of another shape, often a solids.null(), whose transform its own is inside; null for none. */
+  parent?: string | null;
+  /** The point of its own space that position places, and that it turns and scales about. */
+  pivot?: Vec3;
+  /** Drawn over every shape of a lower order and under every one of a higher; one order sorts by depth (0). */
+  order?: number;
+  /** The name of another shape, drawn only inside its outline; or { shape, invert: true }, only outside it. */
+  clip?: string | { shape: string; invert?: boolean };
+  /** Worked out but not drawn, as a clip for others. */
+  hidden?: boolean;
+}
+/** set()'s values: where the shape is and how it looks now. */
+export interface SolidSetValues {
+  /** Another shape in its place, or some of its numbers such as { radius: 2 } (a shape made from a list takes a whole shape). */
+  shape?: SolidShape | SolidShapeNumbers;
+  parent?: string | null;
+  /** Degrees about x, then y, then z. */
+  rotate?: Vec3;
+  /** A number or [x, y, z]. */
+  scale?: number | Vec3;
+  position?: Vec3;
+  pivot?: Vec3;
+  /** 0 to 1. */
+  opacity?: number;
+  /** null takes its color off: it is drawn on the stage's ramp. */
+  color?: SolidColor | null;
+  shade?: SolidShade | null;
+  side?: SolidSides;
+  /** 0 to 1. */
+  casts?: number;
+  order?: number;
+}
+
+/** The stage's grain: the canvas over the stage that shapes with a shade paint on, and shade()'s layer options for it (scene, kind, fps, ...). */
+export type SolidsGrain = { [K in ShadeKind]: { canvas: HTMLCanvasElement; kind?: K } & Partial<Omit<ShadeOptions<K>, 'kind' | 'marks'>> }[ShadeKind];
 
 export interface SolidsOptions {
   /** Looks down -z from (0, 0, distance), +y up. focal: px at a distance of 1 (900); roll: degrees (0); near (0.2): faces are clipped there; fade (0): over this distance past near a face thins out; center: default the middle of the <svg>'s viewBox. */
@@ -2130,30 +2435,501 @@ export interface SolidsOptions {
   light?: { dir?: Vec3; ramp?: string[]; gamma?: number; floor?: number; gain?: number; bounce?: number; across?: [number, number] };
   /** A fine edge, opacity base + edge * (1 - |n . toward the eye|)^power; false for none. */
   rim?: false | { color?: string; width?: number; base?: number; edge?: number; power?: number };
-  /** Soft color where a light at dir reflects into the eye, clipped to the face; bleed spills past its edge, fainter past cap px wide. color makes the gradients; gradient and bleed.gradient name the page's own radialGradient. */
-  glows?: Array<{ dir: Vec3; color?: string; gradient?: string; size?: number; strength?: number; sharp?: number; bleed?: { size?: number; strength?: number; cap?: number; color?: string; gradient?: string } }>;
+  /**
+   * Soft color where a light at dir reflects into the eye, clipped to the face; bleed spills past its edge, fainter past cap px wide. color makes the gradients; gradient and bleed.gradient name the page's own radialGradient.
+   * spread, in degrees: the glow sits at the face's middle when the face mirrors the light to the eye and at its edge when the face is turned that far from it, whatever the camera's distance; below 0 it crosses the other way; 0 (the default) tethers it within reach of the face.
+   */
+  glows?: Array<{ dir: Vec3; color?: string; gradient?: string; size?: number; strength?: number; sharp?: number; spread?: number; bleed?: { size?: number; strength?: number; cap?: number; color?: string; gradient?: string } }>;
+  /** Each shape's outline, blurred (px), falling on the shapes drawn behind it and multiplying their color by `color`, `opacity` strong, moved by `offset` in the target's units. Defaults: blur 24, '#000000', 0.35, [0, 0]. */
+  dropShadow?: false | { blur?: number; color?: string; opacity?: number; offset?: [number, number] };
+  /** The canvas a shape's shade paints its grain on, and the layer options for it. */
+  shade?: SolidsGrain;
 }
 
 export interface SolidsStage {
-  add(name: string, shape: SolidShape, options?: { albedo?: number; glow?: number }): SolidsStage;
-  /** rotate: degrees about x, then y, then z; scale: a number or [x, y, z]; opacity 0 to 1. */
-  set(name: string, props: { rotate?: Vec3; scale?: number | Vec3; position?: Vec3; opacity?: number }): SolidsStage;
+  /** Puts a shape on the stage. KN-100 for a wrong argument. */
+  add(name: string, shape: SolidShape, options?: SolidAddOptions): SolidsStage;
+  /** Places a shape and changes how it looks. KN-100 for a name not on the stage or a key set() does not take. */
+  set(name: string, values: SolidSetValues): SolidsStage;
   remove(name: string): SolidsStage;
-  /** Culled, clipped, sorted far to near (a tie by place on screen), shaded; the same SVG for the same values whatever was drawn before. */
+  /** Culled, clipped, sorted far to near (a tie by place on screen; of two that overlap, one wholly in front of the other's plane after it), shaded; the same SVG for the same values whatever was drawn before. */
   draw(): SolidsStage;
   /** A point's place in the frame. */
   project(p: Vec3): [number, number];
+  /** Takes the stage's elements out of the page and stops its grain, taking out the canvases it added beside the stage's own. After it the stage has no shapes: draw() draws nothing, and set() of a shape it had is KN-100. */
   dispose(): void;
 }
 
 export interface SolidsFactory {
   (target: SVGElement, options?: SolidsOptions): SolidsStage;
-  /** size: the edge, or [x, y, z]. */
-  box(options: { size: number | Vec3 }): SolidShape;
-  /** A box's twelve edges as square beams `beam` thick. */
-  cage(options: { size: number | Vec3; beam: number }): SolidShape;
-  /** Faces of your own: 3 or more corners each, n the outward normal (from the first three corners when left out). */
-  faces(faces: Array<{ pts: Vec3[]; n?: Vec3 }>): SolidShape;
+  box(options: SolidBoxOptions): SolidShape;
+  /** Faces of your own. */
+  faces(faces: SolidFace[]): SolidShape;
+  plane(options: SolidPlaneOptions): SolidShape;
+  disc(options: SolidDiscOptions): SolidShape;
+  sector(options: SolidSectorOptions): SolidShape;
+  capsule(options: SolidCapsuleOptions): SolidShape;
+  polygon(options: SolidPolygonOptions): SolidShape;
+  prism(options: SolidPrismOptions): SolidShape;
+  pyramid(options: SolidPyramidOptions): SolidShape;
+  sphere(options: SolidSphereOptions): SolidShape;
+  /** A transform with nothing to draw, a parent for other shapes. */
+  null(): SolidShape;
+}
+
+/*
+ * Layers. A piece written as a plain object, its layers drawn each frame.
+ * The record's keys, each kind's keys, and the keys of a layer's place,
+ * look, content and animate are typed here; the values are not. The record
+ * is checked when layers() is handed it, or when a clip of a layers.scene()
+ * starts, and its values as they are drawn, each error (KN-161 to KN-169)
+ * naming the layer and the field.
+ */
+
+/**
+ * A value in a layers record. A field takes one of: a number; a string (a
+ * name, or a sum of names and numbers such as 'OUT + R', '0.6R' or
+ * 'hit1 - beat 1'; any other string stays a string, such as a color or a
+ * class); a list, each part a value; or an object of one form: a track
+ * { at, to, ease, extrapolate }; { keys: [[x, v], ...], by, ease, match };
+ * a link { from: 'id.path', scale, add, time }; { follow: 'store.path', ease };
+ * { call: 'name', args, scale, add }, a function handed in fns; { multiply },
+ * { add }, { min }, { max } or { floor }; { rate }; { stagger } or { sweep };
+ * { level }, { spectrum } or { beat }; { wiggle }; { startOf: 'clipId' }; or
+ * { focus: { depth, max } }. Any form also takes on, loop or hold. Names
+ * resolve through the placement's parameters, the record's constants, its
+ * shared values, the composition's markers and beats, 'end' and 'last'.
+ * Every form: https://kinetic.wildflowerjs.com/docs/layers-values/.
+ */
+export type LayerValue = number | string | boolean | null | LayerValue[] | { [key: string]: unknown };
+
+/** Where a layer is, each key a value. */
+export interface LayerPlace {
+  /** [x, y] px, or [x, y, z]. */
+  translate?: LayerValue;
+  /** Degrees, or [x, y, z] about each axis. On an SVG layer it turns about pivot. */
+  rotate?: LayerValue;
+  /** A number, or [x, y]. */
+  scale?: LayerValue;
+  /** [a, b], a share of its own size: CSS lengths such as '-50%'. */
+  shift?: LayerValue;
+  /** Px, for its own 3D turn. */
+  perspective?: LayerValue;
+  /** [x, y, z]: a solid's place on the stage, or a layer's in the 3D world. */
+  position?: LayerValue;
+  /** The point it turns and scales about. */
+  pivot?: LayerValue;
+}
+
+/** How a layer looks, each key a value. Each kind takes the keys its own look type names. */
+export interface LayerLook {
+  /** 0 to 1. */
+  opacity?: LayerValue;
+  /** A color, swatch or role; a solid's also a ramp or { gradient, angle } / { gradient, from, to }. */
+  color?: LayerValue;
+  /** A solid's sides, by name ({ front: 'coral' }), or a list for a sphere's wedges or bands; each a color or { color, shade }. */
+  side?: LayerValue;
+  /** A solid's share of the light it returns. */
+  albedo?: LayerValue;
+  /** How strongly the stage's glows show on a solid. */
+  glow?: LayerValue;
+  /** How strong a drop shadow a solid casts, 0 to 1. */
+  casts?: LayerValue;
+  /** false keeps drop shadows off a solid. */
+  accepts?: LayerValue;
+  /** A solid's grain: a list of { look, marks } groups, a comp look's name, or { role, mirror: 'y' }. On an html layer, shade() on its canvas. */
+  shade?: LayerValue;
+  /** A solid drawn only inside another layer's outline: its id, or { layer, invert: true } for only outside it. */
+  clip?: string | { layer: string; invert?: boolean };
+  /** Px. */
+  blur?: LayerValue;
+  /** CSS properties by name, each a value; a value with unit: 'px' is written with that unit. */
+  style?: { [cssProperty: string]: LayerValue };
+  /** An SVG path drawn up to `end`. */
+  trim?: { end: LayerValue };
+  /** The name of one of the record's presets, played from the layer's own start. */
+  preset?: string;
+  /** A world layer's background pattern drifting across the world, so neighboring layers' patterns stay in line: { rate: [x, y] px a second, tile: px }. */
+  drift?: LayerValue;
+  /** A captions layer's words styled by their state. */
+  words?: { active?: LayerValue; past?: LayerValue; future?: LayerValue };
+  /** effect() on the layer's canvas: kind, source, the kind's parameters. */
+  effect?: LayerValue;
+  /** blur() behind the layer's element: radius, marks, fps, delay, freeze. */
+  backdrop?: LayerValue;
+  /** draw() on the layer's canvas: inks, start, end, strokes, the hand's options. */
+  draw?: LayerValue;
+  /** boil() on an SVG layer's content.d: amount, scale, fps, delay, seed, detail. */
+  boil?: LayerValue;
+  /** The layer's own motion drawn as copies beside it: samples, angle, fps. */
+  smear?: LayerValue;
+  /** { kind: 'ghosts', of, count, lag, fade, scale }, { kind: 'ribbon', u, d, length } or { kind: 'dots', u, d, count, past, future }. */
+  trails?: LayerValue;
+  /** repeat()'s copies of the element's template, each the last one's step again. */
+  repeat?: LayerValue;
+  /** transition(kind, p): kind, p, direction, side ('in' or 'out'). */
+  transition?: LayerValue;
+}
+/** A solid layer's look. */
+export type SolidLayerLook = Omit<LayerLook, 'effect' | 'backdrop' | 'draw' | 'boil'>;
+/** An html layer's look. effect, shade, backdrop and draw: one of them on one element. */
+export type HtmlLayerLook = Omit<LayerLook, 'side' | 'casts' | 'accepts' | 'boil'>;
+/** An svg layer's look. */
+export type SvgLayerLook = Omit<LayerLook, 'side' | 'casts' | 'accepts' | 'effect' | 'shade' | 'backdrop' | 'draw'>;
+/** A path, text or lottie layer's look. look.words needs content.captions. */
+export type PlainLayerLook = Omit<LayerLook, 'side' | 'casts' | 'accepts' | 'effect' | 'shade' | 'backdrop' | 'draw' | 'boil'>;
+
+/** A solid layer's shape and its numbers, as solids' shape functions take them. */
+export interface SolidLayerContent {
+  shape: 'box' | 'faces' | 'plane' | 'disc' | 'sector' | 'capsule' | 'polygon' | 'prism' | 'pyramid' | 'sphere';
+  radius?: LayerValue;
+  size?: LayerValue;
+  from?: LayerValue;
+  to?: LayerValue;
+  length?: LayerValue;
+  inner?: LayerValue;
+  /** [{ pts, n, side }], or a value form giving such a list, read every frame; [] draws nothing. */
+  faces?: LayerValue;
+  sides?: LayerValue;
+  depth?: LayerValue;
+  taper?: LayerValue;
+  height?: LayerValue;
+  wedges?: LayerValue;
+  around?: LayerValue;
+  bands?: LayerValue;
+  along?: LayerValue;
+}
+/** An html layer's content. */
+export interface HtmlLayerContent {
+  /** The element's text. */
+  text?: LayerValue;
+}
+/** An svg layer's content: any attribute by name (d, cx, fill, 'stroke-width', ...), numbers written to a tenth. */
+export interface SvgLayerContent { [attribute: string]: LayerValue }
+/** A path layer's content. */
+export interface PathLayerContent {
+  /** Its anchors, on other layers. */
+  points?: LayerValue;
+  /** The ribbon for each stretch. */
+  between?: LayerValue;
+  head?: LayerValue;
+}
+/** A captions layer's transcript, grouped into lines as captions() groups it: srt or cues, one of the two. */
+export interface LayerCaptions {
+  /** The text of an SRT or WebVTT file. */
+  srt?: LayerValue;
+  /** A list of { text, start, end }. */
+  cues?: LayerValue;
+  maxWords?: LayerValue;
+  maxChars?: LayerValue;
+  maxGap?: LayerValue;
+  sentences?: LayerValue;
+  hold?: LayerValue;
+}
+/** A text layer's content. */
+export interface TextLayerContent {
+  /** The text: a string is the text itself; read a name or a store's field with { from }. */
+  text?: LayerValue;
+  /** One part per letter or word, whitespace kept as parts of its own. */
+  split?: 'letter' | 'word';
+  /** { start, cps }, as typewriter() takes them. */
+  typewriter?: LayerValue;
+  /** { start, duration, fps, chars, seed }, as scramble() takes them. */
+  scramble?: LayerValue;
+  /** The line current now, one part per word; no text, split, typewriter or scramble beside it. */
+  captions?: LayerCaptions;
+  /** On a <canvas>: the baked outlines' global, drawn by text(), with the line's options below. */
+  font?: LayerValue;
+  at?: LayerValue;
+  size?: LayerValue;
+  align?: LayerValue;
+  valign?: LayerValue;
+  tracking?: LayerValue;
+  spacing?: LayerValue;
+  color?: LayerValue;
+}
+/** A lottie layer's content: its animation, loaded into the element by the page's lottie-web and played by lottie(). */
+export interface LottieLayerContent {
+  /** The animation's JSON file. */
+  path?: string;
+  /** lottie-web's renderer ('svg'). */
+  renderer?: string;
+  start?: LayerValue;
+  rate?: LayerValue;
+  loop?: LayerValue;
+}
+
+/** A copy's or a part's place tracks, in its own time. */
+export interface LayerPartPlace {
+  translate?: LayerValue;
+  rotate?: LayerValue;
+  scale?: LayerValue;
+}
+/** A copy's or a part's look tracks, in its own time. */
+export interface LayerPartLook {
+  opacity?: LayerValue;
+  blur?: LayerValue;
+  color?: LayerValue;
+  class?: LayerValue;
+  style?: LayerValue;
+}
+/** A repeated html layer's animate: each copy's tracks. */
+export interface HtmlLayerAnimate {
+  place?: LayerPartPlace;
+  look?: LayerPartLook;
+}
+/** A text layer's animate: per-part tracks, each part starting stagger()'s delay after start. Needs content.split or content.font. */
+export interface TextLayerAnimate {
+  start?: LayerValue;
+  /** The stagger's options. */
+  each?: LayerValue;
+  total?: LayerValue;
+  from?: LayerValue;
+  ease?: LayerValue;
+  grid?: LayerValue;
+  axis?: LayerValue;
+  seed?: LayerValue;
+  spaces?: LayerValue;
+  place?: LayerPartPlace;
+  look?: LayerPartLook;
+  /** A canvas text's font axes (wght, ...) per letter. */
+  axes?: LayerValue;
+}
+
+/** What every layer takes. */
+export interface LayerRecordBase {
+  /** Unique in its comp. */
+  id: string;
+  /** [start, end): alive from start until end, else display: none. */
+  life?: [LayerValue, LayerValue];
+}
+/** A shape on the solids stage (kinetic.25d.js). */
+export interface SolidLayerRecord extends LayerRecordBase {
+  kind: 'solid';
+  /** A null or another solid this one moves with; null for none. */
+  parent?: string | null;
+  /** One of the record's bands; with bands, solids draw in band order and then as listed. */
+  band?: LayerValue;
+  /** Worked out but not drawn, as a clip for others. */
+  hidden?: boolean;
+  place?: LayerPlace;
+  look?: SolidLayerLook;
+  content: SolidLayerContent;
+}
+/** A transform with nothing to draw, which moves its children and holds values other layers read by name. */
+export interface NullLayerRecord extends LayerRecordBase {
+  kind: 'null';
+  parent?: string | null;
+  place?: LayerPlace;
+  controls?: Record<string, LayerValue>;
+}
+/** A comp placed: once, or once for each row or index. */
+export interface CompLayerRecord extends LayerRecordBase {
+  kind: 'comp';
+  /** The comp's name in the record's comps. */
+  comp: string;
+  /** Where its time 0 falls: a time, a marker, { startOf: 'clipId' }, or a value worked out in each copy. */
+  start?: LayerValue;
+  /** Values its layers read by name. */
+  params?: Record<string, LayerValue>;
+  roles?: Record<string, string>;
+  parent?: string | null;
+  /** { over: [rows] }, { over: 'query.path' }, { over: { call, args } } or { count }; each copy reads i, n and its row's fields. */
+  repeat?: { over: LayerValue[] | string | { call: string; args?: LayerValue[] } } | { count: number };
+  /** With repeat: the container whose <template> each copy is cloned from. */
+  src?: string;
+}
+/** The camera that moves the composition's .world element; the one in use is the last listed whose life includes the time. */
+export interface CameraLayerRecord extends LayerRecordBase {
+  kind: 'camera';
+  perspective?: LayerValue;
+  /** moves()' list, with names for times and places. */
+  moves: LayerValue[];
+  focus?: LayerValue;
+}
+/** An HTML element (a canvas for effect, shade and draw). */
+export interface HtmlLayerRecord extends LayerRecordBase {
+  kind: 'html';
+  parent?: string | null;
+  /** 'world': a layer in the 3D world. */
+  band?: string;
+  /** A selector, or a list of them, searched in the scene's clip first, then the composition; ':scope' is the clip, or a repeated copy's own element. */
+  src: string | string[];
+  /** [width, height] in the 3D world. */
+  size?: LayerValue;
+  /** A world layer that holds other layers. */
+  group?: boolean;
+  /** { starts: [...] }, each element's start for its look.preset. */
+  stagger?: { starts: LayerValue[] };
+  /** Its time starts that much later, worked out per element. */
+  delay?: LayerValue;
+  place?: LayerPlace;
+  look?: HtmlLayerLook;
+  content?: HtmlLayerContent;
+  /** Copies of the element's <template>: { count }, or { every, life }, one born every `every` and shown while its age is under life. */
+  repeat?: { count: LayerValue } | { every: LayerValue; life: LayerValue };
+  animate?: HtmlLayerAnimate;
+}
+/** An SVG element. */
+export interface SvgLayerRecord extends LayerRecordBase {
+  kind: 'svg';
+  parent?: string | null;
+  src: string | string[];
+  delay?: LayerValue;
+  place?: LayerPlace;
+  look?: SvgLayerLook;
+  content?: SvgLayerContent;
+}
+/** A path through anchors on other layers; other layers read 'id.head' and 'id.P'. */
+export interface PathLayerRecord extends LayerRecordBase {
+  kind: 'path';
+  parent?: string | null;
+  content?: PathLayerContent;
+  look?: PlainLayerLook;
+}
+/** An element's text, whole or in parts, or a canvas drawn by text(). */
+export interface TextLayerRecord extends LayerRecordBase {
+  kind: 'text';
+  parent?: string | null;
+  src: string | string[];
+  delay?: LayerValue;
+  place?: LayerPlace;
+  look?: PlainLayerLook;
+  content?: TextLayerContent;
+  animate?: TextLayerAnimate;
+}
+/** A Lottie animation played by lottie(). */
+export interface LottieLayerRecord extends LayerRecordBase {
+  kind: 'lottie';
+  parent?: string | null;
+  src: string | string[];
+  place?: LayerPlace;
+  look?: PlainLayerLook;
+  content?: LottieLayerContent;
+}
+/** A layer, by its kind. */
+export type LayerRecord = SolidLayerRecord | NullLayerRecord | CompLayerRecord | CameraLayerRecord | HtmlLayerRecord | SvgLayerRecord | PathLayerRecord | TextLayerRecord | LottieLayerRecord;
+
+/** A group of layers a comp layer places. */
+export interface LayersComp {
+  /** In their stacking order. */
+  layers: LayerRecord[];
+  /** Values its layers read by name; a placement's params win. */
+  params?: Record<string, LayerValue>;
+  roles?: Record<string, string>;
+  /** Named lists of { look, marks } groups, for a solid's look.shade. */
+  looks?: Record<string, LayerValue>;
+  /** Named marks, for those groups. */
+  marks?: Record<string, LayerValue>;
+}
+
+/** The solids stage of a record, worked out once. */
+export interface LayersStage {
+  /** A selector for the SVG element it draws into, in the clip first; the clip's first <svg> by default. */
+  src?: string;
+  /** A selector for the canvas a solid's shading paints on. */
+  grain?: string;
+  /** solids()' camera. */
+  view?: SolidsOptions['camera'];
+  light?: SolidsOptions['light'];
+  rim?: SolidsOptions['rim'];
+  glows?: SolidsOptions['glows'];
+  /** Its color a swatch or role too. */
+  dropShadow?: SolidsOptions['dropShadow'];
+}
+
+/** A piece written as layers. layers() needs id, size and duration; layers.scene() reads them from the page where they are left out. */
+export interface LayersRecord {
+  /** The piece's name; the scene's name by default. */
+  id?: string;
+  /** [width, height] px; the root's data-width and data-height by default. */
+  size?: [number, number];
+  /** Frames a second; the root's data-fps by default, else 30. */
+  fps?: number;
+  /** Its length, in unit; the clip's data-duration by default. */
+  duration?: number;
+  /** The unit of every time in the layers ('second'). */
+  unit?: 'second' | 'frame';
+  /** Markers and beats land on their nearest frame. */
+  snap?: 'frame';
+  /** Time wraps at duration; with wrap, a placement running past the end shows again from the start. */
+  loop?: boolean | { wrap?: boolean };
+  /** Named numbers, read by name and in sums. */
+  constants?: Record<string, LayerValue>;
+  /** Named values several layers read. */
+  shared?: Record<string, LayerValue>;
+  /** Named colors. */
+  swatches?: Record<string, string>;
+  /** Colors and looks by role; comps and placements override them. */
+  roles?: Record<string, string>;
+  /** Named grain looks for solids: shade()'s layer options (kind, scale, ...). */
+  looks?: Record<string, { kind?: ShadeKind; [option: string]: unknown }>;
+  /** Named falloffs and eases: an ease name, { power }, { from, ease, power }, or points [[x, y], ...]. */
+  curves?: Record<string, LayerValue>;
+  /** Animations an html layer plays from its own start. */
+  presets?: Record<string, { opacity?: LayerValue; y?: LayerValue; scale?: LayerValue }>;
+  /** The solids' bands, bottom to top. */
+  bands?: string[];
+  /** The stores the layers read; the scene draws again when one changes while the clock is still. */
+  stores?: string[];
+  /** The wildflower.query queries the layers read; the first frame waits for their rows. */
+  queries?: string[];
+  /** The composition variables the layers read, as a scene's inputs declares them; read with { from: 'inputs.name' }. */
+  inputs?: SceneDefinition['inputs'];
+  /** The clip's own data-prop-* attributes, as a scene's props declares them; read with { from: 'props.name' }. */
+  props?: SceneDefinition['props'];
+  /** A lesson's steps, as step() takes them. */
+  steps?: Record<string, StepDefinition>;
+  /** The finishing pass, as config({ finish }) takes it. */
+  finish?: KineticConfig['finish'];
+  /** The render's motion blur, as config({ shutter }) takes it. */
+  shutter?: KineticConfig['shutter'];
+  stage?: LayersStage;
+  /** In drawing order: a later layer draws over an earlier one. */
+  layers: LayerRecord[];
+  /** Groups of layers a comp layer places, by name. */
+  comps?: Record<string, LayersComp>;
+}
+
+/** The functions a record calls by name with { call: 'name', args }. */
+export type LayersFns = Record<string, (...args: any[]) => unknown>;
+
+/** layers()' options. */
+export interface LayersOptions {
+  /** Where src selectors look, and whose .world the camera moves: the composition root. Needed by a record with html, svg, path, text, lottie or camera layers. */
+  root?: Element;
+  /** The solids stage's SVG group; stage.src's element by default. */
+  target?: SVGElement;
+  /** The solids stage's grain canvas; stage.grain's element by default. */
+  canvas?: HTMLCanvasElement;
+  fns?: LayersFns;
+  /** solids()' options, over those the record's stage gives. */
+  stage?: SolidsOptions;
+}
+
+/** What layers() returns. */
+export interface LayersHandle {
+  /** Draws the record at a time in seconds. */
+  seek(seconds: number): void;
+  /** Paints the layer calls' marks again, for a change seek cannot see; true when the record has layer calls. */
+  refresh(): boolean;
+  /** Takes off the page what the layers put on it: the copies of a <template>, the solids' drawing. */
+  dispose(): void;
+  /** The solids stage, or null for a record without solids. */
+  stage: SolidsStage | null;
+}
+
+export interface KineticLayers {
+  /** Draws a record without a scene, for a page that seeks it itself. KN-161 to KN-169 for a record the check refuses. */
+  (record: LayersRecord, options?: LayersOptions): LayersHandle;
+  /**
+   * A scene of that name that draws the record, on the clip whose
+   * data-component names it: its steps given to step(), its finish and
+   * shutter to config(), subscribed to the stores it reads, and drawn on
+   * each seek and again when a store it reads changes while the clock is
+   * still.
+   */
+  scene(name: string, record: LayersRecord, options?: { fns?: LayersFns }): void;
 }
 
 /** An audio clip's beat grid, from tempo(). */

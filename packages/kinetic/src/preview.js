@@ -3,7 +3,11 @@
  * of KN lines printed since load, an As Rendered button on a piece with a
  * finish or a shutter (the paused frame from render.still() laid over the
  * root), and a Render button (render.js; Cancel
- * while the render runs, aborting the render's signal) and a Check
+ * while the render runs, aborting the render's signal; with config({ alpha })
+ * on, a modal dialog first with the file's estimated size, Render and
+ * Cancel), a Render batch
+ * button on a composition with variables (render.batch(), batch.js: a file
+ * of rows chosen, one MP4 per row into a folder) and a Check
  * button (check.js) in a plain tab, so a scene file previews with two script
  * tags and no CLI, and renders to an MP4 with no renderer. A WildflowerJS
  * component outside the composition root, bound to the `kinetic` store; its
@@ -50,9 +54,35 @@ const COUNT_STYLE = 'background:none;border:0;padding:0 4px;font:inherit;white-s
 const SPEAKER = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="display:block"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor"></path><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>';
 const MARK_ON = 'M11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9';
 const MARK_OFF = 'M11 6l4 4m0-4l-4 4';
+// The alpha dialog, modal over the page, in the bar's colors.
+const DIALOG_STYLE = 'background:#14161c;color:#e8e8ee;border:1px solid #333;border-radius:6px;padding:16px;max-width:min(420px,calc(100vw - 32px));box-sizing:border-box;font:13px/1.4 system-ui,sans-serif';
+// What a frame of PNG with alpha came to a pixel, measured on busy
+// full-frame graphics at 1920 x 1080: 6.72 GB for two minutes at 30 fps.
+const PNG_BYTES_PER_PIXEL = 0.9;
+// Under the frame laid over the stage by As Rendered with alpha on, so its
+// transparent parts show as such.
+const CHECKER = ';background:repeating-conic-gradient(#888 0 25%,#ccc 0 50%) 0 0/16px 16px';
 
-export function createPreview(wf, api, clock, requested, audio) {
+// The alpha dialog's sentence: the file's size for the whole composition,
+// estimated from its size, length and fps.
+function alphaSize(clock) {
+  const root = compositionRoot(document);
+  const { fps, duration } = clock.store;
+  const w = Number(root && root.getAttribute('data-width')) || (root && root.clientWidth) || 1920;
+  const h = Number(root && root.getAttribute('data-height')) || (root && root.clientHeight) || 1080;
+  const bytes = Math.max(1, Math.round(duration * (fps || 30))) * w * h * PNG_BYTES_PER_PIXEL;
+  const size = bytes >= 1e9 ? (bytes / 1e9).toFixed(1) + ' GB' : Math.max(1, Math.round(bytes / 1e6)) + ' MB';
+  const unit = (n, one) => n + ' ' + one + (n === 1 ? '' : 's');
+  const m = Math.floor(duration / 60), s = Math.round(duration - m * 60);
+  const length = m ? unit(m, 'minute') + (s ? ' ' + unit(s, 'second') : '') : unit(s, 'second');
+  return 'A video with transparency is a large file: about ' + size + ' for ' + length + ' at ' + w + ' × ' + h
+    + '. That is an estimate for busy full-frame graphics; a lower third alone comes out far smaller. The file has no sound.';
+}
+
+export function createPreview(wf, api, clock, requested, audio, withInputs) {
   let bar = null;
+  // Render batch's file of rows, held while its button reads Choose folder.
+  let chosen = null;
   let wanted = requested;
   let verdictTimer = 0;
   // The running render's AbortController, which the bar's Cancel aborts.
@@ -68,6 +98,8 @@ export function createPreview(wf, api, clock, requested, audio) {
   // The frame notice was answered, Render anyway or Close: it shows once a
   // page load.
   let noticed = false;
+  // The alpha dialog's Render was pressed: the render it starts asks no more.
+  let confirmed = false;
 
   function clearStill() {
     if (still) { still.remove(); still = null; }
@@ -79,7 +111,7 @@ export function createPreview(wf, api, clock, requested, audio) {
     if (!root) return;
     const W = Number(root.getAttribute('data-width')) || canvas.width, H = Number(root.getAttribute('data-height')) || canvas.height;
     canvas.setAttribute('data-kinetic-as-rendered', '');
-    canvas.style.cssText = 'position:absolute;left:0;top:0;width:' + W + 'px;height:' + H + 'px;z-index:2147483646;pointer-events:none';
+    canvas.style.cssText = 'position:absolute;left:0;top:0;width:' + W + 'px;height:' + H + 'px;z-index:2147483646;pointer-events:none' + (clock.alpha() ? CHECKER : '');
     if (getComputedStyle(root).position === 'static') { root.style.position = 'relative'; moved = root; }
     root.appendChild(canvas);
     still = canvas;
@@ -107,7 +139,7 @@ export function createPreview(wf, api, clock, requested, audio) {
         // The object form: the array form only waits for the store, and
         // onStoreUpdate, which moves the scrubber, would never run.
         subscribe: { [STORE_NAME]: ['time', 'playing'] },
-        state: Object.assign({ pos: 0, rendering: '', running: false, verdict: '', checking: false, done: '', asOn: false, stilling: '', notice: false, drawing: false }, __DEV__ ? { warnings: 0 } : null),
+        state: Object.assign({ pos: 0, rendering: '', running: false, verdict: '', checking: false, done: '', asOn: false, stilling: '', notice: false, drawing: false, choosing: false, batching: false, alphaText: '' }, __DEV__ ? { warnings: 0 } : null),
         computed: Object.assign({
           readout() {
             if (this.stilling) return this.stilling;
@@ -129,6 +161,9 @@ export function createPreview(wf, api, clock, requested, audio) {
           // Both are off while As Rendered draws a frame too.
           renderOff() { return this.running ? false : !!this.rendering || this.checking || this.drawing; },
           checkOff() { return this.busy || this.drawing; },
+          // The Render batch button is Cancel while a batch runs.
+          batchLabel() { return this.batching ? 'Cancel' : this.choosing ? 'Choose folder' : 'Render batch'; },
+          batchOff() { return this.batching ? false : this.busy || this.drawing; },
           noticeStyle() { return { display: this.notice ? 'flex' : 'none' }; },
           asStyle() { return { background: this.asOn ? '#4a5a8a' : '#2a2e3a' }; },
         }, __DEV__ ? {
@@ -202,6 +237,15 @@ export function createPreview(wf, api, clock, requested, audio) {
           // false }) turns it off for a site whose frames allow downloads.
           if (!noticed && clock.frameNotice() && framed()) { this.notice = true; return; }
           this.notice = false;
+          // config({ alpha }): a modal dialog first, every time, with the
+          // file's estimated size, Render and Cancel.
+          if (clock.alpha() && !confirmed) {
+            this.alphaText = alphaSize(clock);
+            const d = bar.querySelector('[data-kinetic-alpha-notice]');
+            if (!d.open) d.showModal();
+            return;
+          }
+          confirmed = false;
           this.done = '';
           this.asOff();
           api.pause();
@@ -232,8 +276,53 @@ export function createPreview(wf, api, clock, requested, audio) {
           this.running = false;
           if (this.rendering) setTimeout(() => { this.rendering = ''; }, this.rendering.startsWith('render failed') ? 10000 : 4000);
         },
+        // Render batch: a .json or .csv file of rows chosen, then
+        // render.batch() into a folder the author picks, the readout
+        // showing the row and frame. The folder's picker needs a click of
+        // its own once the file chooser has used up this one, so the button
+        // then reads Choose folder.
+        batch() {
+          if (this.batching) { if (cancel) cancel.abort(); return; }
+          if (this.rendering || this.checking || drawing) return;
+          if (chosen) { const f = chosen; chosen = null; this.choosing = false; return this.runBatch(f, 'folder'); }
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json,.csv';
+          input.onchange = () => {
+            const f = input.files[0];
+            if (!f) return;
+            const picker = typeof self.showDirectoryPicker === 'function', act = navigator.userActivation;
+            if (!picker || !act || act.isActive) return this.runBatch(f, picker ? 'folder' : 'download');
+            chosen = f;
+            this.choosing = true;
+            this.done = f.name + ': choose the folder';
+          };
+          input.click();
+        },
+        async runBatch(f, save) {
+          this.done = '';
+          this.asOff();
+          api.pause();
+          this.rendering = 'batch…';
+          this.batching = true;
+          const own = cancel = new AbortController();
+          try {
+            const r = await api.render.batch(f, { save, signal: own.signal, onRow: (i) => { this.rendering = 'batch: row ' + (i.index + 1) + ' of ' + i.count + (i.frames ? ', frame ' + i.frame + ' / ' + i.frames : ''); } });
+            this.rendering = '';
+            this.done = 'batch complete: ' + r.length + (r.length === 1 ? ' file' : ' files');
+          } catch (e) {
+            const cancelled = e && e.name === 'AbortError';
+            if (!cancelled) printError(e);
+            this.rendering = cancelled ? 'batch cancelled' : 'batch failed' + (e && e.index !== undefined ? ', row ' + (e.index + 1) : '') + (e && e.code ? ' (' + e.code + ')' : '');
+            setTimeout(() => { this.rendering = ''; }, 10000);
+          }
+          if (cancel === own) cancel = null;
+          this.batching = false;
+        },
         renderAnyway() { noticed = true; this.notice = false; return this.render(); },
         closeNotice() { noticed = true; this.notice = false; },
+        alphaRender() { this.alphaCancel(); confirmed = true; return this.render(); },
+        alphaCancel() { const d = bar.querySelector('[data-kinetic-alpha-notice]'); if (d.open) d.close(); },
         // check({ samples: 30 }): the readout says "checking…" while it runs,
         // then the verdict for ten seconds: the frame and property of the
         // first frame that differed, and the report's reason when it has one.
@@ -295,13 +384,22 @@ export function createPreview(wf, api, clock, requested, audio) {
       // As Rendered only for a piece the file finishes differently: a finish or a shutter.
       + (clock.finish() || clock.shutter() ? '<button type="button" style="' + BUTTON_STYLE + '" data-action="asRendered" data-bind-style="asStyle" data-bind-attr="{ disabled: busy }" title="the paused frame as the render draws it, with the finish and the shutter (off when it plays)">As Rendered</button>' : '')
       + '<button type="button" style="' + BUTTON_STYLE + '" data-action="render" data-bind="renderLabel" data-bind-attr="{ disabled: renderOff }" title="an MP4 of the composition, with WebCodecs">Render</button>'
+      // Render batch only for a composition with variables to fill.
+      + (withInputs() || document.querySelector('[data-composition-variables]') ? '<button type="button" style="' + BUTTON_STYLE + '" data-action="batch" data-bind="batchLabel" data-bind-attr="{ disabled: batchOff }" data-kinetic-batch title="a video per row, from a .json or .csv file">Render batch</button>' : '')
       + '<button type="button" style="' + BUTTON_STYLE + '" data-action="check" data-bind-attr="{ disabled: checkOff }" title="seek 30 frames twice and compare them">Check</button>'
       // The frame notice, on a row of its own under the controls.
       + '<div data-kinetic-frame-notice data-bind-style="noticeStyle" style="display:none;flex:1 0 100%;flex-wrap:wrap;align-items:center;gap:6px 8px;color:' + ALERT + '">'
       + '<span>This page is running inside another site, which may block the download. To be sure, open the file in Chrome directly.</span>'
       + '<button type="button" style="' + BUTTON_STYLE + '" data-action="renderAnyway">Render anyway</button>'
       + '<button type="button" style="' + BUTTON_STYLE + '" data-action="closeNotice">Close</button>'
-      + '</div>';
+      + '</div>'
+      // The alpha dialog, shown modal by Render with config({ alpha }) on.
+      + '<dialog data-kinetic-alpha-notice style="' + DIALOG_STYLE + '">'
+      + '<p data-bind="alphaText" style="margin:0 0 14px"></p>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+      + '<button type="button" style="' + BUTTON_STYLE + '" data-action="alphaCancel">Cancel</button>'
+      + '<button type="button" style="' + BUTTON_STYLE + ';background:#4a5a8a" data-action="alphaRender">Render</button>'
+      + '</div></dialog>';
     document.body.appendChild(bar);
     wf.scan(bar);
     sound();

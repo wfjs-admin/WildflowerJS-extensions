@@ -13,7 +13,7 @@
  * File seconds go through the clip's data-start, data-media-start and
  * data-playback-rate, so the grid and the moments stay on the song however it
  * is trimmed. HyperFrames reads none of these, and a marker names nothing in
- * data-start, where an element's id is a name, as it always has been.
+ * data-start, where an element's id is a name.
  *
  * timeOf(expr) is composition seconds for an expression in data-start's
  * grammar: a number, a name, or a name plus or minus seconds. A name is a
@@ -138,7 +138,7 @@ function fps() {
 // data-fps, else config({ fps }), else 30. Never a render's: a render at
 // another rate samples the piece more finely and leaves its frames where
 // they are (the clock's store holds the render's rate while one runs, so
-// frame 15 of a 30 fps piece read as 0.25 s during render({ fps: 60 })).
+// frame 15 of a 30 fps piece would read as 0.25 s during render({ fps: 60 })).
 function ownFps() {
   const root = compositionRoot(document);
   const own = root ? Number(root.getAttribute('data-fps')) : 0;

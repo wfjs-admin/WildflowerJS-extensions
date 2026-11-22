@@ -3,7 +3,7 @@
  *
  * With autoplay on, an interactive page with steps enters the first step when the
  * registered run of readiness resolves, and not at all when that run fails;
- * a page with no steps plays the whole composition at load, as before. The
+ * a page with no steps plays the whole composition at load. The
  * sine lesson passes check() with the learner's values back and a playing
  * step still playing, holds and waits in interactive mode, and plays straight
  * through with its scripts as a video.
@@ -83,7 +83,7 @@ describe(`interactive mode as the page loads (${BUILD} extension, ${CORE_TIER} c
     expect(kn158(left).length).toBe(BUILD === 'dev' ? 1 : 0);
   });
 
-  it('a page with no steps plays the whole composition at load, as before', async () => {
+  it('a page with no steps plays the whole composition at load', async () => {
     const { store } = await lessonFrame(STAGE(''), { cleanup });
     expect(await until(() => store.playing && store.time > 0.1, 3000)).toBe(true);
     expect([store.mode, store.stepIndex, store.stepCount]).toEqual(['interactive', -1, 0]);

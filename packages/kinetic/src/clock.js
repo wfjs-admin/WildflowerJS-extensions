@@ -45,7 +45,7 @@ import { readFinish, reportFinish } from './finish.js';
 
 const DEFAULT_FPS = 30;
 const LOOP_HOLD = 3;          // seconds on the last frame before a loop starts again
-const OPTIONS = ['fps', 'channel', 'autoplay', 'preview', 'frameNotice', 'loop', 'fit', 'sound', 'shutter', 'finish', 'encode', 'mode'];
+const OPTIONS = ['fps', 'channel', 'autoplay', 'preview', 'frameNotice', 'loop', 'fit', 'sound', 'shutter', 'finish', 'encode', 'alpha', 'mode'];
 const MODES = ['auto', 'interactive', 'video'];
 
 // A shutter, for render({ shutter }) and config({ shutter }): an angle in
@@ -76,6 +76,12 @@ export function checkEncoding(o, where) {
   if (o.audioBitrate !== undefined && !(typeof o.audioBitrate === 'number' && Number.isFinite(o.audioBitrate) && o.audioBitrate > 0)) throw fail(CODES.BAD_CALL, where('audioBitrate'), __DEV__ && 'audioBitrate is bits per second, a number above 0 such as 192000, not ' + show(o.audioBitrate));
 }
 
+// render({ alpha }) and config({ alpha }): a boolean, `call` naming the call.
+export function checkAlpha(v, call) {
+  if (typeof v !== 'boolean') throw fail(CODES.BAD_CALL, call + '({ alpha })', __DEV__ && 'alpha is true (a QuickTime file of PNG frames with transparency) or false (an MP4, the default), not ' + show(v));
+  return v;
+}
+
 // config({ encode }): the fields given, checked, or null for false, null or
 // none.
 const ENCODE = ['codec', 'bitrate', 'audioCodec', 'audioBitrate'];
@@ -101,7 +107,7 @@ export const lastFrameBefore = (t, fps) => (Math.ceil(t * fps - 1e-6) - 1) / fps
 // before the page loads. With none set, Kinetic defines it as the root's
 // data-fps at the moment it is read (undefined with no root or no number),
 // so a runtime that reads it after this script has run seeks on the
-// composition's frames. Probed in Chrome: a runtime whose script runs while
+// composition's frames. In Chrome, a runtime whose script runs while
 // the page is still loading reads it at DOMContentLoaded, so a plain or
 // deferred Kinetic tag anywhere in the page is in time; one whose script
 // runs later (deferred, or added after load) reads it at once, so Kinetic's
@@ -111,8 +117,8 @@ export const lastFrameBefore = (t, fps) => (Math.ceil(t * fps - 1e-6) - 1) / fps
 // fps from this config alone, and takes any config as an export render, so
 // a preview of a root with data-fps also runs its export branch: no
 // codec-proxy swap, no cross-origin audio diagnostic, clip windows snapped
-// to frames, no wait on a video still loading (kept: the frame grid is what
-// a render needs; runtime.test.js pins the branch).
+// to frames, no wait on a video still loading (the frame grid is what a
+// render needs; runtime.test.js pins the branch).
 const RENDER_CONFIG = '__HF_EXPORT_RENDER_SEEK_CONFIG';
 function defineRenderConfig(w) {
   if (RENDER_CONFIG in w) return;
@@ -135,7 +141,7 @@ export function createClock(wf) {
   defineRenderConfig(w);
   // loop: false, or the seconds a loop holds its last frame.
   // frameNotice: the bar's note before a render in a frame (preview.js).
-  const settings = { fps: null, channel: 'event', autoplay: true, preview: null, frameNotice: true, loop: LOOP_HOLD, fit: null, sound: true, audio: null, shutter: null, finish: null, encode: null, mode: 'auto', lesson: null };
+  const settings = { fps: null, channel: 'event', autoplay: true, preview: null, frameNotice: true, loop: LOOP_HOLD, fit: null, sound: true, audio: null, shutter: null, finish: null, encode: null, alpha: false, mode: 'auto', lesson: null };
   const beforeHooks = [];     // (time) => void, before the store write (guard.js)
   const writeHooks = [];      // (time) => void, inside the store write's batch (lesson.js: the steps and the scripts)
   const holdHooks = [];       // (time) => void, once the seek onto a play({ to }) hold has settled (lesson.js)
@@ -538,7 +544,7 @@ export function createClock(wf) {
   // Every option is checked, and the timeline's root found, before any is
   // applied, so a call that throws leaves the settings as they were.
   function config(opts) {
-    if (opts === undefined) return { fps: store.fps, channel: settings.channel, autoplay: settings.autoplay, preview: previewing(), frameNotice: settings.frameNotice, loop: settings.loop === false ? false : { hold: settings.loop }, fit: settings.fit ? settings.fit.get() : false, sound: settings.sound, shutter: settings.shutter ? Object.assign({}, settings.shutter) : false, finish: settings.finish ? reportFinish(settings.finish) : false, encode: settings.encode ? Object.assign({}, settings.encode) : false, mode: settings.mode };
+    if (opts === undefined) return { fps: store.fps, channel: settings.channel, autoplay: settings.autoplay, preview: previewing(), frameNotice: settings.frameNotice, loop: settings.loop === false ? false : { hold: settings.loop }, fit: settings.fit ? settings.fit.get() : false, sound: settings.sound, shutter: settings.shutter ? Object.assign({}, settings.shutter) : false, finish: settings.finish ? reportFinish(settings.finish) : false, encode: settings.encode ? Object.assign({}, settings.encode) : false, alpha: settings.alpha, mode: settings.mode };
     if (!opts || typeof opts !== 'object') throw fail(CODES.BAD_CALL, 'config(options)', __DEV__ && 'options is an object');
     for (const k of Object.keys(opts)) {
       if (!OPTIONS.includes(k)) throw fail(CODES.BAD_CALL, 'config({ ' + k + ' })', __DEV__ && "'" + k + "' is not an option; the options are " + OPTIONS.join(', '));
@@ -550,10 +556,12 @@ export function createClock(wf) {
     const shutter = opts.shutter !== undefined ? readShutter(opts.shutter, 'config') : settings.shutter;
     const finish = opts.finish !== undefined ? readFinish(opts.finish, 'config') : settings.finish;
     const encode = opts.encode !== undefined ? readEncode(opts.encode) : settings.encode;
+    const alpha = opts.alpha !== undefined ? checkAlpha(opts.alpha, 'config') : settings.alpha;
     const timeline = opts.channel === 'timeline' && !duckTimeline ? timelineId() : null;
     settings.shutter = shutter;
     settings.finish = finish;
     settings.encode = encode;
+    settings.alpha = alpha;
     if (opts.finish !== undefined && settings.finishLive) settings.finishLive.sync(finish);
     if (opts.fps !== undefined) settings.fps = opts.fps;
     if (opts.channel !== undefined) settings.channel = opts.channel;
@@ -715,11 +723,12 @@ export function createClock(wf) {
     useAudio(a) { settings.audio = a; },
     soundOn: () => settings.sound,
     frameNotice: () => settings.frameNotice,
-    // config({ shutter }), config({ finish }) and config({ encode }), what
-    // render() uses when given none.
+    // config({ shutter }), config({ finish }), config({ encode }) and
+    // config({ alpha }), what render() uses when given none.
     shutter: () => settings.shutter,
     finish: () => settings.finish,
     encode: () => settings.encode,
+    alpha: () => settings.alpha,
     // render()'s fps on the store, with the frame for time t at that fps in
     // the same change: the runtime's player sends no hf-seek for a seek to
     // the time it is already at, so no seek may follow to work the frame out.

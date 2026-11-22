@@ -6,9 +6,15 @@ the brief, keep its shape, and change its content. Each is followed by the
 rules that matter most for it; `rules.md` has the rest, `api.md` the names
 and options, and `patterns.md` one idea at a time.
 
+Each page is two halves. The HTML and CSS set what is on screen and where
+it sits at rest. The layers, handed to
+`wildflower.kinetic.layers.scene(name, { layers: [...] })`, say how each
+element changes over time: their tracks, and what they read. The scene
+draws its layers on the clip whose `data-component` is that name.
+
 Both pages load the framework, then Kinetic, then the page's own script,
-all deferred. Serve the folder over http (`npx serve`, or any static
-server): a page opened from disk previews, but cannot fetch files beside it.
+all deferred. Serve the folder over http with any static server: a page opened from
+disk previews, but cannot fetch files beside it.
 
 Each is one page, made and finished in place. Both load the development
 builds (`wildflower.lite.dev.js`, or `wildflower.full.dev.js` for queries,
@@ -19,8 +25,8 @@ swap those two script lines for the minified builds
 
 Both are in the default style (`style.md`), for a brief that says nothing
 about the look: warm paper, ink, Work Sans, the house palette, and a light
-finish. When the brief gives a look, it wins; keep the Kinetic in the pages
-and change the colors, the type and the finish.
+finish. When the brief gives a look, it wins; keep the Kinetic code in the
+pages and change the colors, the type and the finish.
 
 ## A video
 
@@ -38,8 +44,8 @@ File `index.html`:
     <title>Launch</title>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js" data-preview></script>
-    <script defer src="scenes.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.3/dist/kinetic.wf.js" data-preview></script>
+    <script defer src="video.js"></script>
     <style>
         html, body { margin: 0; background: #efe8db; }
         [data-composition-id] {
@@ -78,11 +84,9 @@ File `index.html`:
     <div data-composition-id="launch" data-start="0" data-duration="6"
          data-width="1280" data-height="720" data-fps="30">
         <div id="title" class="card" data-component="title-card" data-start="0" data-duration="3.6">
-            <div class="sun" data-bind-style="sun"></div>
-            <h1 data-bind-style="heading">Launch</h1>
-            <p class="line" data-list="letters" data-key="key">
-                <template><span data-bind="text" data-bind-style="style"></span></template>
-            </p>
+            <div class="sun"></div>
+            <h1>Launch</h1>
+            <p class="line"></p>
         </div>
         <div class="card end" data-start="title - 0.6" data-duration="3"
              data-clip-transition="push from-right power3.inOut">
@@ -93,41 +97,39 @@ File `index.html`:
 </html>
 ```
 
-File `scenes.js`:
+File `video.js`:
 
 ```javascript
-wildflower.kinetic.config({ shutter: 180, finish: { grain: 0.08 } });   // the light finish: motion blur and the paper's still grain
-const { scene, split, styleAt, stagger } = wildflower.kinetic;
-
-// How each letter of the line comes in: a fade, and a spring up from 24 px below.
-const RISE = {
-    opacity:    { at: [0, 0.35], to: [0, 1] },
-    translateY: { at: [0, 0.6],  to: [24, 0], ease: 'spring' },
-};
-
-scene('title-card', {
-    keyframes: {
+// The title card's layers: what each element does over time.
+wildflower.kinetic.layers.scene('title-card', {
+    id: 'title-card', size: [1280, 720], duration: 3.6,
+    shutter: 180, finish: { grain: 0.08 },   // the light finish: motion blur, and the paper's still grain
+    layers: [
         // The disc rises first, then the heading under it.
-        sun: {
-            opacity:    { at: [0, 0.4], to: [0, 1] },
-            scale:      { at: [0, 0.8], to: [0.6, 1], ease: 'spring' },
-            translateY: { at: [0, 0.8], to: [120, 0], ease: 'spring' },
+        {
+            id: 'sun', kind: 'html', src: '.sun',
+            place: {
+                translate: [0, { at: [0, 0.8], to: [120, 0], ease: 'spring' }],
+                scale: { at: [0, 0.8], to: [0.6, 1], ease: 'spring' },
+            },
+            look: { opacity: { at: [0, 0.4], to: [0, 1] } },
         },
-        heading: {
-            opacity:    { at: [0.3, 0.8], to: [0, 1] },
-            translateY: { at: [0.3, 0.9], to: [40, 0], ease: 'spring' },
+        {
+            id: 'heading', kind: 'html', src: '#title h1',
+            place: { translate: [0, { at: [0.3, 0.9], to: [40, 0], ease: 'spring' }] },
+            look: { opacity: { at: [0.3, 0.8], to: [0, 1] } },
         },
-    },
-    computed: {
-        letters() {
-            const rows = split('A new way to make video');
-            return rows.map((r) => ({
-                key: r.key,
-                text: r.text,
-                style: r.space ? {} : styleAt(this.local - 0.9 - stagger(r.i, rows.length, { each: 0.04 }), RISE),
-            }));
+        // The line's letters, each a fade and a spring up from 24 px below, 0.04 s apart from 0.9 s.
+        {
+            id: 'line', kind: 'text', src: '.line',
+            content: { text: 'A new way to make video', split: 'letter' },
+            animate: {
+                start: 0.9, each: 0.04,
+                place: { translate: [0, { at: [0, 0.6], to: [24, 0], ease: 'spring' }] },
+                look: { opacity: { at: [0, 0.35], to: [0, 1] } },
+            },
         },
-    },
+    ],
 });
 ```
 
@@ -142,41 +144,50 @@ const { blob } = await wildflower.kinetic.render();  // launch.mp4, downloaded
 
 The rules that matter here:
 
-- Every value on screen is a function of the time. A scene reads
-  `this.local` (seconds since its clip started) or `keyframes`, never a
-  timer, `Date.now()`, `Math.random()` (use `random(seed)`), a CSS
-  animation or a CSS transition.
+- Every value on screen is a function of the time, and the layers say
+  which: a track `{ at, to, ease }` reads the clip's own seconds (0 when the
+  clip starts). Nothing moves through a timer, `Date.now()`,
+  `Math.random()`, a CSS animation or a CSS transition.
+- A layer's `src` is a selector searched in the scene's clip first, then the
+  whole composition, so select the element precisely: `#title h1`, since
+  the end card has an `h1` too.
+  The HTML gives the element its place at rest; `place` and `look` move it
+  from there.
+- `size` and `duration` belong to this scene (here the title clip's 3.6
+  s); `shutter` and `finish` are settings for the whole composition, set
+  once in the scene that gives them.
 - The root carries `data-composition-id`, `data-start="0"`,
   `data-duration`, `data-width`, `data-height` and `data-fps`. Kinetic gives
   the root its `data-width` and `data-height`, so the CSS does not repeat
   them.
-- The `:not([data-kinetic-ready])` rule is Kinetic's cloak, and stays in
-  the page: it hides the stage, keeping its layout, until Kinetic is ready
+- The `:not([data-kinetic-ready])` rule is Kinetic's cloak; keep it in the
+  page. It hides the stage, keeping its layout, until Kinetic is ready
   (fonts, media decoded, effects drawn, the first seek landed).
 - Work Sans loads with `display=block`, so neither the preview nor a render
   ever draws the fallback font; readiness waits for it.
 - The text sits inside the safe area, 64 px in from every edge at 1280 by
   720 (the card's padding), aligned to its left edge. The accent is a fill
   (the disc, the end card), and the text on it stays ink.
-- `config({ shutter: 180, finish: { grain: 0.08 } })` is the light finish:
-  the shutter gives the render motion blur, and the grain, which holds
-  still, gives the paper its tooth, on the page and in the file.
+- `shutter: 180, finish: { grain: 0.08 }` is the light finish: the shutter
+  gives the render motion blur, and the grain, which holds still, gives the
+  paper a texture, on the page and in the file.
 - A clip is an element with `data-start` and `data-duration`, shown only
   inside that window. `data-start="title - 0.6"` starts it 0.6 s before
   the clip `title` ends, and `data-clip-transition` makes that overlap a
-  push, so the change of ground comes through a move. Kinetic writes the
-  transition on the clip's own tag, so a scene styles the elements inside
+  push, so the background color changes with a move. Kinetic writes the
+  transition on the clip's own tag, so a layer moves the elements inside
   its clip, never the clip's tag.
-- A `data-list` row's template has one root element. A letter row needs
-  `display: inline-block` (a transform does nothing on an inline element)
-  and `white-space: pre` (spaces have rows of their own).
+- A text layer with `split: 'letter'` makes one span per letter inside its
+  element, each `inline-block` (a transform does nothing on an inline
+  element) and `white-space: pre`, since spaces get spans of their own.
+  For other markup per letter, put a `<template>` inside the element.
 - `check()` must report `ok: true` before a render; a render needs Chrome
   with HTML-in-Canvas (`api.md`, Control, readiness, self-test and
   rendering).
 - The finished page drops `data-preview`, since the bar is for making the
-  video, and loads the minified builds. Kinetic gives it the rest: a click
-  on the stage pauses and plays it, and the loop holds the last frame 3 s
-  before it starts again (`style.md`, "A finished video page").
+  video, and loads the minified builds. Kinetic then adds two things: a
+  click on the stage pauses and plays it, and the loop holds the last frame
+  3 s before it starts again (`style.md`, "A finished video page").
 
 ## An interactive lesson
 
@@ -207,7 +218,8 @@ File `index.html`:
     <title>A quarter turn</title>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=block" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.3/dist/kinetic.wf.js"></script>
+    <script defer src="page.js"></script>
     <script defer src="lesson.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -263,20 +275,20 @@ File `index.html`:
 </head>
 <body>
 <main>
-    <div data-composition-id="turn" data-start="0" data-duration="13"
+    <div data-composition-id="turn" data-start="0" data-duration="15"
          data-width="1280" data-height="720" data-fps="30">
         <!-- The dial, in the frame above the band. -->
-        <div class="layer" data-component="dial" data-start="0" data-duration="13">
+        <div class="layer" data-component="dial" data-start="0" data-duration="15">
             <svg viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">
                 <circle cx="900" cy="320" r="170" fill="#e4dbca"></circle>
-                <path fill="#B1A8FF" data-bind-attr="wedge"></path>
-                <path d="M900 150V490M730 320H1070" stroke="#efe8db" stroke-width="6" data-bind-attr="quarters"></path>
+                <path class="wedge" fill="#B1A8FF"></path>
+                <path class="quarters" d="M900 150V490M730 320H1070" stroke="#efe8db" stroke-width="6"></path>
                 <path d="M1082 320h22M900 138v-22M718 320h-22M900 502v22" stroke="#6e685f" stroke-width="4" stroke-linecap="round"></path>
-                <line x1="900" y1="320" stroke="#26282d" stroke-width="6" stroke-linecap="round" data-bind-attr="hand"></line>
+                <line class="hand" x1="900" y1="320" stroke="#26282d" stroke-width="6" stroke-linecap="round"></line>
                 <circle cx="900" cy="320" r="8" fill="#26282d"></circle>
-                <circle r="14" fill="#26282d" data-bind-attr="point"></circle>
+                <circle class="point" r="14" fill="#26282d"></circle>
             </svg>
-            <span class="tag" data-bind="label" data-bind-style="labelAt"></span>
+            <span class="tag"></span>
         </div>
         <section id="spin" class="layer cap" data-step data-start="0" data-duration="5">
             <h2>An angle measures a turn</h2>
@@ -284,13 +296,13 @@ File `index.html`:
         </section>
         <section id="ask" class="layer cap" data-step data-start="spin" data-duration="5">
             <h2>Where is the top?</h2>
-            <p>At what angle does the point sit at the top of the dial?</p>
+            <p>At what angle is the point at the top of the dial?</p>
         </section>
         <!-- The explanation: inside the question's step, after its hold at 6 s. -->
         <div class="layer cap" data-start="7" data-duration="3">
             <p class="reveal">90°: a quarter turn.</p>
         </div>
-        <section id="recap" class="layer cap" data-step data-start="ask" data-duration="3">
+        <section id="recap" class="layer cap" data-step data-start="ask" data-duration="5">
             <h2>Each quarter turn adds 90°</h2>
             <p>Four quarter turns make a whole turn of 360°.</p>
         </section>
@@ -301,11 +313,11 @@ File `index.html`:
             <p class="why" data-show="why" data-bind="why"></p>
         </div>
         <!-- The learner's prompts: in interactive mode only, so never in the video. -->
-        <div class="layer" data-component="prompt" data-start="0" data-duration="13">
+        <div class="layer" data-component="prompt" data-start="0" data-duration="15">
             <p class="prompt" data-show="text" data-bind="text"></p>
         </div>
         <!-- The step's own control and the band: in interactive mode only, so the video keeps their space as empty paper. -->
-        <div class="layer" data-component="controls" data-start="0" data-duration="13">
+        <div class="layer" data-component="controls" data-start="0" data-duration="15">
             <label class="ctl" data-show="turning">
                 <span>Angle</span><b data-bind="angleText"></b>
                 <input type="range" min="0" max="360" step="1" data-model="dial.angle" data-model-number>
@@ -333,12 +345,12 @@ File `index.html`:
 </html>
 ```
 
-File `lesson.js`:
+File `page.js`, the page's own parts: the store that the learner and the
+steps' scripts both write, the question, the prompts and the band.
 
 ```javascript
-const { scene, step, ramp } = wildflower.kinetic;
-// The stage scaled down to the window, and the light finish: motion blur and the paper's grain.
-wildflower.kinetic.config({ fit: true, shutter: 180, finish: { grain: 0.08 } });
+// The stage scaled down to the window.
+wildflower.kinetic.config({ fit: true });
 
 // The steps' titles, for the band.
 const TITLES = { spin: 'Turning the dial', ask: 'The top of the dial', recap: 'Quarter turns' };
@@ -353,41 +365,6 @@ const WHY = {
 wildflower.store('dial', {
     state: { angle: 0, choice: null },
     computed: { right() { return this.choice === 90; } },
-});
-
-step('spin', { wait: 1, entry: { 'dial.angle': 0 }, script: { 'dial.angle': { at: [1, 4], to: [0, 180], ease: 'power2.inOut' } } });
-step('ask', {
-    wait: 1,                                                   // the lesson: holds before the explanation at 2 s
-    until: 'dial.right',                                       // the lesson: a wrong answer keeps it waiting; the right one plays the explanation
-    entry: { 'dial.choice': null },                            // the lesson: cleared on the way in
-    script: {
-        'dial.choice': { at: [0, 1.5], set: [null, 90] },      // the video: 90 is chosen at 1.5 s
-        'dial.angle': { at: [2, 3], to: [180, 90], ease: 'power2.inOut' },
-    },
-});
-
-// The dial: the turn as a wedge, the hand, the point, and the angle beside it,
-// sized so the angle at the bottom stays clear of the band.
-const CX = 900, CY = 320, R = 170;
-const at = (deg, r) => [CX + r * Math.cos(deg * Math.PI / 180), CY - r * Math.sin(deg * Math.PI / 180)];
-scene('dial', {
-    subscribe: ['dial'],
-    follow: { angle: 'dial.angle' },   // eased toward the store's angle by a spring
-    computed: {
-        point() { const [x, y] = at(this.angle, R); return { cx: x.toFixed(1), cy: y.toFixed(1) }; },
-        hand() { return { x2: this.point.cx, y2: this.point.cy }; },
-        wedge() {
-            const a = Math.min(Math.max(this.angle, 0), 360);
-            if (a < 0.5) return { d: '' };
-            if (a > 359.5) return { d: `M${CX - R} ${CY}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0Z` };
-            const [x, y] = at(a, R);
-            return { d: `M${CX} ${CY}L${CX + R} ${CY}A${R} ${R} 0 ${a > 180 ? 1 : 0} 0 ${x.toFixed(1)} ${y.toFixed(1)}Z` };
-        },
-        // The recap: the disc parts into quarters, 0.5 s into its step at 10 s.
-        quarters() { return { opacity: ramp(this.local, 10.5, 11.1).toFixed(3) }; },
-        label() { return Math.round(this.angle) + '°'; },
-        labelAt() { const [x, y] = at(this.angle, R + 64); return { transform: `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)` }; },
-    },
 });
 
 wildflower.component('quiz', {
@@ -443,6 +420,57 @@ wildflower.component('controls', {
 });
 ```
 
+File `lesson.js`, the layers: the steps, and the dial, which follows the
+store's angle by a spring. The dial's geometry is four small functions of
+the angle, handed over in `fns`; everything else is fields.
+
+```javascript
+const CX = 900, CY = 320, R = 170;
+const at = (deg, r) => [CX + r * Math.cos(deg * Math.PI / 180), CY - r * Math.sin(deg * Math.PI / 180)];
+const fns = {
+    x: (deg, r) => at(deg, r)[0],
+    y: (deg, r) => at(deg, r)[1],
+    // The turn as a wedge from 0°, a full disc at 360°.
+    wedge(deg) {
+        const a = Math.min(Math.max(deg, 0), 360);
+        if (a < 0.5) return '';
+        if (a > 359.5) return `M${CX - R} ${CY}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0Z`;
+        const [x, y] = at(a, R);
+        return `M${CX} ${CY}L${CX + R} ${CY}A${R} ${R} 0 ${a > 180 ? 1 : 0} 0 ${x.toFixed(1)} ${y.toFixed(1)}Z`;
+    },
+    degrees: (deg) => Math.round(deg) + '°',
+    // The angle's label, outside the dial beside the point, clear of the band.
+    labelAt(deg) { const [x, y] = at(deg, R + 64); return `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`; },
+};
+
+wildflower.kinetic.layers.scene('dial', {
+    id: 'turn', size: [1280, 720], duration: 15, stores: ['dial'],
+    shutter: 180, finish: { grain: 0.08 },   // the light finish: motion blur and the paper's grain
+    steps: {
+        spin: { wait: 1, entry: { 'dial.angle': 0 }, script: { 'dial.angle': { at: [1, 4], to: [0, 180], ease: 'power2.inOut' } } },
+        ask: {
+            wait: 1,                                                   // the lesson: holds before the explanation at 2 s
+            until: 'dial.right',                                       // a wrong answer keeps it waiting; the right one plays on
+            entry: { 'dial.choice': null },                            // the lesson: cleared on the way in
+            script: {
+                'dial.choice': { at: [0, 1.5], set: [null, 90] },      // the video: 90 is chosen at 1.5 s
+                'dial.angle': { at: [2, 3], to: [180, 90], ease: 'power2.inOut' },
+            },
+        },
+    },
+    // The angle the dial shows: the store's, eased toward it by a spring.
+    shared: { angle: { follow: 'dial.angle' } },
+    layers: [
+        { id: 'wedge', kind: 'svg', src: '.wedge', content: { d: { call: 'wedge', args: ['angle'] } } },
+        // The recap: the disc parts into quarters, 0.5 s into its step at 10 s.
+        { id: 'quarters', kind: 'svg', src: '.quarters', content: { opacity: { at: [10.5, 11.1], to: [0, 1] } } },
+        { id: 'hand', kind: 'svg', src: '.hand', content: { x2: { call: 'x', args: ['angle', R] }, y2: { call: 'y', args: ['angle', R] } } },
+        { id: 'point', kind: 'svg', src: '.point', content: { cx: { call: 'x', args: ['angle', R] }, cy: { call: 'y', args: ['angle', R] } } },
+        { id: 'label', kind: 'html', src: '.tag', content: { text: { call: 'degrees', args: ['angle'] } }, look: { style: { transform: { call: 'labelAt', args: ['angle'] } } } },
+    ],
+}, { fns });
+```
+
 Open it and it is the lesson: the first step plays and holds, and the
 learner drags, answers and steps on. With `?preview` in the address, or
 `wildflower.kinetic.config({ mode: 'video' })` and
@@ -452,13 +480,21 @@ learner drags, answers and steps on. With `?preview` in the address, or
 The rules that matter here:
 
 - A step is a clip with an `id` and `data-step`; its range runs to the
-  next step's start. `step(id, { wait, until, entry, script })` gives it
-  the second it holds at, the store path that must be truthy before the
-  rest of it plays, what it writes as it is entered, and the script that
-  writes the store in the video.
+  next step's start. `steps: { id: { wait, until, entry, script } }` in
+  `layers.scene()` gives each step the second it holds at, the store path that must
+  be truthy before the rest of it plays, what it writes as it is entered,
+  and the script that writes the store in the video.
 - The learner's control and the step's script write the same store field,
-  and the scenes read it, here through `follow`. A scene never reads the
-  slider itself.
+  and the layers read it: here `{ follow: 'dial.angle' }`, a spring toward
+  it, named once in `shared` and read by name. `stores` lists the stores
+  the layers read, and the scene draws again when one changes while the
+  lesson holds. A layer never reads the slider itself.
+- What a field cannot say, such as the dial's geometry, goes in a small
+  function in `fns`, called with `{ call: 'name', args }`; its arguments are
+  values (`'angle'` here). Keep each one pure: the same arguments always
+  give the same result.
+- The layers draw the picture; the question, the prompts and the band are
+  the page's own components, which read the stores.
 - The layout is the same in every lesson, and all of it is inside the
   composition root. The left column: the step's heading at the top left of
   the safe area, a line or two of body under it, a question's choices
@@ -478,19 +514,20 @@ The rules that matter here:
   `pointer-events: auto`. The fit scales the root with a CSS transform, and
   a click or a drag lands on a scaled control where it is drawn.
 - Kinetic never moves to the next step by itself: each step plays, then
-  holds on its last frame until the learner presses Next. Next follows
+  holds on its last frame until the learner presses Next. Next is bound to
   `$kinetic.canAdvance`, which is false only while a step's `until` path is
-  falsy, so on a step with nothing to answer it is ready at once, and a
+  falsy, so on a step with nothing to answer Next is enabled at once, and a
   press while the step plays skips the rest of it. Once an `until` path is
-  truthy, the rest of the step plays by itself, Next lit. Next is in the
+  truthy, the rest of the step plays by itself, with Next enabled. Next is in the
   accent while it can be used and on the raised surface with muted text
   while it cannot. Back always works.
 - There is no scrubber: a step is short, and Replay step (`go()` with the
   step's index) starts it again. Play and Pause share one width. Play at or
   past the step's hold plays the step again from its start.
-- At a hold the clock stands still, so `local` does too: what the learner
-  changes there moves only through `follow` (the dial here) or a binding to
-  the store, never through the time.
+- At a hold the clock stands still, so a track on the time does too: what
+  the learner changes there moves only through a `{ follow }` (the dial
+  here), a link to the store (`{ from: 'dial.angle' }`) or a component's
+  binding, never through the time.
 - A right answer turns its button to the accent fill and makes `until`
   true, so the explanation plays; the action handler also turns the dial to
   90°, which only the learner's click runs. A wrong answer turns coral,
@@ -503,16 +540,16 @@ The rules that matter here:
 - The prompts to the learner ("Your turn: ...") are in the second person
   and read the store's `mode`, so the video has none of them.
 - The last step offers "Start again" (`go(0)`) in Next's place, so the
-  learner never steps back through every step. The first step's `entry`
+  learner does not have to step back through every step. The first step's `entry`
   puts the angle back to 0°. The finished lesson has no preview bar and
   loads the minified builds.
 - A question holds before its explanation: `wait` is earlier than the
   step's end, and the explanation is a clip that starts after the hold, so
   it plays once the question is answered.
-- `node <this skill's folder>/scripts/check.cjs index.html --lesson` walks
-  the steps: whether each holds, the `until` it waits on, and a still of
-  each hold. The stills are interactive mode, with the band drawn; the
-  `--frames` PNGs are video mode, where the band's place is empty paper.
+- `check({ lesson: true, frames: 6 })` in the page walks the steps:
+  whether each holds, the `until` it waits on, and a still of each hold.
+  The stills are interactive mode, with the band drawn; the `frames` PNGs
+  are video mode, where the band's place is empty paper.
 - Nothing inside the root changes through a CSS transition: the question's
   buttons change class with no transition, since the script sets the answer
   in the video and a render captures each frame at once.

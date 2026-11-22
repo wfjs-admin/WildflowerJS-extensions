@@ -100,7 +100,7 @@ describe(`clock (${BUILD} extension, ${CORE_TIER} core)`, () => {
     const { wf } = await load();
     const c = wf.kinetic.config();
     // frameNotice is false here because the test helper's load() turns it off.
-    expect(c).toEqual({ fps: 30, channel: 'event', autoplay: false, preview: false, frameNotice: false, loop: { hold: 3 }, fit: false, sound: true, shutter: false, finish: false, encode: false, mode: 'auto' });
+    expect(c).toEqual({ fps: 30, channel: 'event', autoplay: false, preview: false, frameNotice: false, loop: { hold: 3 }, fit: false, sound: true, shutter: false, finish: false, encode: false, alpha: false, mode: 'auto' });
   });
 
   it('config() rejects an unknown option with KN-100, naming it and the known ones, and applies nothing', async () => {

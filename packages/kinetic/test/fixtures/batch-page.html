@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- A page for render.batch(): 320 by 180, half a second at 10 fps. The
+     root's color, the white bar's width and the green flag come from the
+     scene's inputs, so a frame of the video shows the row it was made from.
+     The address's search names the framework file (core) and Kinetic's
+     (wf); with `driver`, the page runs render.batch() when its parent asks
+     by postMessage and posts the outcome back, for a test that cannot
+     reach into the page (a sandboxed frame has an opaque origin). -->
+<style>
+  body { margin: 0 }
+  #main { position: relative; width: 320px; height: 180px; overflow: hidden; font: 20px sans-serif }
+  #bar { position: absolute; left: 0; top: 0; height: 60px; background: #fff }
+  #flag { position: absolute; right: 0; bottom: 0; width: 120px; height: 60px; background: #0f0 }
+  #label { position: absolute; left: 10px; top: 70px; margin: 0; color: #888 }
+</style>
+<script>
+  const q = new URLSearchParams(location.search);
+  document.write('<script src="' + q.get('core') + '"><\/script><script src="' + q.get('wf') + '"><\/script>');
+</script>
+</head><body>
+<div id="main" data-composition-id="card" data-no-timeline data-start="0" data-duration="0.5" data-fps="10" data-width="320" data-height="180"
+  data-composition-variables='[{"id":"label","type":"string","label":"Label","default":"DEFAULT"},{"id":"color","type":"string","label":"Color","default":"#0000ff"},{"id":"share","type":"number","label":"Share","default":0.5},{"id":"flag","type":"boolean","label":"Flag","default":false}]'>
+  <div data-component="card" data-start="0" data-bind-style="{ background: color }" style="position:absolute;inset:0">
+    <div id="bar" data-bind-style="{ width: width }"></div>
+    <div id="flag" data-show="flag"></div>
+    <p id="label" data-bind="label"></p>
+  </div>
+</div>
+<script>
+  if (q.has('plain')) document.getElementById('main').removeAttribute('data-composition-variables');
+  if (!q.has('plain')) {
+    wildflower.kinetic.scene('card', {
+      inputs: {
+        label: String,
+        color: String,
+        // Doubled by addition, so a share that arrived as text makes no bar.
+        share: { type: Number, validator: (v) => v >= 0 && v <= 1 },
+        flag: Boolean,
+      },
+      computed: {
+        label() { return this.inputs.label; },
+        color() { return this.inputs.color; },
+        width() { return (this.inputs.share + this.inputs.share) * 160 + 'px'; },
+        flag() { return this.inputs.flag; },
+      },
+    });
+  }
+  // With `auto`, the page batches as it loads, as a page with no button would. A row's frame is this page again,
+  // so each load notes how deep its window sits, where the test can read it, and keeps the batch's outcome.
+  if (q.has('auto')) {
+    addEventListener('load', () => {
+      let depth = 0;
+      for (let w = window; w !== w.top; w = w.parent) depth++;
+      try { (top.__batchDepths = top.__batchDepths || []).push(depth); } catch (e) { /* another origin above */ }
+      window.__auto = wildflower.kinetic.render.batch([{ label: 'x', share: 0.1 }], { save: false, to: 0.3 }).then((r) => r.map((x) => x.name), (e) => 'failed: ' + e.message);
+    });
+  }
+  if (q.has('driver')) {
+    addEventListener('message', (e) => {
+      if (e.source !== parent || !e.data || e.data.type !== 'test-batch') return;
+      wildflower.kinetic.render.batch(e.data.rows, e.data.options).then(
+        (r) => parent.postMessage({ type: 'test-batch-done', results: r }, '*'),
+        (err) => parent.postMessage({ type: 'test-batch-failed', code: err.code, message: err.message, index: err.index, results: err.results }, '*'));
+    });
+  }
+</script>
+</body></html>

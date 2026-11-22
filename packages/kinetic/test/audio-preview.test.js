@@ -120,9 +120,8 @@ describe(`sound in the preview (${BUILD} extension, ${CORE_TIER} core)`, () => {
     // Each clip's first start. Under load (the whole suite on a busy
     // machine) the first frames after play() come late, the picture runs
     // more than 45 ms from the sound, and the preview restarts every clip
-    // from the new time, as it should; three starts a clip were seen
-    // 2026-10-28, on the commit before the review fixes too. Sources
-    // stacking is the next tests' to catch.
+    // from the new time, as it should; as many as three starts a clip have
+    // been seen. Sources stacking is the next tests' to catch.
     const first = [];
     for (const s of starts) if (!first.some((f) => which(f) === which(s))) first.push(s);
     expect(first.map(which).sort()).toEqual(['a', 'b']);

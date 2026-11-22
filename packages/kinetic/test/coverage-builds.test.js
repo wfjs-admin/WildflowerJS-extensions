@@ -1,5 +1,5 @@
 /**
- * Behaviour that until now only a development-build warning pinned, checked
+ * Behaviour that a development-build warning describes, checked
  * on every build: the extension's computeds win over a scene's own of the
  * same name (KN-152), a keyframes entry wins over a computed (KN-153), a scene
  * with no timing ancestor runs on composition time (KN-112), and a data-start

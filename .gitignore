@@ -1,5 +1,5 @@
 node_modules/
-tools/
+/tools/
 packages/*/dist/
 __screenshots__/
 .core-local/

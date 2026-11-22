@@ -17,14 +17,16 @@ description: >
 
 Kinetic (`@wildflowerjs/kinetic`, used in code as `wildflower.kinetic`)
 turns a WildflowerJS page into a video, where every value is a function of
-time, previewed, checked and rendered in the browser. A scene is a component
-whose values are functions of the time. The renderer seeks to a time and the
-scene's computed values give the values for it. There is no timeline to
-register. The page previews in a plain browser tab and renders through
+time, previewed, checked and rendered in the browser. A piece is written as
+layers: each layer picks an element on the page and lists the tracks that
+move it, the way a motion designer fills in a timeline's fields.
+`wildflower.kinetic.layers.scene(name, { layers: [...] })` makes the scene
+that draws them; when the renderer seeks to a time, every value is worked
+out for that time from the layers. The page's HTML and CSS set what is on
+screen at rest, and the layers say how it changes. The page previews in a plain browser tab and renders through
 `wildflower.kinetic.render()` in the browser, with its `<video>` footage and
 the sound of its `<audio>` clips. For many videos from one page,
-`scripts/batch.cjs` renders it once per row of a file; the same page also
-renders through HyperFrames with its runtime tag added, see step 8.
+`render.batch()` renders it once per row of a file, see step 8.
 
 The same scenes run in two modes. Video mode is the video above. Interactive mode
 is a lesson on the page: each step is a clip with an `id` and `data-step`,
@@ -37,9 +39,15 @@ Settle the intake before you read the rest. Step 1 of the procedure needs only
 read `references/start.md`: one complete video page and one complete
 interactive lesson page, each copy-runnable, with the rules that matter for
 each. Start from the one that fits the brief. Then read
-`references/rules.md` before writing a scene, `references/api.md` for the
-names and options, and copy shapes from `references/patterns.md` (each of
-the last two opens with a list of its sections).
+`references/rules.md` before writing layers, `references/api.md` for
+every field of a layer (its first part) and the helpers underneath, and
+copy shapes from `references/patterns.md` (each of the last two opens with
+a list of its sections).
+
+What a layer's fields cannot say, such as a model's numbers or a shape's
+geometry, goes in a small pure function handed over in `fns` and called by
+name. Write a whole scene in code (`scene()` with `computed` and `seek()`)
+only for a picture no layer can describe; reach for it last.
 
 A Kinetic page is a WildflowerJS page: a scene is a component, and every
 attribute and API of the framework works in it. For anything about
@@ -55,40 +63,42 @@ scenes.
 
 ```html
 <script defer src="https://cdn.jsdelivr.net/npm/wildflowerjs@^1.5.5/dist/wildflower.lite.dev.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.2/dist/kinetic.wf.js" data-preview></script>
-<script defer src="scenes.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@wildflowerjs/kinetic@0.3/dist/kinetic.wf.js" data-preview></script>
+<script defer src="title.js"></script>
 <style>[data-composition-id]:not([data-kinetic-ready]) { visibility: hidden; }</style>
 
 <div data-composition-id="main" data-start="0" data-duration="6"
      data-width="1280" data-height="720" data-fps="30">
     <div class="card" data-component="title-card" data-start="0.4" data-duration="5">
-        <h1 data-bind-style="heading">Launch</h1>
+        <h1>Launch</h1>
     </div>
 </div>
 ```
 
 ```javascript
-wildflower.kinetic.config({ shutter: 180, finish: { grain: 0.08 } });   // motion blur in every render, and the default style's light, still grain
-
-wildflower.kinetic.scene('title-card', {
-    keyframes: {
-        heading: {
-            opacity:    { at: [0, 0.5], to: [0, 1] },
-            translateY: { at: [0, 0.6], to: [40, 0], ease: 'spring' }
-        }
-    }
+wildflower.kinetic.layers.scene('title-card', {
+    id: 'title-card', size: [1280, 720], duration: 5,
+    shutter: 180, finish: { grain: 0.08 },   // motion blur in every render, and the default style's light, still grain
+    layers: [{
+        id: 'heading', kind: 'html', src: '.card h1',
+        place: { translate: [0, { at: [0, 0.6], to: [40, 0], ease: 'spring' }] },
+        look: { opacity: { at: [0, 0.5], to: [0, 1] } },
+    }],
 });
 ```
 
+The layers' times count in seconds from the clip's start (here 0.4 s into
+the composition).
+
 `data-preview` adds the preview bar and fits the stage to the window, and
 Kinetic gives the root its `data-width` and `data-height`, so the page needs
-no CSS for any of the three. The one rule in `<style>` is Kinetic's cloak:
-it hides the stage until Kinetic is ready (fonts, media decoded, effects
-drawn, the first seek landed), later than WildflowerJS's `[data-cloak]`,
-which lifts when the components initialize, and with `visibility`, which
-keeps the layout Kinetic measures, where `[data-cloak]` uses `display: none`.
-Keep it in the page: Kinetic's script is deferred, and the stage would flash
-before it runs.
+no CSS for any of the three. The one rule in `<style>` is Kinetic's cloak.
+It hides the stage until Kinetic is ready (fonts, media decoded, effects
+drawn, the first seek landed), which is later than WildflowerJS's
+`[data-cloak]` lifts (when the components initialize). It uses
+`visibility`, which keeps the layout Kinetic measures, where `[data-cloak]`
+uses `display: none`. Keep it in the page: Kinetic's script is deferred, so
+without the rule the stage flashes before the script runs.
 
 A page with Trillium adds its script after Kinetic's, an import map for
 three.js, and the scenes as a module, which runs after the deferred scripts:
@@ -102,8 +112,8 @@ three.js, and the scenes as a module, which runs after the deferred scripts:
 A diagram whose layout is the hard part (a Sankey with many flows, a
 flowchart, a state diagram, a timeline) is written as Mermaid text and laid
 out by pele, a Mermaid renderer with no dependencies (MIT), loaded before
-the scenes at this exact version and hash, so a page lays out the same next
-month; Kinetic animates what pele places
+the scenes at this exact version and hash, so the layout does not change
+when pele does. Kinetic animates what pele places
 (`references/patterns.md`, "A Sankey laid out by pele" and "A flowchart
 laid out by pele"):
 
@@ -121,9 +131,9 @@ swap those two script lines for the minified builds
 (`wildflower.lite.min.js` or `wildflower.full.min.js`, and
 `kinetic.wf.min.js`). A finished video page drops `data-preview`, since the
 bar is for making it, and adds `fit: true` to its `config()` call, so the
-stage still fits the window without the bar. A finished lesson has no bar either, and its last step
-always offers a "Start again" button that calls `go(0)`, so the learner
-never steps back through every step.
+stage still fits the window without the bar. A finished lesson has no bar
+either, and its last step always offers a "Start again" button that calls
+`go(0)`, so the learner does not have to step back through every step.
 
 ## Procedure
 
@@ -158,110 +168,116 @@ the principles every piece follows, before step 1.
 2. Design each scene's key frame as a still that stands on its own: the
    frame a viewer sees once everything is in, which must say the scene's one
    thing with nothing moving. Build the page with the scenes at their key
-   frames first, save them with `--frames` (step 7), and judge each against
+   frames first, take them with `check({ frames })` (step 7), and judge each against
    `references/craft.md`, "Judging a frame", before adding any motion.
    Motion then serves what the still says: it shows change, order, cause or
    emphasis, and every frame holds long enough to read.
 3. Write the page: the three scripts, the CSS rule that holds the stage until
    Kinetic marks it ready, the root with its attributes, one clip per scene,
    one `<audio src data-start>` per sound and one `<video src data-start>` per
-   piece of footage inside the root.
-4. Write one scene per clip. Keyframes go in `keyframes`. Anything else a frame
-   needs is a computed that reads `this.local` or `this.time` and the
-   helpers. `local` holds at 0 before the clip and at its duration after
-   it, where the scene is hidden and costs nothing. Follow the motion habits in
-   `references/rules.md`: an ease on every move, entrances that settle and
-   exits that leave faster, offsets between layers, one `'smooth'` track
-   through several points.
-5. Data goes through `wildflower.query`, named in the scene's `waitFor`, on
-   the full tier. Values that change from video to video are `inputs`, read
-   from the composition's variables.
+   piece of footage inside the root. The HTML and CSS lay out every element
+   as it stands at rest; give each element a layer will move a class or an
+   id for its `src` to select.
+4. Write each clip's layers with `layers.scene()`, under the name the
+   clip's `data-component` gives. Each element that moves is a layer: its
+   `src`, then `place` (where it is), `look` (how it looks) and `content`
+   (what it shows). Each field is a value, and a value that moves is a track
+   (`{ at, to, ease }`, or `{ keys, by, ease }` for several keys or one
+   driven by another value). Times count from the clip's start. What the
+   fields cannot say goes in a small pure function in `fns`, called with
+   `{ call, args }`. Follow the motion habits in `references/rules.md`: an
+   ease on every move, entrances that settle and exits that leave faster,
+   offsets between layers, one `'smooth'` track through several points.
+5. Data goes through `wildflower.query`, on the full tier. List each query
+   the layers read in `queries`, so the first frame waits for the rows. A
+   repeat places a comp once per row (`repeat: { over: 'sales.rows' }`), and
+   each copy reads its row's fields as parameters. Values that change from
+   video to video go in `inputs`, read with `{ from: 'inputs.title' }` from
+   the composition's variables.
 6. Open the page in Chrome with `?preview` on the URL, or `data-preview` on
    Kinetic's script tag, and scrub the bar at the bottom of the window. A
    lesson opens without either, to try it as the learner does; `?preview`
    plays it as the video.
-7. Run this skill's `scripts/check.cjs` on the page:
-   `node <this skill's folder>/scripts/check.cjs <page>`. It finds
-   Playwright and the page's files itself. It waits for
-   readiness, runs `wildflower.kinetic.check()` and prints every `[KN` line.
-   Fix each line it prints, then run it again until the report is `ok: true`
-   and no line prints. The run fails on a report that is not ok, on any `[KN`
-   line, on an uncaught error or unhandled rejection at any time (`page
-   error:`), and on a console error the framework or an extension printed
-   (`[WildflowerJS]`, `[WF-238]`, `[TH-101]` and the like), even outside
-   the seeks, where `check()`'s own report does not count them. Your own
-   `console.error` lines are printed and do not fail it; read them too. An
-   error that comes again from many seeks prints once, with its count
-   (`× 37`). It runs in the installed Chrome (Playwright's
-   Chromium without one) and prints which.
+7. Check the page in the page itself. With a browser you can drive, open
+   the page (served over http when it fetches files) and run this in it:
 
-   `check()` cannot see a binding that shows nothing or a layer in the wrong
-   place, since those are the same on every seek, so look at frames too:
-   `--frames 0,2.5,5` saves a PNG of the stage at each time, and
-   `--frames 12` twelve evenly spaced, into `frames/` beside the page
-   (`--out <dir>` for another folder). Open the PNGs it prints and look at
-   each one against the brief.
-
-   After the check it times every block of text on screen and lists, under
-   `reading:`, each one that leaves before it can be read, by the BBC
-   subtitle rate (fully on screen for at least 1.5 s, and 0.5 s plus
-   0.375 s a word, with 1 s more for a figure). Every frame has to stand on
-   its own, so fix each block it lists, by holding it longer or cutting
-   words, unless a word is meant to fly past. That is a floor: a calm piece
-   holds about twice as long (`references/craft.md`, "Time"). The list does
-   not fail the run. `--no-reading` skips it.
-
-   It also lists, under `layout:`, text outside the safe area while at
-   rest, text cut off at the frame's edge, text over other text, and text
-   under its contrast floor (4.5:1, 3:1 at 48 px and up), measured against
-   what is actually behind it. Fix each, unless it's on purpose (a grayed
-   hint, a phone mockup that bleeds off the frame). The list does not fail
-   the run. `--no-layout` skips it.
-
-   For a lively or bold piece, add `--pace lively` or `--pace bold`: it
-   measures how much of the piece is still, how often it snaps, its longest
-   hold and its range of brightness against the dial in
-   `references/directions.md`, and marks each miss. Fix each miss, or say in
-   the plan why it is right, before rendering.
-
-   For a loop, add `--seam`: it compares the last frame with frame 0 and
-   marks a jump there, with where it is. `--jumps` finds every pair of
-   frames that changes far more than the frames around it (a pop, or a cut).
-   To find which layer pops, add `--isolate '#bleed,#rims'`: it hides each
-   selector in turn over the worst pair (or the pair `--diff 16,17` names)
-   and prints how much of the change each one takes away. `--strip` with
-   `--frames` tiles the frames into one numbered `strip.png`.
-
-   For a lesson, add `--lesson`: it enters each step in interactive mode
-   with `go()`, waits for its hold (the last frame before the step's wait,
-   so 0.467 s for a wait of 0.5 at 30 fps) and saves a still of it, and reports
-   whether each step held, the `until` path it waits on, and the console
-   errors and KN lines during it. It answers no question and goes on to the
-   next step, so a step that should wait for the learner and is not
-   reported as waiting on its `until` is a step to fix. A step that never
-   holds, a console error or a KN line fails it.
-8. Render with the Render button on the bar (an MP4 in Chrome, with the
-   audio clips' sound). The render has motion blur, since the scene file
-   set `config({ shutter: 180 })`; a brief that asks for a crisp, stepped
-   look sets `shutter: 0` instead. For many videos from one page, run the batch
-   script, `scripts/batch.cjs` in the package (also at
-   https://kinetic.wildflowerjs.com/scripts/batch.cjs), which renders the
-   page once per row of a JSON or CSV file with the row's values as the
-   composition's variables, in Chrome, with no flags-page setting:
-
-   ```bash
-   node batch.cjs index.html rows.json --out renders
-   node batch.cjs index.html people.csv --name name
+   ```js
+   const r = await wildflower.kinetic.check({ reading: true, layout: true, frames: 6 });
    ```
 
-   rows.json is an array of objects, one per video, each field a variable's
-   id with its value; a CSV has a header row of ids. Files are named
-   `<composition id>-<row number>.mp4`, or by `--name field`. A row whose
-   input fails (KN-130) stops the batch with the KN line and exit code 1.
-   The page needs no runtime tag; rendering through HyperFrames instead
-   (its runtime's tag after Kinetic's, `npx hyperframes render --batch
-   rows.json`, parallel workers) is at
-   https://kinetic.wildflowerjs.com/docs/hyperframes/.
+   It loads `kinetic.tools.js` from beside Kinetic's file (KN-103 when it
+   cannot). Fix what it reports and run it again until `r.ok` is true and
+   `r.console`, the KN lines and errors printed during the run (each once,
+   with its `count`), is empty. Read the page's console from load too: a
+   KN line or a `[WildflowerJS]`, `[WF-238]` or `[TH-101]` error printed
+   before the check is not in `r.console`, and it needs fixing as well.
+
+   `check()` cannot see a binding that shows nothing or a layer in the wrong
+   place, since those are the same on every seek, so look at the frames:
+   `r.images` is `[{ t, frame, png }]`, each `png` a Blob of the frame as a
+   render draws it. Open one with `open(URL.createObjectURL(r.images[2].png))`
+   and take a screenshot of that tab, and look at each against the brief.
+   `frames: [0, 2.5, 5]` takes those seconds instead. Where the browser has
+   no HTML-in-Canvas, `r.skipped` lists the frames with KN-201; then seek
+   with `wildflower.kinetic.seek(t)` and screenshot the page instead.
+
+   `r.reading.short` lists each block of text that leaves before it can be
+   read (`{ text, words, held, from, needs }`), by the BBC subtitle rate
+   (fully on screen for at least 1.5 s, and 0.5 s plus 0.375 s a word, with
+   1 s more for a figure). Every frame has to stand on its own, so fix each
+   block it lists, by holding it longer or cutting words, unless a word is
+   meant to fly past. That rate is the minimum, and a calm piece holds about
+   twice as long (`references/craft.md`, "Time").
+
+   `r.layout.found` lists text outside the safe area while at rest
+   (`'safe'`), cut off at the frame's edge (`'cut'`), over other text
+   (`'over'`), and under its contrast floor (`'contrast'`, 4.5:1, 3:1 at
+   48 px and up), measured against what is actually behind it. Fix each,
+   unless it's on purpose (a grayed hint, a phone mockup that bleeds off the
+   frame). Neither list fails the check.
+
+   More options, as the piece needs them:
+   - `pace: 'lively'` or `'bold'` measures how much of the piece is still,
+     how often it snaps, its longest hold and its range of brightness against
+     the dial in `references/directions.md`; `r.pace.misses` lists each
+     miss. Fix each, or say in the plan why it is right, before rendering.
+   - `seam: true`, for a loop, compares the last frame with frame 0
+     (`r.seam.jump`). `jumps: true` lists every pair of frames that changes
+     far more than the frames around it (a pop, or a cut). `isolate:
+     ['#bleed', '#rims']` hides each selector in turn over the worst pair
+     (or the pair `diff: [16, 17]` gives) and reports how much of the change
+     each takes away. `strip: true` with `frames` tiles them into one PNG.
+   - `lesson: true` enters each step in interactive mode with `go()`, waits
+     for its hold (the last frame before the step's wait, so 0.467 s for a
+     wait of 0.5 at 30 fps), and reports in `r.lesson.steps` whether each
+     held, whether it waits on its `until`, a still of the hold, and the
+     lines printed during it. It answers no question and goes on, so a step
+     that should wait for the learner and is not reported as waiting is a
+     step to fix. A step that never holds, a console error or a KN line makes
+     `r.ok` false.
+
+   With no browser you can drive, ask the user to open the page in Chrome
+   with `?preview`, paste the `check()` line above into the console
+   (Cmd-Option-J on a Mac, Ctrl-Shift-J on Windows), and paste back the
+   report and every `[KN` line the console shows, or at least press Check on
+   the preview bar and paste what it says. Ask them to describe or screenshot
+   the frames you need to see.
+8. Render with the Render button on the bar (an MP4 in Chrome, with the
+   audio clips' sound). The render has motion blur, since the scene sets
+   `shutter: 180`; a brief that asks for a crisp, stepped look sets
+   `shutter: 0` instead. For many videos from one page, write the rows as
+   a JSON file (an array of objects, one per video, each field a variable's
+   id with its value) or a CSV with a header row of ids, and have the user
+   press Render batch on the bar (shown when the composition declares
+   variables): it asks for the file, then for a folder (a second click on
+   Choose folder when the file chooser used up the first), and writes one
+   MP4 per row. In code it is `wildflower.kinetic.render.batch(rows, {
+   name: 'title' })`, rows an array or a File; from a click the files go
+   into a folder, otherwise each downloads (Chrome asks once about several
+   downloads), and `save: false` returns the Blobs. Files are named
+   `<composition id>-<row number>.mp4`, or by the `name` field. A row whose
+   input fails (KN-130) stops the batch with that row's error. Leave the
+   HyperFrames runtime's tag off the page: rows do not reach it.
 
 ## Rules that matter most
 
@@ -269,125 +285,122 @@ the principles every piece follows, before step 1.
   the default style; anything the user asks for wins over it. A lively or
   bold piece (a showreel, a sting, an opener) follows one direction from
   `references/directions.md` in its place.
-- Every frame is a function of the time. Nothing in a scene reads
-  `Date.now()`, `performance.now()` or `Math.random()`, starts a timer, a
-  `fetch()` or a `requestAnimationFrame()`, or uses a CSS transition.
-  Randomness comes from `random(seed)`, `noise(x, seed)`, `noise2()`,
-  `noise3()`, `stagger(i, n, { from: 'random', seed })`, `scramble(t, text,
-  { seed })` and, for camera shake, `shake(t, profile, { seed })`.
-- `styleAt(t, tracks)` gives the style object for time t from an object of
-  tracks, and a key may be a plain number. One track's value is
-  `interpolate(t, track)`: `interpolate(0.5, { at: [0, 1], to: [0, 10] })`
-  is the number 5, for a computed that needs the number.
-- Charts, simulations and particles have no Kinetic helper. Write them as
-  data made at load and read from the time; `references/rules.md`, "What
-  you write yourself", gives the approach for each.
-- For moments inside a scene, keep the timing table a plain array of
-  objects with `at` (and `end` where a row stops before the next), and read
-  it with `moment(this.local, ROWS)`: the current row, the seconds since it
-  started, its progress, the next row, and each row's state. Never write
-  the lookup loop yourself.
-- Measure a line of text with `textMetrics(text, font, options)`: its width,
-  each letter's place (`letters: true`), and the size that fits a width
-  (`width`). Never estimate a letter's place by counting characters, and
-  measure with a web font from `@font-face`, which readiness waits for.
-- To stagger, subtract `stagger()` from the time you pass to any helper
-  (styleAt, ramp, interpolate); never a delay of your own arithmetic:
-  `styleAt(this.local - stagger(i, n, options), tracks)`. `stagger()` starts
-  from the first, the last, the center, the edges, a seeded order or an
-  index, in a row or on a grid.
+- Every frame is a function of the time. Nothing in the layers or their `fns`
+  reads `Date.now()`, `performance.now()` or `Math.random()`, starts a
+  timer, a `fetch()` or a `requestAnimationFrame()`, and nothing on the page
+  moves by a CSS transition or animation. Randomness comes from seeds:
+  `{ wiggle: { seed } }`, `{ stagger: { from: 'random', seed } }`, a
+  scramble's `seed`, and `random(seed)` or `noise(x, seed)` inside a
+  function.
+- The layers say what moves and when; the HTML and CSS say where it sits at
+  rest. A layer's `src` is a selector searched in the scene's clip first,
+  then the whole composition, so select each element precisely (an id, or a
+  class inside its clip's id).
+- A track is `{ at: [times], to: [values], ease }`, or `{ keys: [[x, v],
+  ...], by, ease }` when its input is not the time (a store's value, a
+  sweep's weight, the music's level). Name a time or a value once in
+  `constants` or `shared` and read it by name; markers and beats read by
+  name too (`'hit1'`, `'beat 4'`).
+- A row of things is one comp repeated: `repeat: { over: rows }` or
+  `{ count }`, each copy reading `i`, `n` and its row's fields. To stagger
+  them, start each copy later with `start: { stagger: { each: 0.08 } }`, or
+  delay several elements one `src` finds with `delay: { stagger: {...} }`;
+  never a delay of your own arithmetic. A text layer splits into letters
+  or words with `split` and staggers them with `animate.each`.
+- Charts, simulations and particles have no layer field of their own. Write the model
+  as small pure functions of the time and the data, handed in `fns`, and
+  read them with `{ call }`; `references/rules.md`, "What you write
+  yourself", gives the approach for each.
+- Measure a line of text with `textMetrics(text, font, options)` inside a
+  function: its width, each letter's place (`letters: true`), and the size
+  that fits a width (`width`). Never estimate a letter's place by counting
+  characters, and measure with a web font from `@font-face`, which
+  readiness waits for.
 - Quote every text prop, one word or many: `data-prop-role="'Director'"`,
   `data-prop-color="'#892dbf'"`; numbers and booleans go bare.
 - A render seeks to whole frames, `n / fps`. A landing, a flash or a cut goes
-  on a frame, or it is never shown. Decide it with `this.clipFrame`, a whole
-  number. A clip's edges go on frames too (KN-114): write an edge as
+  on a frame, or it is never shown: `snap: 'frame'` in `layers.scene()` puts every
+  marker and beat on its nearest frame. A clip's edges go on frames too (KN-114): write an edge as
   `n / fps` to 8 decimals (`data-start="11.03333333"` for frame 331 at 30
   fps), and to put an edge on a beat, round the beat's time to its frame.
 - The root carries `data-composition-id`, `data-start="0"`,
   `data-duration`, `data-width`, and `data-height`.
-- Put the composition inside no component of your own. A binding on a
-  scene's own root tag then reads the scene; inside a component it reads that
-  component (WF-521 from a development WildflowerJS; KN-154 for Kinetic's own
-  values in a scene inside a scene). Style the root with `root: { style: { background: 'bg' } }`
-  either way.
+- Put the composition inside no component of your own, and no scene's clip
+  inside another's (KN-154 for Kinetic's own values in a scene inside a
+  scene). The page's own components (a lesson's band, its question) sit
+  beside the clips, inside the root.
 - A transition between two clips is their overlap: the incoming clip starts
   before the other ends (`data-start="intro - 0.5"`) and carries
   `data-clip-transition="push from-right"`. A clip that comes in over nothing, or
   leaves to nothing, takes `data-clip-enter` or `data-clip-exit` with a length.
   A clip's plain fade is `data-clip-enter="fade 0.5"` and
-  `data-clip-exit="fade 0.5"`; `edges` and `presence` are for a scene whose
-  code needs the value. For blur, grain, music, and fading, the "Which to
-  use" tables in `references/rules.md` give the route and the default.
-  A halftone, a luma wipe from an image or a dissolve is the same attribute
-  with `halftone from-left 24px`, `luma url(maps/burn.png) soft` or
-  `dissolve 3px`, never an SVG filter of your own on the clip.
+  `data-clip-exit="fade 0.5"`. For blur, grain, music, and fading, the
+  "Which to use" tables in `references/rules.md` give the route and the
+  default. A halftone, a luma wipe from an image or a dissolve is the same
+  attribute with `halftone from-left 24px`, `luma url(maps/burn.png) soft`
+  or `dissolve 3px`, never an SVG filter of your own on the clip.
 - A halftone, stipple, dither or duotone look on an image, footage or a
-  canvas is `effect(canvas, { scene: this, source, kind })` from a scene's `init()`, with
-  `this.fx.set({ ... })` in `seek(local)` for parameters that move. HTML is
-  no source; for still HTML, use an SVG filter with the patterns' two rules.
-- Every layer made in a scene takes `scene: this` (`effect()`, `shade()`,
-  `blur()`, `text()`, `lottie()`): it then runs on the scene's local time
-  and is disposed with the scene. Without it, it runs on composition time
-  until you call `dispose()`.
-- A Lottie animation is lottie-web's `loadAnimation({ autoplay: false })`
-  kept as `this.anim` and handed to `lottie(this.anim, { scene: this, start })` in the
-  same task of a scene's `init()`, with `this.anim.destroy()` in the
-  scene's `destroy()`, never played or seeked by the scene itself; the page
-  loads lottie-web. An animated GIF,
-  WebP or APNG is `animatedImage(src)` at the top of the file, drawn with
-  `draw(canvas, local)` in `seek(local)`, never an `<img>` in a render (it
-  plays on the browser's clock).
+  canvas is a layer on a `<canvas>` with `look.effect: { kind, source, ...
+  }`, its parameters values that may move. Shading, light and grain marks
+  are `look.shade`, a masked blur `look.backdrop`, a hand-drawn sheet
+  `look.draw`, line boil on an SVG path `look.boil`. HTML is no source; for
+  still HTML, use an SVG filter with the patterns' two rules.
+- A Lottie animation is a `kind: 'lottie'` layer with `content: { path,
+  start, rate, loop }`; the page loads lottie-web before Kinetic draws it.
+  An animated GIF, WebP or APNG is `animatedImage(src)` drawn on a canvas
+  from a scene in code (`references/api.md`), never an `<img>` in a render
+  (it plays on the browser's clock).
 - The clock is the store `kinetic`: `$kinetic.time` in a binding,
-  `this.stores.kinetic` in a scene or a component that subscribes to it,
-  and `wildflower.getStore('kinetic')` from a script.
-- Pools in scenes are written in `seek(local)` with `update(key, props)`,
-  `key` being the entity's value of the field the container's `data-key`
-  names; every seek flushes them before the frame is captured.
-- Sound is an `<audio src data-start>` clip in the root, never audio a scene
-  plays itself. Visuals that follow it read `level(this.time, band)` or
-  `spectrum(this.time, bins)`.
+  `this.stores.kinetic` in a component that subscribes to it, and
+  `wildflower.getStore('kinetic')` from a script.
+- Sound is an `<audio src data-start>` clip in the root, never audio the
+  page plays itself. Visuals that follow it read `{ level: 'bass' }` (or
+  `'mid'`, `'treble'`, `'all'`), `{ spectrum: {} }` (a copy's bin) or
+  `{ beat: { beats } }`, as a value or as a track's `by`.
 - Footage is a `<video src data-start>` clip in the root with `muted` for the
   picture alone or `data-has-audio="true"` for its sound too, and never
-  `autoplay`, `controls` or `loop`. Kinetic seeks and plays it; a scene never
-  sets its `currentTime` or calls its `play()`.
-- Numbers are formatted with `format()`, never `toLocaleString()` with no
-  locale.
-- A camera move binds `camera(this.local, tracks)` with `data-bind-style` on
-  a world element inside the scene, and each layer in the world binds
-  `depth(z)`. A wrapper between the world and a layer needs
+  `autoplay`, `controls` or `loop`. Kinetic seeks and plays it; nothing on
+  the page sets its `currentTime` or calls its `play()`.
+- Numbers are formatted with `format()` inside a function, never
+  `toLocaleString()` with no locale.
+- A camera move is a `kind: 'camera'` layer with `moves` (Kinetic's
+  `moves()` list); the layers it looks at take `band: 'world'` and a
+  `place.position` of `[x, y, z]`, and the camera moves the composition's
+  `.world` element. A wrapper between the world and a layer needs
   `transform-style: preserve-3d`, and a fade goes on the layer itself: a
   wrapper with `opacity` below 1, a `filter`, `overflow`, `clip-path`, a mask,
   a blend mode or `isolation` draws its layers flat. The world itself takes
-  none of these and no background; the backdrop goes on the scene's root or
-  the farthest layer, and a crop on the scene's root or the stage.
-- The shutter is on: the scene file's first line is
-  `wildflower.kinetic.config({ shutter: 180 })`, so every render, the bar's
-  Render button's and the batch script's, averages eight seeks over half of
-  each frame and fast moves blur as a camera's would. It costs about 8
-  times the render time; only a brief that asks for a crisp, stepped look
-  sets `shutter: 0`. With the
-  HyperFrames runtime's tag on the page `render()` does not apply the
-  shutter (KN-205,
+  none of these and no background; the backdrop goes on the clip or the
+  farthest layer, and a crop on the clip or the stage.
+- The shutter is on: the scene sets `shutter: 180`, so every render, the
+  bar's Render button's and each of `render.batch()`'s, averages eight seeks over
+  half of each frame and fast moves blur as a camera's would. It costs about
+  8 times the render time; only a brief that asks for a crisp, stepped look
+  says `shutter: 0`. With the HyperFrames runtime's tag on the page
+  `render()` does not apply the shutter (KN-205,
   https://kinetic.wildflowerjs.com/docs/hyperframes/#on-the-page), so leave
-  that tag off for a render with motion blur. For blur in the preview too, `smear(this.local, tracks)`
-  gives rows of copies for a `data-list` whose element has
-  `isolation: isolate`; without it the copies brighten the scene behind
-  them. In a render with a shutter, `smear()` gives one copy.
+  that tag off for a render with motion blur. For blur in the preview too,
+  `look.smear` draws a layer's own motion as copies beside it; put it in an
+  element with `isolation: isolate`, or the copies brighten the scene
+  behind them.
 - In a lesson, one store field holds each value the learner and the video
   both change: the control binds it with `data-model`, the step's `script`
-  writes it by the same path, and a scene reads it or eases it with
-  `follow`. A step that explains a change is a task the learner does, with
+  writes it by the same path, and a layer reads it with a link
+  (`{ from: 'dial.angle' }`) or eases toward it with `{ follow:
+  'dial.angle' }`, with the store listed in `stores`. `steps` in
+  `layers.scene()` holds each step's `wait`, `until`, `entry` and `script`. A step that explains a change is a task the learner does, with
   `until` waiting for it. Once `until` is true the rest of the step plays
   and the step holds on its last frame, so a question holds before its
   explanation (`wait` earlier than the step's end) and the explanation plays
   after the right answer. Kinetic never moves to the next step by itself:
   the learner does, with Next. Bind Next to `$kinetic.canAdvance`: it is
   false while the step's `until` is false, and true otherwise, at any point
-  in the step, not only at the hold. Pressed anywhere in the step, Next enters the next step at once and
-  leaves the rest of the step to the video. A step with nothing to answer
+  in the step, not only at the hold. Pressed anywhere in the step, Next
+  enters the next step at once, and the rest of the step is not played. A step with nothing to answer
   needs no `wait`: it plays its range and holds on the last frame. Back is
-  always there. At a hold the clock stands still, so `local` does too, and what the
-  learner changes moves only through `follow` springs or bindings to state.
+  always there. At a hold the clock stands still, so tracks on the time do
+  too, and what the learner changes moves only through followers, links to
+  the store, or bindings to state.
   Controls that write a scripted path, and quiz buttons, are disabled in
   video mode (`data-bind-attr="{ disabled: $kinetic.mode === 'video' }"`).
   Interactive-only effects go in action handlers, a step's
@@ -399,7 +412,14 @@ The full list, with the reason for each, is `references/rules.md`.
 
 ## Diagnostics
 
-Codes start with `KN`. KN-100 (a wrong argument), KN-120 (a malformed track),
+Codes start with `KN`. The errors in layers are KN-161 to KN-169, thrown by
+`layers.scene()` or at the frame that first reads the field, each giving
+the layer and the field: KN-161 (the layers object's shape), KN-162 (a
+key a layer does not take), KN-163 (a name nothing defines), KN-164 (a link
+to nothing), KN-165 (a value of no known form), KN-166 (a function not
+handed over in `fns`), KN-167 (an order or band), KN-168 (a `src` that finds
+no element) and KN-169 (names that lead back to themselves).
+KN-100 (a wrong argument), KN-120 (a malformed track),
 KN-121 (an unknown ease), KN-200, KN-201, KN-203 (what `render()` is missing),
 KN-204 (media from another origin, which a render draws black, or an
 `effect()` source WebGL cannot read) and KN-206

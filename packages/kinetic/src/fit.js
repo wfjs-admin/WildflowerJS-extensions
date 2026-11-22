@@ -18,8 +18,8 @@
  * Outside a render, html and body. The HyperFrames runtime sets margin 0,
  * padding 0 and overflow hidden on html and body as it starts, and gives
  * both the composition's width and height, which it writes again on later
- * layout passes (probed: as it
- * becomes ready, and when playback starts). A render's capture needs that; a page
+ * layout passes (as it becomes ready, and when playback starts). A
+ * render's capture needs that; a page
  * with anything beside the composition loses its scrolling and its width.
  * Outside a render (window.__HF_RENDER_CAPTURE_MODE unset) the extension takes
  * those properties off again, watching the two elements' style attributes:
@@ -57,7 +57,7 @@
  * In a render too, so a page that renders through the runtime has its size.
  */
 
-import { compositionRoot } from './timing.js';
+import { compositionRoot, batchName } from './timing.js';
 
 const STARTUP = [['margin', '0px'], ['padding', '0px'], ['overflow', 'hidden']];
 const WRAP_STYLE = 'position:relative;margin:0 auto;max-width:100%;overflow:hidden;';
@@ -70,10 +70,11 @@ export function embedded() {
   try { return /[?&]embed(?:[=&]|$)/.test(self.location.search); } catch (_) { return false; }
 }
 
-// A render's capture, or `embed` in the URL: the page shows the composition
-// alone. Read on every call, like the flag.
+// A render's capture, `embed` in the URL, or a frame render.batch() renders
+// a row in (batch.js): the page shows the composition alone. Read on every
+// call, like the flag.
 export function isolated() {
-  return rendering() || embedded();
+  return rendering() || embedded() || !!batchName();
 }
 
 // Hides what sits beside the root and its ancestors and takes away the
@@ -121,8 +122,9 @@ function isolate() {
     const parent = el.parentElement;
     if (el !== document.body) {
       // Kinetic's own pause mark over the stage stays (an embed's click shows
-      // it), and outside a render its speaker, an embed's only sound control.
-      for (const sib of parent.children) if (sib !== el && !LEFT_ALONE.includes(sib.tagName) && !sib.hasAttribute('data-kinetic-paused') && !(sib.hasAttribute('data-kinetic-speaker') && !rendering())) set(sib, 'display', 'none');
+      // it), and outside a render its speaker, an embed's only sound control;
+      // so does a batch's frame for a row, which draws nothing while hidden.
+      for (const sib of parent.children) if (sib !== el && !LEFT_ALONE.includes(sib.tagName) && !sib.hasAttribute('data-kinetic-paused') && !(sib.tagName === 'IFRAME' && sib.name.startsWith('kinetic-batch:')) && !(sib.hasAttribute('data-kinetic-speaker') && !rendering())) set(sib, 'display', 'none');
     }
     set(parent, 'margin', '0');
     set(parent, 'padding', '0');

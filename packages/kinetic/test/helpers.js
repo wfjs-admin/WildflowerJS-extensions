@@ -11,7 +11,7 @@ export const CORE = typeof __KINETIC_EXT_CORE__ !== 'undefined' ? __KINETIC_EXT_
 export const WF_FILE = typeof __KINETIC_EXT_FILE__ !== 'undefined' ? __KINETIC_EXT_FILE__ : '/packages/kinetic/dist/kinetic.wf.js';
 export const CORE_TIER = (CORE.match(/wildflower(?:\.([\w-]+?))?(?:\.(dev|min))?\.js$/) || [])[1] || 'standard';
 export const RUNTIME_FILE = '/tools/hyperframes/dist/hyperframe.runtime.iife.js';
-// lottie-web, fetched by scripts/fetch-lottie.cjs; a page loads it, Kinetic never does.
+// lottie-web, a vendored copy; a page loads it, Kinetic never does.
 export const LOTTIE_FILE = '/tools/lottie/build/player/lottie.min.js';
 
 export function loadScript(src) {
@@ -153,6 +153,36 @@ export function wav(samples, rate = 48000) {
 }
 export const wavUrl = (samples, rate) => URL.createObjectURL(new Blob([wav(samples, rate)], { type: 'audio/wav' }));
 
+// A cage of the edge `size`, as faces for solids.faces(): the twelve edges of
+// a cube as square beams `beam` thick, and a block at each corner showing its
+// three outer faces. 72 faces in all, many tied in depth, so it tests the sort.
+export function cageFaces(size, beam) {
+  const h = size / 2, t = beam / 2, m = h - t, out = [];
+  const block = (c, half, keep) => {
+    for (let axis = 0; axis < 3; axis++) for (const sign of [-1, 1]) {
+      if (!keep(axis, sign)) continue;
+      const u = (axis + 1) % 3, v = (axis + 2) % 3, pts = [];
+      for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const p = [0, 0, 0];
+        p[axis] = c[axis] + sign * half[axis]; p[u] = c[u] + su * half[u]; p[v] = c[v] + sv * half[v];
+        pts.push(p);
+      }
+      const n = [0, 0, 0]; n[axis] = sign;
+      out.push({ pts, n });
+    }
+  };
+  for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) {
+    const s = [x, y, z];
+    block([x * m, y * m, z * m], [t, t, t], (axis, sign) => sign === s[axis]);
+  }
+  for (let axis = 0; axis < 3; axis++) for (const a of [-1, 1]) for (const b of [-1, 1]) {
+    const c = [0, 0, 0], half = [t, t, t];
+    c[(axis + 1) % 3] = a * m; c[(axis + 2) % 3] = b * m; half[axis] = h - beam;
+    block(c, half, (ax) => ax !== axis);
+  }
+  return out;
+}
+
 // `seconds` of a sine at `hz`, amplitude `amp`, from `from` seconds on
 // (silence before), at 48 kHz.
 export function tone(hz, seconds, amp = 0.5, from = 0) {
@@ -240,10 +270,8 @@ export async function lessonFrame(body, { head = '', script = '', cleanup = null
   return { w, frame, k: w.wildflower.kinetic, store: w.wildflower.getStore('kinetic'), doc: w.document };
 }
 
-// Files from the main site that a few tests use: present in the repository
-// the package is developed in, absent from the extensions repository, where
-// those tests skip (the development repository runs them before every
-// release). A missing file can come back as the server's HTML fallback, so
+// Files from the main site that a few tests use; where they are absent,
+// those tests skip. A missing file can come back as the server's HTML fallback, so
 // an HTML answer counts as absent for the non-HTML files asked about here.
 export const SITE_FONT = '/www/fonts/work-sans-normal-latin.woff2';
 export const SITE_SINE_SCRIPT = '/www/demos/kinetic-sine/sine.js';

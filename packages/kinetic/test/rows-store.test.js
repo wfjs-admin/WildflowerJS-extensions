@@ -5,7 +5,7 @@
  * forward, back, the same time again, after the list re-renders with new
  * rows, keyed and unkeyed, through both seek channels (hf-seek and seek()).
  * Beside them, the same rows read `local` and a scene computed, the form the
- * docs have always shown.
+ * docs show.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { load, mount, tick, dispatchSeek, uniqueName, BUILD, CORE_TIER } from './helpers.js';

@@ -1,9 +1,10 @@
 /**
  * A clip outside its window paints nothing. Kinetic hides such a clip with
- * inline visibility, as the HyperFrames runtime does, and an SVG filter that
- * makes its own pixels (feFlood, feImage, feTurbulence) on the clip or on a
- * descendant painted through visibility: hidden (probed in Chrome 155,
- * 2026-10-09), as did a descendant with visibility: visible of its own. The
+ * inline visibility, as the HyperFrames runtime does, and with a clip-path,
+ * since in Chrome 155 an SVG filter that makes its own pixels (feFlood,
+ * feImage, feTurbulence) on the clip or on a descendant paints through
+ * visibility: hidden, as does a descendant with visibility: visible of its
+ * own. The
  * pixels are read from a screenshot of the stage; the layout of clips in
  * the flow is read from their boxes.
  */
@@ -143,8 +144,8 @@ describe(`a hidden clip paints nothing (${BUILD} extension, ${CORE_TIER} core)`,
   });
 
   // The clip-path that hides a clip also keeps Chrome from loading a lazy
-  // image inside it until the clip shows (probed 2026-10-09: an image added
-  // to a hidden clip was not requested), so readiness makes them eager.
+  // image inside it until the clip shows (an image added to a hidden clip
+  // is not requested), so readiness makes them eager.
   it('a lazy image added to a clip while it is hidden is loaded by the next ready()', async () => {
     const { wf } = await load();
     const host = await mount(`<div data-composition-id="hd6" data-no-timeline data-start="0" data-duration="4" style="position:fixed;left:0;top:0;width:200px;height:120px">
